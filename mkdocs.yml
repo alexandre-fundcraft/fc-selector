@@ -1,0 +1,48 @@
+site_name: FC Selector
+site_description: DDD Selector/Query pattern for Django with OData query language support
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+  features:
+    - navigation.instant
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+    - toc.integrate
+
+plugins:
+  - search
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - admonition
+  - pymdownx.details
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Why FC Selector?:
+    - Benefits: theory/benefits.md
+    - Problems It Solves: theory/selector-pattern.md
+  - Theory:
+    - What is OData?: theory/odata.md
+    - What are DTOs?: theory/dtos.md
+  - Getting Started:
+    - Installation: installation.md
+    - Quick Start: quickstart.md
+  - Usage Guide:
+    - Selectors: selectors.md
+    - Query Builder: query-builder.md
+    - DTOs: dtos.md
+    - ViewSets: viewsets.md
+  - Reference:
+    - OData Syntax: odata-syntax.md
+    - API Reference: api-reference.md
