@@ -24,8 +24,10 @@ posts = repository.get_published()
 
 **With FC Selector:**
 ```python
+from fc_selector.django.selector import ODataSelector, QueryBuilder
+
 posts = selector.get_many(
-    ODataQueryBuilder()
+    QueryBuilder()
     .select("id", "title", "excerpt")  # Only these 3 fields
     .filter("status eq 'published'")
 )
@@ -49,7 +51,7 @@ for post in posts:
 **With FC Selector:**
 ```python
 posts = selector.get_many(
-    ODataQueryBuilder()
+    QueryBuilder()
     .expand("author")  # Automatic select_related
 )
 # Single query with JOIN - no N+1
@@ -83,9 +85,9 @@ class BlogPostSelector(ODataSelector):
         dto_class = BlogPostDTO
 
 # All queries through one interface:
-selector.get_many(ODataQueryBuilder().filter("status eq 'published'"))
-selector.get_many(ODataQueryBuilder().filter("author/id eq 5"))
-selector.get_many(ODataQueryBuilder().filter("featured eq true").top(5))
+selector.get_many(QueryBuilder().filter("status eq 'published'"))
+selector.get_many(QueryBuilder().filter("author/id eq 5"))
+selector.get_many(QueryBuilder().filter("featured eq true").top(5))
 ```
 
 **Benefit:** Less code, easier maintenance, consistent API.

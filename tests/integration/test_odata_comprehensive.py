@@ -5,8 +5,10 @@ This module provides utilities to run all OData expression tests
 and generate comprehensive test reports.
 """
 
-from datetime import UTC
+import random
+from datetime import UTC, datetime, timedelta
 
+from django.db import connection
 from django.test import TestCase
 
 
@@ -21,7 +23,7 @@ class TestODataComprehensiveSuite(TestCase):
 
         # Core test modules that should be importable
         test_modules = [
-            "fc_selector.core.parsers.filter",
+            "fc_selector.protocols.odata.parsers.filter",
             "fc_selector.core.query_builder",
             "fc_selector.django.selector",
         ]
@@ -42,9 +44,6 @@ class TestODataComprehensiveSuite(TestCase):
 
     def test_database_schema_for_tests(self):
         """Verify that the test database schema supports our OData tests."""
-
-        # Check that we can create the test tables needed for our OData tests
-        from django.db import connection
 
         with connection.cursor() as cursor:
             # Check if we can create a simple test table structure
@@ -211,9 +210,6 @@ class ODataTestDataFactory:
     def create_performance_test_data(count=1000):
         """Create large dataset for performance testing."""
 
-        import random
-        from datetime import datetime, timedelta
-
         categories = ["electronics", "books", "clothing", "home", "sports", "toys"]
         statuses = ["draft", "published", "archived"]
 
@@ -231,11 +227,7 @@ class ODataTestDataFactory:
                 "is_active": random.choice([True, False]),
                 "status": random.choice(statuses),
                 "created_at": base_date + timedelta(days=random.randint(0, 1460)),
-                "rating": (
-                    round(random.uniform(1.0, 5.0), 1)
-                    if random.random() > 0.2
-                    else None
-                ),
+                "rating": (round(random.uniform(1.0, 5.0), 1) if random.random() > 0.2 else None),
             }
             test_data.append(record)
 

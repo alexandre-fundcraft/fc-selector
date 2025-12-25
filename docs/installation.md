@@ -66,8 +66,7 @@ pip install -e ".[dev]"
 ## Verify Installation
 
 ```python
-from fc_selector.django.selector import ODataSelector
-from fc_selector.core import ODataQueryBuilder
+from fc_selector.django.selector import ODataSelector, QueryBuilder
 
 print("FC Selector installed successfully!")
 ```

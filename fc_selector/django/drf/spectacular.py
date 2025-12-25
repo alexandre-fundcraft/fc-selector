@@ -108,9 +108,7 @@ When `true`, response includes `@odata.count` with total results.""",
 
 
 # Parameters for retrieve (only $select and $expand make sense)
-ODATA_RETRIEVE_PARAMETERS = [
-    p for p in ODATA_PARAMETERS if p.name in ("$select", "$expand")
-]
+ODATA_RETRIEVE_PARAMETERS = [p for p in ODATA_PARAMETERS if p.name in ("$select", "$expand")]
 
 
 if HAS_SPECTACULAR:
@@ -148,7 +146,7 @@ if HAS_SPECTACULAR:
             ODataSelectorViewSetMixin,
         )
 
-        for path, path_regex, method, callback in endpoints:
+        for _path, _path_regex, _method, callback in endpoints:
             view_class = getattr(callback, "cls", None)
             if view_class and issubclass(view_class, ODataSelectorViewSetMixin):
                 # Mark this view for OData parameter injection
@@ -176,7 +174,7 @@ if HAS_SPECTACULAR:
 
                 # Check if this is an OData endpoint by looking at tags or operationId
                 operation_id = operation.get("operationId", "")
-                tags = operation.get("tags", [])
+                operation.get("tags", [])
 
                 # Add parameters if not already present
                 if "parameters" not in operation:
@@ -190,13 +188,21 @@ if HAS_SPECTACULAR:
 
                 for param in params_to_add:
                     if param.name not in existing_param_names:
-                        operation["parameters"].append({
-                            "name": param.name,
-                            "in": "query",
-                            "required": param.required,
-                            "description": param.description,
-                            "schema": {"type": "string" if param.type == OpenApiTypes.STR else "integer" if param.type == OpenApiTypes.INT else "boolean"},
-                        })
+                        operation["parameters"].append(
+                            {
+                                "name": param.name,
+                                "in": "query",
+                                "required": param.required,
+                                "description": param.description,
+                                "schema": {
+                                    "type": "string"
+                                    if param.type == OpenApiTypes.STR
+                                    else "integer"
+                                    if param.type == OpenApiTypes.INT
+                                    else "boolean"
+                                },
+                            }
+                        )
 
         return result
 

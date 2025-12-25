@@ -17,7 +17,7 @@ from rest_framework import serializers
 from fc_selector.core.dtos import UNSET
 
 # Cache for dynamically created serializers to avoid recursion
-_serializer_cache = {}
+_serializer_cache: dict[type, type] = {}
 
 
 class ODataDTOSerializer(serializers.Serializer):
@@ -63,16 +63,12 @@ class ODataDTOSerializer(serializers.Serializer):
         super().__init__(*args, **kwargs)
 
         # Get Meta configuration
-        dto_class = getattr(self.Meta, 'dto_class', None)
+        dto_class = getattr(self.Meta, "dto_class", None)
         if not dto_class:
-            raise ValueError(
-                f"{self.__class__.__name__} must define Meta.dto_class"
-            )
+            raise ValueError(f"{self.__class__.__name__} must define Meta.dto_class")
 
         if not is_dataclass(dto_class):
-            raise ValueError(
-                f"dto_class must be a dataclass, got {type(dto_class)}"
-            )
+            raise ValueError(f"dto_class must be a dataclass, got {type(dto_class)}")
 
         self.dto_class = dto_class
         self._configure_fields()
@@ -82,10 +78,10 @@ class ODataDTOSerializer(serializers.Serializer):
         from typing import get_type_hints
 
         # Get field configuration from Meta
-        fields_option = getattr(self.Meta, 'fields', None)
-        exclude_option = getattr(self.Meta, 'exclude', None) or []
-        read_only_fields = getattr(self.Meta, 'read_only_fields', None) or []
-        extra_kwargs = getattr(self.Meta, 'extra_kwargs', None) or {}
+        fields_option = getattr(self.Meta, "fields", None)
+        exclude_option = getattr(self.Meta, "exclude", None) or []
+        read_only_fields = getattr(self.Meta, "read_only_fields", None) or []
+        extra_kwargs = getattr(self.Meta, "extra_kwargs", None) or {}
 
         # Get all DTO fields
         dto_fields = {f.name: f for f in dataclass_fields(self.dto_class)}
@@ -93,9 +89,9 @@ class ODataDTOSerializer(serializers.Serializer):
         # Get type hints to access actual type objects
         try:
             type_hints = get_type_hints(self.dto_class)
-        except Exception:
+        except (TypeError, AttributeError, NameError):
             # Fallback to annotations if type hints fail
-            type_hints = getattr(self.dto_class, '__annotations__', {})
+            type_hints = getattr(self.dto_class, "__annotations__", {})
 
         # Determine which fields to include
         if fields_option is None:
@@ -120,18 +116,14 @@ class ODataDTOSerializer(serializers.Serializer):
 
             # Add read_only if specified
             if field_name in read_only_fields:
-                field_kwargs['read_only'] = True
+                field_kwargs["read_only"] = True
 
             # Create appropriate serializer field based on DTO field type
-            serializer_field = self._create_field_for_dto_field(
-                field_type, field_kwargs
-            )
+            serializer_field = self._create_field_for_dto_field(field_type, field_kwargs)
 
             self.fields[field_name] = serializer_field
 
-    def _create_field_for_dto_field(
-        self, field_type, field_kwargs: dict[str, Any]
-    ) -> serializers.Field:
+    def _create_field_for_dto_field(self, field_type, field_kwargs: dict[str, Any]) -> serializers.Field:
         """
         Create appropriate serializer field for a DTO field type.
 
@@ -149,8 +141,8 @@ class ODataDTOSerializer(serializers.Serializer):
             # The to_representation method will handle converting the DTO to a dict
             is_many = self._is_many_relationship(field_type)
 
-            field_kwargs.setdefault('allow_null', True)
-            field_kwargs.setdefault('required', False)
+            field_kwargs.setdefault("allow_null", True)
+            field_kwargs.setdefault("required", False)
 
             # Use SerializerMethodField to manually serialize nested DTOs
             if is_many:
@@ -175,14 +167,14 @@ class ODataDTOSerializer(serializers.Serializer):
         field_class = type_map.get(base_type, serializers.CharField)
 
         # Set common kwargs
-        field_kwargs.setdefault('allow_null', True)
-        field_kwargs.setdefault('required', False)
+        field_kwargs.setdefault("allow_null", True)
+        field_kwargs.setdefault("required", False)
 
         # For ListField, don't pass unexpected kwargs
         if field_class == serializers.ListField:
             # Remove kwargs that ListField doesn't support
-            field_kwargs.pop('max_length', None)
-            field_kwargs.pop('min_length', None)
+            field_kwargs.pop("max_length", None)
+            field_kwargs.pop("min_length", None)
 
         return field_class(**field_kwargs)
 
@@ -204,8 +196,8 @@ class ODataDTOSerializer(serializers.Serializer):
                         field_type = inner_args[0]
 
         # Check if type name ends with 'DTO'
-        if hasattr(field_type, '__name__'):
-            return field_type.__name__.endswith('DTO')
+        if hasattr(field_type, "__name__"):
+            return bool(str(field_type.__name__).endswith("DTO"))
 
         return False
 
@@ -229,7 +221,7 @@ class ODataDTOSerializer(serializers.Serializer):
 
     def _extract_dto_class(self, field_type: Any) -> type:
         """Extract the DTO class from a type annotation."""
-        from typing import get_args, get_origin
+        from typing import cast, get_args, get_origin
 
         # Handle Optional[T] or List[T]
         origin = get_origin(field_type)
@@ -242,15 +234,15 @@ class ODataDTOSerializer(serializers.Serializer):
                 if inner_origin is list:
                     inner_args = get_args(inner_type)
                     if inner_args:
-                        return inner_args[0]
-                return inner_type
+                        return cast(type, inner_args[0])
+                return cast(type, inner_type)
 
         # Direct DTO type
-        return field_type
+        return cast(type, field_type)
 
     def _get_base_type(self, field_type: Any) -> type:
         """Get base type, unwrapping Optional."""
-        from typing import get_args, get_origin
+        from typing import cast, get_args, get_origin
 
         origin = get_origin(field_type)
         if origin is not None:
@@ -259,7 +251,7 @@ class ODataDTOSerializer(serializers.Serializer):
                 # Return first non-None type
                 for arg in args:
                     if arg is not type(None):
-                        return arg
+                        return cast(type, arg)
 
         return field_type if isinstance(field_type, type) else str
 
@@ -276,9 +268,7 @@ class ODataDTOSerializer(serializers.Serializer):
             Dictionary representation
         """
         if not is_dataclass(instance):
-            raise ValueError(
-                f"Expected dataclass instance, got {type(instance)}"
-            )
+            raise ValueError(f"Expected dataclass instance, got {type(instance)}")
 
         data = {}
 
@@ -298,7 +288,7 @@ class ODataDTOSerializer(serializers.Serializer):
             elif isinstance(value, list) and value and is_dataclass(value[0]):
                 # List of DTOs
                 data[field_name] = [self._dto_to_dict(item) for item in value]
-            elif value is None and (getattr(field, 'many', False) or isinstance(field, serializers.ListField)):
+            elif value is None and (getattr(field, "many", False) or isinstance(field, serializers.ListField)):
                 # Handle None values for list fields
                 data[field_name] = None
             elif value is None:
@@ -332,7 +322,7 @@ class ODataDTOSerializer(serializers.Serializer):
 
         # Check if the DTO class itself has _excluded_fields attribute
         excluded_fields = set()
-        if hasattr(dto_class, '_excluded_fields'):
+        if hasattr(dto_class, "_excluded_fields"):
             excluded_fields = set(dto_class._excluded_fields)
         else:
             # Try to import and use the corresponding serializer
@@ -346,27 +336,31 @@ class ODataDTOSerializer(serializers.Serializer):
 
                 # Try common patterns for serializer modules
                 # Example: blog.selectors.blog_post -> blog.dto_serializers
-                base_module = dto_module_name.split('.selectors.')[0] if '.selectors.' in dto_module_name else dto_module_name.rsplit('.', 1)[0]
+                base_module = (
+                    dto_module_name.split(".selectors.")[0]
+                    if ".selectors." in dto_module_name
+                    else dto_module_name.rsplit(".", 1)[0]
+                )
 
                 possible_serializer_modules = [
-                    base_module + '.dto_serializers',
-                    dto_module_name.rsplit('.', 1)[0] + '.dto_serializers',
-                    dto_module_name.replace('_selector', '_dto_serializers'),
+                    base_module + ".dto_serializers",
+                    dto_module_name.rsplit(".", 1)[0] + ".dto_serializers",
+                    dto_module_name.replace("_selector", "_dto_serializers"),
                 ]
 
-                serializer_class_name = dto_class_name + 'Serializer'
+                serializer_class_name = dto_class_name + "Serializer"
 
                 for module_name in possible_serializer_modules:
                     try:
                         module = importlib.import_module(module_name)
                         if hasattr(module, serializer_class_name):
                             serializer_class = getattr(module, serializer_class_name)
-                            if hasattr(serializer_class, 'Meta') and hasattr(serializer_class.Meta, 'exclude'):
+                            if hasattr(serializer_class, "Meta") and hasattr(serializer_class.Meta, "exclude"):
                                 excluded_fields = set(serializer_class.Meta.exclude or [])
                                 break
                     except (ImportError, AttributeError):
                         continue
-            except Exception:
+            except (ImportError, AttributeError, TypeError, ValueError):
                 # If anything fails, just continue without exclusions
                 pass
 

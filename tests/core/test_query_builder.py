@@ -1,64 +1,64 @@
 """
-Tests for ODataQueryBuilder.
+Tests for QueryBuilder.
 """
 
-from fc_selector.core.query_builder import ODataQueryBuilder
+from fc_selector.core.query_builder import QueryBuilder
 
 
-class TestODataQueryBuilderInit:
-    """Tests for ODataQueryBuilder initialization."""
+class TestQueryBuilderInit:
+    """Tests for QueryBuilder initialization."""
 
     def test_init_empty(self):
-        query = ODataQueryBuilder()
+        query = QueryBuilder()
         assert query.build_query_string() == ""
 
     def test_init_with_query_string(self):
-        query = ODataQueryBuilder("$filter=Price gt 100&$top=10")
+        query = QueryBuilder("$filter=Price gt 100&$top=10")
         result = query.build_query_string()
         assert "$filter=Price gt 100" in result
         assert "$top=10" in result
 
 
-class TestODataQueryBuilderFromQueryString:
+class TestQueryBuilderFromQueryString:
     """Tests for from_query_string class method."""
 
     def test_from_empty_string(self):
-        query = ODataQueryBuilder.from_query_string("")
+        query = QueryBuilder.from_query_string("")
         assert query.build_query_string() == ""
 
     def test_from_none_string(self):
-        query = ODataQueryBuilder.from_query_string(None)
+        query = QueryBuilder.from_query_string(None)
         assert query.build_query_string() == ""
 
     def test_from_select(self):
-        query = ODataQueryBuilder.from_query_string("$select=id,name")
+        query = QueryBuilder.from_query_string("$select=id,name")
         assert "$select=id,name" in query.build_query_string()
 
     def test_from_filter(self):
-        query = ODataQueryBuilder.from_query_string("$filter=status eq 'active'")
+        query = QueryBuilder.from_query_string("$filter=status eq 'active'")
         assert "$filter=status eq 'active'" in query.build_query_string()
 
     def test_from_top_skip(self):
-        query = ODataQueryBuilder.from_query_string("$top=10&$skip=20")
+        query = QueryBuilder.from_query_string("$top=10&$skip=20")
         result = query.build_query_string()
         assert "$top=10" in result
         assert "$skip=20" in result
 
     def test_from_orderby(self):
-        query = ODataQueryBuilder.from_query_string("$orderby=name desc")
+        query = QueryBuilder.from_query_string("$orderby=name desc")
         assert "$orderby=name desc" in query.build_query_string()
 
     def test_from_expand(self):
-        query = ODataQueryBuilder.from_query_string("$expand=author,categories")
+        query = QueryBuilder.from_query_string("$expand=author,categories")
         assert "$expand=author,categories" in query.build_query_string()
 
     def test_from_count(self):
-        query = ODataQueryBuilder.from_query_string("$count=true")
+        query = QueryBuilder.from_query_string("$count=true")
         assert "$count=true" in query.build_query_string()
 
     def test_from_complex_query(self):
         query_string = "$filter=status eq 'published'&$select=id,title&$top=10&$orderby=created_at desc"
-        query = ODataQueryBuilder.from_query_string(query_string)
+        query = QueryBuilder.from_query_string(query_string)
         result = query.build_query_string()
         assert "$filter=status eq 'published'" in result
         assert "$select=id,title" in result
@@ -66,39 +66,36 @@ class TestODataQueryBuilderFromQueryString:
         assert "$orderby=created_at desc" in result
 
 
-class TestODataQueryBuilderFilter:
+class TestQueryBuilderFilter:
     """Tests for filter methods."""
 
     def test_filter_sets_expression(self):
-        query = ODataQueryBuilder().filter("status eq 'active'")
+        query = QueryBuilder().filter("status eq 'active'")
         assert query.build_query_string() == "$filter=status eq 'active'"
 
     def test_filter_replaces_existing(self):
-        query = ODataQueryBuilder().filter("status eq 'active'").filter("status eq 'draft'")
+        query = QueryBuilder().filter("status eq 'active'").filter("status eq 'draft'")
         assert query.build_query_string() == "$filter=status eq 'draft'"
 
     def test_and_filter_without_existing(self):
-        query = ODataQueryBuilder().and_filter("status eq 'active'")
+        query = QueryBuilder().and_filter("status eq 'active'")
         assert query.build_query_string() == "$filter=status eq 'active'"
 
     def test_and_filter_with_existing(self):
-        query = ODataQueryBuilder().filter("status eq 'active'").and_filter("featured eq true")
+        query = QueryBuilder().filter("status eq 'active'").and_filter("featured eq true")
         assert query.build_query_string() == "$filter=(status eq 'active') and (featured eq true)"
 
     def test_or_filter_without_existing(self):
-        query = ODataQueryBuilder().or_filter("status eq 'active'")
+        query = QueryBuilder().or_filter("status eq 'active'")
         assert query.build_query_string() == "$filter=status eq 'active'"
 
     def test_or_filter_with_existing(self):
-        query = ODataQueryBuilder().filter("status eq 'active'").or_filter("status eq 'draft'")
+        query = QueryBuilder().filter("status eq 'active'").or_filter("status eq 'draft'")
         assert query.build_query_string() == "$filter=(status eq 'active') or (status eq 'draft')"
 
     def test_chained_and_filters(self):
         query = (
-            ODataQueryBuilder()
-            .filter("status eq 'published'")
-            .and_filter("featured eq true")
-            .and_filter("rating gt 4")
+            QueryBuilder().filter("status eq 'published'").and_filter("featured eq true").and_filter("rating gt 4")
         )
         result = query.build_query_string()
         assert "status eq 'published'" in result
@@ -106,111 +103,111 @@ class TestODataQueryBuilderFilter:
         assert "rating gt 4" in result
 
 
-class TestODataQueryBuilderSelect:
+class TestQueryBuilderSelect:
     """Tests for select method."""
 
     def test_select_single_field(self):
-        query = ODataQueryBuilder().select("id")
+        query = QueryBuilder().select("id")
         assert query.build_query_string() == "$select=id"
 
     def test_select_multiple_fields(self):
-        query = ODataQueryBuilder().select("id", "name", "email")
+        query = QueryBuilder().select("id", "name", "email")
         assert query.build_query_string() == "$select=id,name,email"
 
     def test_select_comma_separated_string(self):
-        query = ODataQueryBuilder().select("id,name,email")
+        query = QueryBuilder().select("id,name,email")
         assert query.build_query_string() == "$select=id,name,email"
 
 
-class TestODataQueryBuilderExpand:
+class TestQueryBuilderExpand:
     """Tests for expand method."""
 
     def test_expand_single(self):
-        query = ODataQueryBuilder().expand("author")
+        query = QueryBuilder().expand("author")
         assert query.build_query_string() == "$expand=author"
 
     def test_expand_multiple(self):
-        query = ODataQueryBuilder().expand("author", "categories")
+        query = QueryBuilder().expand("author", "categories")
         assert query.build_query_string() == "$expand=author,categories"
 
     def test_expand_comma_separated(self):
-        query = ODataQueryBuilder().expand("author,categories")
+        query = QueryBuilder().expand("author,categories")
         assert query.build_query_string() == "$expand=author,categories"
 
 
-class TestODataQueryBuilderOrderBy:
+class TestQueryBuilderOrderBy:
     """Tests for orderby method."""
 
     def test_orderby_single(self):
-        query = ODataQueryBuilder().orderby("name")
+        query = QueryBuilder().orderby("name")
         assert query.build_query_string() == "$orderby=name"
 
     def test_orderby_with_direction(self):
-        query = ODataQueryBuilder().orderby("name desc")
+        query = QueryBuilder().orderby("name desc")
         assert query.build_query_string() == "$orderby=name desc"
 
     def test_orderby_multiple(self):
-        query = ODataQueryBuilder().orderby("name desc", "id asc")
+        query = QueryBuilder().orderby("name desc", "id asc")
         assert query.build_query_string() == "$orderby=name desc,id asc"
 
 
-class TestODataQueryBuilderPagination:
+class TestQueryBuilderPagination:
     """Tests for top, skip, and count methods."""
 
     def test_top(self):
-        query = ODataQueryBuilder().top(10)
+        query = QueryBuilder().top(10)
         assert query.build_query_string() == "$top=10"
 
     def test_skip(self):
-        query = ODataQueryBuilder().skip(20)
+        query = QueryBuilder().skip(20)
         assert query.build_query_string() == "$skip=20"
 
     def test_top_and_skip(self):
-        query = ODataQueryBuilder().top(10).skip(20)
+        query = QueryBuilder().top(10).skip(20)
         result = query.build_query_string()
         assert "$top=10" in result
         assert "$skip=20" in result
 
     def test_count_true(self):
-        query = ODataQueryBuilder().count(True)
+        query = QueryBuilder().count(True)
         assert query.build_query_string() == "$count=true"
 
     def test_count_false(self):
-        query = ODataQueryBuilder().count(False)
+        query = QueryBuilder().count(False)
         assert query.build_query_string() == "$count=false"
 
 
-class TestODataQueryBuilderBuild:
+class TestQueryBuilderBuild:
     """Tests for build methods."""
 
     def test_build_query_string_empty(self):
-        query = ODataQueryBuilder()
+        query = QueryBuilder()
         assert query.build_query_string() == ""
 
     def test_build_query_string_with_filter(self):
-        query = ODataQueryBuilder().filter("Price gt 100")
+        query = QueryBuilder().filter("Price gt 100")
         assert query.build_query_string() == "$filter=Price gt 100"
 
     def test_build_query_string_from_existing(self):
-        query = ODataQueryBuilder("$select=id,name").filter("Price gt 100")
+        query = QueryBuilder("$select=id,name").filter("Price gt 100")
         result = query.build_query_string()
         assert "$filter=Price gt 100" in result
         assert "$select=id,name" in result
 
     def test_to_dict(self):
-        query = ODataQueryBuilder().filter("status eq 'active'").select("id", "name").top(10)
+        query = QueryBuilder().filter("status eq 'active'").select("id", "name").top(10)
         result = query.to_dict()
         assert result["$filter"] == "status eq 'active'"
         assert result["$select"] == "id,name"
         assert result["$top"] == "10"
 
 
-class TestODataQueryBuilderChaining:
+class TestQueryBuilderChaining:
     """Tests for method chaining."""
 
     def test_full_chain(self):
         query = (
-            ODataQueryBuilder()
+            QueryBuilder()
             .filter("status eq 'published'")
             .and_filter("id eq 5")
             .select("id", "title", "author")
@@ -231,7 +228,7 @@ class TestODataQueryBuilderChaining:
 
     def test_from_query_string_and_modify(self):
         """Test parsing existing query and adding more filters."""
-        query = ODataQueryBuilder.from_query_string("$select=id,name&$top=10")
+        query = QueryBuilder.from_query_string("$select=id,name&$top=10")
         query.and_filter("id eq 5")
         result = query.build_query_string()
         assert "$filter=id eq 5" in result
@@ -239,20 +236,20 @@ class TestODataQueryBuilderChaining:
         assert "$top=10" in result
 
 
-class TestODataQueryBuilderStringRepresentation:
+class TestQueryBuilderStringRepresentation:
     """Tests for string representation."""
 
     def test_str(self):
-        query = ODataQueryBuilder().filter("Price gt 100")
+        query = QueryBuilder().filter("Price gt 100")
         assert str(query) == "$filter=Price gt 100"
 
     def test_str_from_query_string(self):
-        query = ODataQueryBuilder("$select=id,name").filter("Price gt 100")
+        query = QueryBuilder("$select=id,name").filter("Price gt 100")
         result = str(query)
         assert "$filter=Price gt 100" in result
         assert "$select=id,name" in result
 
     def test_repr(self):
-        query = ODataQueryBuilder().filter("status eq 'active'")
-        assert "ODataQueryBuilder" in repr(query)
+        query = QueryBuilder().filter("status eq 'active'")
+        assert "QueryBuilder" in repr(query)
         assert "status eq 'active'" in repr(query)

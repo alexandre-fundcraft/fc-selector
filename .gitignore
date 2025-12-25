@@ -101,3 +101,4 @@ site/
 # Project specific
 .history
 archive
+.DS_Store

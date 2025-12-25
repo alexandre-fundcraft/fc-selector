@@ -1,10 +1,10 @@
 # ViewSet Examples - Complete Guide
 
-This guide shows complete examples of using ODataSelector + ODataQueryBuilder + DTOs in ViewSets.
+This guide shows complete examples of using ODataSelector + QueryBuilder + DTOs in ViewSets.
 
 ## Table of Contents
 1. [Quick Start](#quick-start)
-2. [ODataQueryBuilder](#odataquerybuilder)
+2. [QueryBuilder](#odataquerybuilder)
 3. [Complete ViewSet Examples](#complete-viewset-examples)
 4. [Custom Actions](#custom-actions)
 5. [Request Examples](#request-examples)
@@ -51,18 +51,18 @@ urlpatterns = [
 
 ---
 
-## ODataQueryBuilder
+## QueryBuilder
 
-The `ODataQueryBuilder` is a fluent builder for constructing OData queries programmatically. It's part of the core layer and has no framework dependencies.
+The `QueryBuilder` is a fluent builder for constructing OData queries programmatically. It's part of the core layer and has no framework dependencies.
 
 ### Basic Usage
 
 ```python
-from fc_odata.core import ODataQueryBuilder
+from fc_odata.core import QueryBuilder
 
 # Build a query from scratch
 query = (
-    ODataQueryBuilder()
+    QueryBuilder()
     .filter("status eq 'published'")
     .select("id", "title", "author")
     .expand("author")
@@ -82,7 +82,7 @@ When receiving a request with an OData query string, use `from_query_string()`:
 ```python
 # Parse query string from request
 query_string = request.META.get('QUERY_STRING', '')
-query = ODataQueryBuilder.from_query_string(query_string)
+query = QueryBuilder.from_query_string(query_string)
 
 # Add additional filters programmatically
 query.and_filter(f"id eq {pk}")
@@ -127,7 +127,7 @@ query.or_filter("status eq 'draft'")
 from rest_framework import viewsets
 from rest_framework.response import Response
 
-from fc_odata.core import ODataQueryBuilder
+from fc_odata.core import QueryBuilder
 
 from .selectors.blog_post import AuthorSelector
 from .dto_serializers import AuthorDTOSerializer
@@ -143,7 +143,7 @@ class AuthorViewSet(viewsets.ReadOnlyModelViewSet):
         query_string = request.META.get('QUERY_STRING', '')
 
         selector = AuthorSelector()
-        query = ODataQueryBuilder.from_query_string(query_string)
+        query = QueryBuilder.from_query_string(query_string)
         dtos = selector.get_many(query)
 
         serializer = self.get_serializer(dtos, many=True)
@@ -154,7 +154,7 @@ class AuthorViewSet(viewsets.ReadOnlyModelViewSet):
         query_string = request.META.get('QUERY_STRING', '')
 
         selector = AuthorSelector()
-        query = ODataQueryBuilder.from_query_string(query_string).and_filter(f"id eq {pk}")
+        query = QueryBuilder.from_query_string(query_string).and_filter(f"id eq {pk}")
         dto = selector.get_one(query)
 
         if dto is None:
@@ -171,7 +171,7 @@ from rest_framework import viewsets, status
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 
-from fc_odata.core import ODataQueryBuilder
+from fc_odata.core import QueryBuilder
 
 
 class BlogPostViewSet(viewsets.ModelViewSet):
@@ -187,7 +187,7 @@ class BlogPostViewSet(viewsets.ModelViewSet):
         query_string = request.META.get('QUERY_STRING', '')
 
         selector = BlogPostSelector()
-        query = ODataQueryBuilder.from_query_string(query_string)
+        query = QueryBuilder.from_query_string(query_string)
         dtos = selector.get_many(query)
 
         serializer = self.get_serializer(dtos, many=True)
@@ -198,7 +198,7 @@ class BlogPostViewSet(viewsets.ModelViewSet):
         query_string = request.META.get('QUERY_STRING', '')
 
         selector = BlogPostSelector()
-        query = ODataQueryBuilder.from_query_string(query_string).and_filter(f"id eq {pk}")
+        query = QueryBuilder.from_query_string(query_string).and_filter(f"id eq {pk}")
         dto = selector.get_one(query)
 
         if dto is None:
@@ -272,7 +272,7 @@ class BlogPostViewSet(viewsets.ModelViewSet):
 ```python
 from rest_framework.decorators import action
 
-from fc_odata.core import ODataQueryBuilder
+from fc_odata.core import QueryBuilder
 
 
 class BlogPostViewSet(viewsets.ModelViewSet):
@@ -288,7 +288,7 @@ class BlogPostViewSet(viewsets.ModelViewSet):
 
         selector = BlogPostSelector()
         # Parse existing query and add status filter
-        query = ODataQueryBuilder.from_query_string(query_string).and_filter("status eq 'published'")
+        query = QueryBuilder.from_query_string(query_string).and_filter("status eq 'published'")
         dtos = selector.get_many(query)
 
         serializer = self.get_serializer(dtos, many=True)
@@ -308,7 +308,7 @@ def by_author(self, request, author_id=None):
     query_string = request.META.get('QUERY_STRING', '')
 
     selector = BlogPostSelector()
-    query = ODataQueryBuilder.from_query_string(query_string).and_filter(f"author/id eq {author_id}")
+    query = QueryBuilder.from_query_string(query_string).and_filter(f"author/id eq {author_id}")
     dtos = selector.get_many(query)
 
     serializer = self.get_serializer(dtos, many=True)
@@ -357,7 +357,7 @@ def posts(self, request, pk=None):
     Example: GET /api/authors/1/posts/
     """
     # Verify author exists
-    if not AuthorSelector().exists_by(ODataQueryBuilder().and_filter(f"id eq {pk}")):
+    if not AuthorSelector().exists_by(QueryBuilder().and_filter(f"id eq {pk}")):
         return Response({'detail': 'Author not found.'}, status=404)
 
     query_string = request.META.get('QUERY_STRING', '')
@@ -366,7 +366,7 @@ def posts(self, request, pk=None):
     from .dto_serializers import BlogPostDTOSerializer
 
     selector = BlogPostSelector()
-    query = ODataQueryBuilder.from_query_string(query_string).and_filter(f"author/id eq {pk}")
+    query = QueryBuilder.from_query_string(query_string).and_filter(f"author/id eq {pk}")
     dtos = selector.get_many(query)
 
     serializer = BlogPostDTOSerializer(dtos, many=True)
@@ -386,7 +386,7 @@ def me(self, request):
     query_string = request.META.get('QUERY_STRING', '')
 
     selector = UserSelector()
-    query = ODataQueryBuilder.from_query_string(query_string).and_filter(f"id eq {request.user.pk}")
+    query = QueryBuilder.from_query_string(query_string).and_filter(f"id eq {request.user.pk}")
     dto = selector.get_one(query)
 
     if dto is None:
@@ -400,7 +400,7 @@ def me(self, request):
 
 ## Selector Methods Reference
 
-The `ODataSelector` provides these methods that accept `ODataQueryBuilder` and return DTOs directly:
+The `ODataSelector` provides these methods that accept `QueryBuilder` and return DTOs directly:
 
 | Method | Returns | Description |
 |--------|---------|-------------|
@@ -413,17 +413,17 @@ The `ODataSelector` provides these methods that accept `ODataQueryBuilder` and r
 ### Examples
 
 ```python
-from fc_odata.core import ODataQueryBuilder
+from fc_odata.core import QueryBuilder
 
 selector = BlogPostSelector()
 
 # Get one
-query = ODataQueryBuilder().and_filter(f"id eq {pk}")
+query = QueryBuilder().and_filter(f"id eq {pk}")
 dto = selector.get_one(query)
 
 # Get many with complex query
 query = (
-    ODataQueryBuilder()
+    QueryBuilder()
     .filter("status eq 'published'")
     .and_filter("featured eq true")
     .select("id", "title")
@@ -435,15 +435,15 @@ dtos = selector.get_many(query)
 dto = selector.get_by_pk(1)
 
 # Get by primary key with field selection
-query = ODataQueryBuilder().select("id", "title", "author").expand("author")
+query = QueryBuilder().select("id", "title", "author").expand("author")
 dto = selector.get_by_pk(1, query)
 
 # Count
-query = ODataQueryBuilder().filter("status eq 'published'")
+query = QueryBuilder().filter("status eq 'published'")
 count = selector.count_by(query)
 
 # Exists
-query = ODataQueryBuilder().filter("slug eq 'my-post'")
+query = QueryBuilder().filter("slug eq 'my-post'")
 exists = selector.exists_by(query)
 ```
 
@@ -649,11 +649,11 @@ GET /api/users/1/?$select=id,username,email
 
 ## Best Practices
 
-### 1. Always Use ODataQueryBuilder
+### 1. Always Use QueryBuilder
 
 ```python
-# Good - use ODataQueryBuilder
-query = ODataQueryBuilder.from_query_string(query_string).and_filter(f"id eq {pk}")
+# Good - use QueryBuilder
+query = QueryBuilder.from_query_string(query_string).and_filter(f"id eq {pk}")
 dto = selector.get_one(query)
 
 # Bad - exposing queryset
@@ -678,7 +678,7 @@ dtos = selector.to_dtos(list(queryset), ...)
 
 ```python
 # Good - OData filter syntax
-query = ODataQueryBuilder().filter("status eq 'published'").and_filter("featured eq true")
+query = QueryBuilder().filter("status eq 'published'").and_filter("featured eq true")
 
 # Bad - mixing Django and OData
 queryset = BlogPost.objects.filter(status='published')
@@ -704,7 +704,7 @@ if not selector.exists_by(query):
 dto = selector.get_by_pk(pk)
 
 # Also good - with field selection
-query = ODataQueryBuilder().select("id", "title").expand("author")
+query = QueryBuilder().select("id", "title").expand("author")
 dto = selector.get_by_pk(pk, query)
 ```
 
@@ -713,7 +713,7 @@ dto = selector.get_by_pk(pk, query)
 ## Summary
 
 You now have:
-- ODataQueryBuilder for fluent query construction
+- QueryBuilder for fluent query construction
 - Selector methods that return DTOs directly (no queryset exposure)
 - Complete ViewSet examples (read-only, CRUD, custom actions)
 - OData query support in all endpoints

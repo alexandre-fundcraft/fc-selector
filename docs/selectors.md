@@ -41,7 +41,7 @@ class BlogPostSelector(ODataSelector):
 ```python
 from dataclasses import dataclass
 from fc_selector.core.dtos import BaseODataDTO, UNSET
-from fc_selector.django.selector import ODataSelector
+from fc_selector.django.selector import ODataSelector, QueryBuilder
 
 @dataclass
 class BlogPostDTO(BaseODataDTO):
@@ -111,7 +111,7 @@ posts = selector.get_many()
 
 # With filters
 posts = selector.get_many(
-    ODataQueryBuilder()
+    QueryBuilder()
     .filter("status eq 'published'")
     .orderby("created_at desc")
     .top(10)
@@ -124,7 +124,7 @@ Get a single DTO matching a query. Returns `None` if not found.
 
 ```python
 post = selector.get_one(
-    ODataQueryBuilder()
+    QueryBuilder()
     .filter("slug eq 'my-post'")
     .expand("author")
 )
@@ -140,7 +140,7 @@ post = selector.get_by_pk(1)
 # With expand
 post = selector.get_by_pk(
     1,
-    ODataQueryBuilder().expand("author", "categories")
+    QueryBuilder().expand("author", "categories")
 )
 ```
 
@@ -150,7 +150,7 @@ Count matching records.
 
 ```python
 count = selector.count_by(
-    ODataQueryBuilder().filter("status eq 'draft'")
+    QueryBuilder().filter("status eq 'draft'")
 )
 ```
 
@@ -160,7 +160,7 @@ Check if any records match.
 
 ```python
 exists = selector.exists_by(
-    ODataQueryBuilder().filter("slug eq 'my-post'")
+    QueryBuilder().filter("slug eq 'my-post'")
 )
 ```
 
@@ -206,7 +206,7 @@ Applied automatically for `$expand` on ForeignKey/OneToOne fields:
 ```python
 # This query:
 selector.get_many(
-    ODataQueryBuilder().expand("author")
+    QueryBuilder().expand("author")
 )
 
 # Generates:
@@ -220,7 +220,7 @@ Applied automatically for `$expand` on ManyToMany fields:
 ```python
 # This query:
 selector.get_many(
-    ODataQueryBuilder().expand("categories")
+    QueryBuilder().expand("categories")
 )
 
 # Generates:
@@ -234,12 +234,93 @@ Applied automatically for `$select`:
 ```python
 # This query:
 selector.get_many(
-    ODataQueryBuilder().select("id", "title")
+    QueryBuilder().select("id", "title")
 )
 
 # Generates:
 BlogPost.objects.only('id', 'title')
 ```
+
+## Field Restrictions
+
+Control which fields can be filtered and sorted using a hybrid approach.
+
+### Positive List (Secure by Default)
+
+Explicitly list which fields are allowed:
+
+```python
+class BlogPostSelector(ODataSelector):
+    class Meta:
+        model = BlogPost
+        dto_class = BlogPostDTO
+
+        # Only these fields can be used in $filter
+        filterable_fields = ["status", "created_at", "author_id"]
+
+        # Only these fields can be used in $orderby
+        sortable_fields = ["title", "created_at", "status"]
+```
+
+This is the **recommended approach** for security - new fields added to the model won't be exposed automatically.
+
+### Negative List (Permissive)
+
+Alternatively, allow all fields except specific exclusions:
+
+```python
+class BlogPostSelector(ODataSelector):
+    class Meta:
+        model = BlogPost
+        dto_class = BlogPostDTO
+
+        # All fields filterable EXCEPT these
+        non_filterable_fields = ["password_hash", "internal_notes"]
+
+        # All fields sortable EXCEPT these
+        non_sortable_fields = ["content"]  # Long text, no sense sorting
+```
+
+### Priority Rules
+
+1. If `filterable_fields` is defined → only those fields are filterable (ignores `non_filterable_fields`)
+2. If only `non_filterable_fields` is defined → all fields except those are filterable
+3. If neither is defined → all fields are filterable
+
+Same logic applies to `sortable_fields`/`non_sortable_fields`.
+
+### OData Metadata
+
+These restrictions are automatically exposed in the `$metadata` endpoint following the OData Capabilities vocabulary:
+
+```xml
+<Annotation Target="ODataService.Container/posts"
+            Term="Org.OData.Capabilities.V1.FilterRestrictions">
+  <Record>
+    <PropertyValue Property="Filterable" Bool="true"/>
+    <PropertyValue Property="NonFilterableProperties">
+      <Collection>
+        <PropertyPath>password_hash</PropertyPath>
+        <PropertyPath>internal_notes</PropertyPath>
+      </Collection>
+    </PropertyValue>
+  </Record>
+</Annotation>
+
+<Annotation Target="ODataService.Container/posts"
+            Term="Org.OData.Capabilities.V1.SortRestrictions">
+  <Record>
+    <PropertyValue Property="Sortable" Bool="true"/>
+    <PropertyValue Property="NonSortableProperties">
+      <Collection>
+        <PropertyPath>content</PropertyPath>
+      </Collection>
+    </PropertyValue>
+  </Record>
+</Annotation>
+```
+
+This allows OData clients to discover which fields support filtering and sorting before making requests.
 
 ## Field Aliases
 
@@ -273,7 +354,7 @@ $filter=author__name eq 'John'&$select=id,title,author__name
 from dataclasses import dataclass
 from typing import Optional, List
 from fc_selector.core.dtos import BaseODataDTO, UNSET
-from fc_selector.django.selector import ODataSelector
+from fc_selector.django.selector import ODataSelector, QueryBuilder
 
 # DTOs
 @dataclass
@@ -319,7 +400,7 @@ selector = BlogPostSelector()
 
 # Get published posts with author
 posts = selector.get_many(
-    ODataQueryBuilder()
+    QueryBuilder()
     .filter("status eq 'published'")
     .select("id", "title", "authorName")
     .expand("author")

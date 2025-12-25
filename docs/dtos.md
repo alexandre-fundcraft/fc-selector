@@ -27,7 +27,7 @@ When you query with `$select=id,title`:
 
 ```python
 dto = selector.get_one(
-    ODataQueryBuilder().filter("id eq 1").select("id", "title")
+    QueryBuilder().filter("id eq 1").select("id", "title")
 )
 
 dto.id       # 1
@@ -120,7 +120,7 @@ When expanded:
 
 ```python
 post = selector.get_one(
-    ODataQueryBuilder()
+    QueryBuilder()
     .filter("id eq 1")
     .expand("author")
 )
@@ -132,7 +132,7 @@ When not expanded:
 
 ```python
 post = selector.get_one(
-    ODataQueryBuilder().filter("id eq 1")
+    QueryBuilder().filter("id eq 1")
 )
 
 post.author  # UNSET
@@ -145,7 +145,7 @@ You can select specific fields from expanded relations:
 ```python
 # OData query: $expand=author($select=name)
 post = selector.get_one(
-    ODataQueryBuilder()
+    QueryBuilder()
     .filter("id eq 1")
     .expand("author($select=name)")
 )
@@ -183,6 +183,7 @@ For DRF, use `ODataDTOSerializer`:
 
 ```python
 from fc_selector.django.drf.serializers import ODataDTOSerializer
+from fc_selector.core.dtos import BaseODataDTO, UNSET
 
 class BlogPostDTOSerializer(ODataDTOSerializer):
     class Meta:

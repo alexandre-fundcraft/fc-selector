@@ -1,10 +1,7 @@
-
 from django.db.models import Model
 
 
-def reverse_relationship(
-    relationship_expr: str, root_model: type[Model]
-) -> tuple[str, type[Model]]:
+def reverse_relationship(relationship_expr: str, root_model: type[Model]) -> tuple[str, type[Model]]:
     """
     Reverses a relationship expression relative to root_model.
 

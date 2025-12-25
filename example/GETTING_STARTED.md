@@ -2,7 +2,7 @@
 
 ## ✅ New System Activated!
 
-The example application now uses the **new system**: `ODataSelector` + `ODataQueryBuilder` + `DTOs` + `ODataDTOSerializer`.
+The example application now uses the **new system**: `ODataSelector` + `QueryBuilder` + `DTOs` + `ODataDTOSerializer`.
 
 ## ⚠️ IMPORTANT: Read-Only Library
 
@@ -242,7 +242,7 @@ HTTP Request with OData query
          ↓
 ViewSet method (list, retrieve, etc.)
          ↓
-ODataQueryBuilder.from_query_string(query_string)
+QueryBuilder.from_query_string(query_string)
          ↓
 ODataSelector.get_one(query) / get_many(query)
          ↓
@@ -258,8 +258,8 @@ JSON Response
 The new architecture follows hexagonal/clean architecture principles:
 
 ```python
-# Good - using ODataQueryBuilder (pure OData, no ORM exposure)
-query = ODataQueryBuilder.from_query_string(query_string).and_filter(f"id eq {pk}")
+# Good - using QueryBuilder (pure OData, no ORM exposure)
+query = QueryBuilder.from_query_string(query_string).and_filter(f"id eq {pk}")
 dto = selector.get_one(query)
 
 # Bad - exposing queryset (old pattern)
@@ -271,7 +271,7 @@ instance = queryset.filter(pk=pk).first()
 
 | Feature | Old | New |
 |---------|-----|-----|
-| Query Building | Query string parsing | ODataQueryBuilder (fluent API) |
+| Query Building | Query string parsing | QueryBuilder (fluent API) |
 | Data Access | Exposes QuerySet | Returns DTOs directly |
 | Models → JSON | ODataModelSerializer | Selector → DTO → DTOSerializer |
 | Field Selection | DRF fields | DTO with UNSET sentinel |
@@ -343,7 +343,7 @@ Make sure:
 ## 🎉 Done!
 
 You now have a complete system running with:
-- ✅ ODataQueryBuilder for fluent query construction
+- ✅ QueryBuilder for fluent query construction
 - ✅ OData queries ($select, $filter, $expand, $orderby, $top, $skip)
 - ✅ DTOs with type safety
 - ✅ No ORM/QuerySet exposure (hexagonal architecture)

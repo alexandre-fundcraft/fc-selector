@@ -60,6 +60,7 @@ for post in posts:
 
 ```python
 from dataclasses import dataclass
+from typing import Optional, List
 from fc_selector.core.dtos import BaseODataDTO, UNSET
 
 @dataclass
@@ -92,10 +93,12 @@ dto.content = None
 ### UNSET Makes It Clear
 
 ```python
+from fc_selector.django.selector import QueryBuilder
+
 # UNSET = field was not selected
 # None = field was selected, value is null
 
-query = ODataQueryBuilder().select("id", "title")
+query = QueryBuilder().select("id", "title")
 dto = selector.get_one(query)
 
 dto.id       # 1 (selected, has value)
@@ -103,7 +106,7 @@ dto.title    # "My Post" (selected, has value)
 dto.content  # UNSET (not selected - we didn't ask for it)
 dto.excerpt  # UNSET (not selected)
 
-query2 = ODataQueryBuilder().select("id", "excerpt")
+query2 = QueryBuilder().select("id", "excerpt")
 dto2 = selector.get_one(query2)
 
 dto2.excerpt  # None (selected, but value is null in DB)
@@ -157,7 +160,7 @@ class BlogPostDTO(BaseODataDTO):
 
 When expanded:
 ```python
-query = ODataQueryBuilder().expand("author")
+query = QueryBuilder().expand("author")
 dto = selector.get_one(query)
 
 dto.author.name  # "John Doe"
@@ -165,7 +168,7 @@ dto.author.name  # "John Doe"
 
 When not expanded:
 ```python
-query = ODataQueryBuilder()  # No expand
+query = QueryBuilder()  # No expand
 dto = selector.get_one(query)
 
 dto.author  # UNSET

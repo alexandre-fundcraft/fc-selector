@@ -2,11 +2,11 @@
 
 ## The Selector Pattern
 
-FC Selector implements the **Selector** (or **Query**) pattern from Domain-Driven Design (DDD).
+FC Selector implements the **Selector** (or **Query**) pattern from Domain-Driven Design (DDD), following the principles of **Hexagonal Architecture**.
 
 ### What is a Selector?
 
-A Selector is a specialized component for **read-only data retrieval**. Unlike a Repository that handles both reads and writes, a Selector focuses exclusively on queries.
+A Selector is a specialized component for **read-only data retrieval**. Unlike a Repository that handles both reads and writes, a Selector focuses exclusively on queries and returns Data Transfer Objects (DTOs) instead of database models.
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -23,209 +23,126 @@ A Selector is a specialized component for **read-only data retrieval**. Unlike a
 └─────────────────────────────────────────────────────────┘
 ```
 
-### Why Separate Reads from Writes?
+## Protocol-Agnostic Queries
 
-1. **Different optimization strategies** - Reads can use denormalized views, caching, or different databases
-2. **Simpler code** - No write logic in selectors, no read logic in repositories
-3. **CQRS-ready** - Natural fit for Command Query Responsibility Segregation
-4. **Safer** - Read-only by design, no accidental mutations
+A key feature of FC Selector is the separation between **how you ask** (Protocol) and **what you want** (Intent).
 
-## OData as Query Language
+### QueryIntent: The Canonical Representation
 
-Instead of creating a method for every possible query:
+Internally, every query is converted into a `QueryIntent`. This is a framework-agnostic structure that describes:
+- **Filter**: What conditions must be met (represented as an AST).
+- **Select**: Which fields to retrieve.
+- **Expand**: Which relations to eager load.
+- **Order**: How to sort the results.
+- **Pagination**: Limits and offsets.
 
-```python
-# Traditional approach - explosion of methods
-class PostRepository:
-    def get_all(self): ...
-    def get_by_id(self, id): ...
-    def get_published(self): ...
-    def get_by_author(self, author_id): ...
-    def get_published_by_author(self, author_id): ...
-    def get_featured(self): ...
-    def get_featured_published(self): ...
-    def get_by_category(self, category_id): ...
-    # ... endless variations
-```
+Because the system works with `QueryIntent`, you can trigger the same query logic via OData, GraphQL, or direct Python calls using the `QueryBuilder`.
 
-FC Selector uses **OData** as a standardized query language:
+## OData as the Default Protocol
+
+While the core is agnostic, FC Selector provides first-class support for **OData v4** as an interface language. Instead of creating a method for every possible query variation, you expose a flexible OData-powered endpoint.
 
 ```python
-# FC Selector approach - one flexible method
+# FC Selector approach - one flexible method, many possibilities
 selector = BlogPostSelector()
 
-# All these queries use the same method
-selector.get_many(ODataQueryBuilder().filter("status eq 'published'"))
-selector.get_many(ODataQueryBuilder().filter("author/id eq 5"))
-selector.get_many(ODataQueryBuilder().filter("status eq 'published' and author/id eq 5"))
-selector.get_many(ODataQueryBuilder().filter("featured eq true"))
-selector.get_many(ODataQueryBuilder().filter("categories/any(c: c/id eq 3)"))
+# These all generate different QueryIntents but use the same Selector logic
+selector.get_many(QueryBuilder().filter("status eq 'published'"))
+selector.get_many(QueryBuilder().filter("author/id eq 5"))
+selector.get_many(QueryBuilder().top(10).orderby("created_at desc"))
 ```
-
-### What is OData?
-
-OData (Open Data Protocol) is a standard for building RESTful APIs. FC Selector uses its query syntax:
-
-| Parameter | Purpose | Example |
-|-----------|---------|---------|
-| `$filter` | Filter results | `status eq 'published'` |
-| `$select` | Choose fields | `id,title,author` |
-| `$expand` | Include relations | `author,categories` |
-| `$orderby` | Sort results | `created_at desc` |
-| `$top` | Limit results | `10` |
-| `$skip` | Skip results (pagination) | `20` |
-| `$count` | Include total count | `true` |
 
 ## DTOs (Data Transfer Objects)
 
-Selectors return **DTOs**, not Django models.
-
-### Why DTOs?
-
-```python
-# Problem with returning models
-def get_posts():
-    return BlogPost.objects.filter(status='published')
-    # Returns QuerySet - can access ANY field
-    # Can trigger lazy loading (N+1)
-    # Couples consumers to Django ORM
-
-# Solution with DTOs
-def get_posts():
-    return selector.get_many(
-        ODataQueryBuilder()
-        .filter("status eq 'published'")
-        .select("id", "title")
-    )
-    # Returns List[BlogPostDTO]
-    # Only requested fields are populated
-    # No lazy loading possible
-    # Decoupled from ORM
-```
+Selectors return **DTOs**, not Django models. This provides:
+- **Decoupling**: The API consumer doesn't know about the underlying database structure.
+- **Performance**: Prevents N+1 queries by disabling lazy loading.
+- **Contract Safety**: Only specified fields are available.
 
 ### The UNSET Sentinel
+DTOs use a special `UNSET` value for fields that weren't selected in the query, allowing for efficient partial updates and bandwidth optimization.
 
-DTOs use a special `UNSET` value for fields that weren't selected:
+## Layered Architecture
 
-```python
-@dataclass
-class BlogPostDTO(BaseODataDTO):
-    id: int = UNSET
-    title: str = UNSET
-    content: str = UNSET  # Large field
+FC Selector is organized into three decoupled layers:
 
-# Query with $select=id,title
-dto = selector.get_one(
-    ODataQueryBuilder()
-    .filter("id eq 1")
-    .select("id", "title")
-)
+### 1. Protocol Layer (`fc_selector/protocols`)
+Responsible for translating external requests into the internal language.
+- **OData Parser**: Converts OData strings to AST/QueryIntent.
+- **Converters**: Bidirectional mapping between protocols.
 
-dto.id      # 1
-dto.title   # "My Post"
-dto.content # UNSET (not fetched from database)
-```
+### 2. Core Layer (`fc_selector/core`)
+The "Domain" of the library. No dependencies on Django or DRF.
+- **QueryIntent**: The central query model.
+- **AST Nodes**: Abstract representation of logic.
+- **QueryBuilder**: Fluent API for constructing queries. Supports dependency injection of custom filter parsers.
+- **Exceptions**: Domain-level errors like `InvalidFieldError` for security validation.
 
-This enables:
+### 3. Infrastructure Layer (`fc_selector/django`)
+The implementation of the query logic for specific backends.
+- **DjangoExecutor**: Recursively applies a `QueryIntent` to a Django QuerySet.
+- **AstToDjangoQVisitor**: Translates the neutral AST into Django `Q()` objects.
+- **ODataSelector**: The public interface combining all layers.
 
-- **Efficient queries** - Only fetch what you need
-- **Clear contracts** - Know exactly what data is available
-- **Serialization control** - UNSET fields are omitted from JSON
-
-## Architecture
-
-FC Selector has three layers:
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  DRF Layer (Optional)                                    │
-│  ViewSets, Serializers, Mixins                          │
-│  - ODataSelectorViewSetMixin                            │
-│  - ODataDTOSerializer                                   │
-└────────────────────────┬────────────────────────────────┘
-                         │
-┌────────────────────────▼────────────────────────────────┐
-│  Django Layer                                            │
-│  - ODataSelector (main class)                           │
-│  - Query optimization (select_related, prefetch_related)│
-│  - AST to Django Q transformation                       │
-└────────────────────────┬────────────────────────────────┘
-                         │
-┌────────────────────────▼────────────────────────────────┐
-│  Core Layer (Framework-agnostic)                         │
-│  - ODataQueryBuilder                                    │
-│  - OData parsers ($filter, $select, $expand, etc.)      │
-│  - BaseODataDTO                                         │
-│  - AST nodes                                            │
-└─────────────────────────────────────────────────────────┘
-```
-
-### Core Layer
-
-Framework-agnostic code that could work with any ORM:
-
-- `ODataQueryBuilder` - Fluent API for building queries
-- Parsers - Convert OData strings to AST
-- `BaseODataDTO` - Base class for DTOs
-
-### Django Layer
-
-Django-specific implementation:
-
-- `ODataSelector` - Main selector class
-- Query optimization
-- AST to Django Q objects transformation
-
-### DRF Layer
-
-Django REST Framework integration:
-
-- `ODataSelectorViewSetMixin` - ViewSet mixin
-- `ODataDTOSerializer` - Serializer for DTOs
+---
 
 ## Usage Patterns
 
-### Pattern 1: From Services/Use Cases
-
+### From Services/Use Cases (Direct Intent)
 ```python
-class PublishPostUseCase:
-    def __init__(self):
-        self.selector = BlogPostSelector()
-        self.repository = BlogPostRepository()
+from fc_selector.django.selector import ODataSelector, QueryBuilder
+from fc_selector.core.filters import Field
 
-    def execute(self, post_id: int) -> BlogPostDTO:
-        # Read with selector
-        post = self.selector.get_by_pk(post_id)
-        if not post:
-            raise NotFound()
-
-        # Write with repository
-        self.repository.update(post_id, status='published')
-
-        # Return updated data
-        return self.selector.get_by_pk(post_id)
+intent = (
+    QueryBuilder()
+    .where(Field("status").eq("published"))
+    .select("id", "title")
+    .build()
+)
+dtos = selector.execute(intent)
 ```
 
-### Pattern 2: From ViewSets
-
+### From ViewSets (OData Adapter)
 ```python
+from rest_framework import viewsets
+from fc_selector.django.drf.viewsets import ODataSelectorViewSetMixin
+
 class BlogPostViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
+    # Automatically handles OData query params from the request
     selector_class = BlogPostSelector
     serializer_class = BlogPostDTOSerializer
-
-    @action(detail=False)
-    def featured(self, request):
-        query = ODataQueryBuilder(request.META['QUERY_STRING'])
-        query.and_filter("featured eq true")
-        dtos = self.selector_class().get_many(query)
-        return Response(self.get_serializer(dtos, many=True).data)
 ```
 
-### Pattern 3: Direct Query String
+---
+
+## Security Features
+
+FC Selector includes built-in security measures:
+
+### Field Validation
+The `AstToDjangoQVisitor` validates all field names:
+- **Private fields blocked**: Fields starting with `_` cannot be accessed.
+- **Field existence check**: Non-existent fields raise `InvalidFieldError`.
+- **Allowed fields whitelist**: Optional restriction to specific fields.
 
 ```python
-# Useful for internal APIs or testing
-dtos = selector.query_as_dtos(
-    "$filter=status eq 'published'&$select=id,title&$top=10"
-)
+# These will raise InvalidFieldError
+"$filter=_password eq 'secret'"  # Private field
+"$filter=nonexistent eq 'value'"  # Invalid field
 ```
+
+### Input Length Limits
+The parser enforces `MAX_FILTER_LENGTH=4000` to prevent DoS attacks via overly complex queries.
+
+---
+
+## Performance Optimizations
+
+### Parser Caching
+Lexer and parser instances are cached in thread-local storage, avoiding repeated instantiation overhead.
+
+### Automatic Query Optimization
+The `DjangoExecutor` automatically:
+- Uses `select_related()` for forward FK/OneToOne relations
+- Uses `prefetch_related()` for reverse/ManyToMany relations
+- Uses `only()` to limit fetched fields based on `$select`

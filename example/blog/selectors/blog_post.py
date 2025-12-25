@@ -46,7 +46,7 @@ class UserDTO(BaseODataDTO):
     date_joined: str = UNSET
     is_anonymous: str = UNSET  # @property
     is_authenticated: str = UNSET  # @property
-    pk: str = UNSET  # @property
+    # pk: str = UNSET  # @property
     author: UserDTO | None = UNSET
     groups: list[GroupDTO] | None = UNSET
     user_permissions: list[PermissionDTO] | None = UNSET
@@ -61,8 +61,9 @@ class AuthorDTO(BaseODataDTO):
     created_at: str = UNSET
     email: str = UNSET  # @property
     name: str = UNSET  # @property
-    pk: str = UNSET  # @property
+    # pk: str = UNSET  # @property
     user: UserDTO | None = UNSET
+    posts: list[BlogPostDTO] | None = UNSET  # Reverse relation
 
 @dataclass
 class BlogPostDTO(BaseODataDTO):
@@ -82,7 +83,7 @@ class BlogPostDTO(BaseODataDTO):
     tags: list = UNSET
     metadata: dict = UNSET
     is_published: str = UNSET  # @property
-    pk: str = UNSET  # @property
+    # pk: str = UNSET  # @property
     word_count: str = UNSET  # @property
     author: AuthorDTO | None = UNSET
     categories: list[CategoryDTO] | None = UNSET
@@ -102,7 +103,7 @@ class GroupDTO(BaseODataDTO):
     """DTO for Group model."""
     id: str = UNSET
     name: str = UNSET
-    pk: str = UNSET  # @property
+    # pk: str = UNSET  # @property
     permissions: list[PermissionDTO] | None = UNSET
 
 @dataclass
@@ -111,7 +112,7 @@ class PermissionDTO(BaseODataDTO):
     id: str = UNSET
     name: str = UNSET
     codename: str = UNSET
-    pk: str = UNSET  # @property
+    # pk: str = UNSET  # @property
     content_type: ContentTypeDTO | None = UNSET
 
 @dataclass
@@ -121,7 +122,7 @@ class CategoryDTO(BaseODataDTO):
     name: str = UNSET
     description: str = UNSET
     created_at: str = UNSET
-    pk: str = UNSET  # @property
+    # pk: str = UNSET  # @property
 
 
 # ==================== SELECTORS ====================
@@ -173,6 +174,7 @@ class AuthorSelector(ODataSelector):
         dto_class = AuthorDTO
         expandable_fields = {
             "user": UserDTO,
+            "posts": BlogPostDTO,  # Reverse relation from BlogPost.author
         }
 
 class UserSelector(ODataSelector):

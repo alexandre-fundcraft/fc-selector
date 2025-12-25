@@ -44,9 +44,7 @@ class Migration(migrations.Migration):
                 ("count", models.IntegerField(default=0)),
                 (
                     "rating",
-                    models.DecimalField(
-                        blank=True, decimal_places=2, max_digits=3, null=True
-                    ),
+                    models.DecimalField(blank=True, decimal_places=2, max_digits=3, null=True),
                 ),
                 ("is_active", models.BooleanField(default=True)),
                 ("created_at", models.DateTimeField()),
@@ -167,9 +165,7 @@ class Migration(migrations.Migration):
                 ("updated_at", models.DateTimeField(auto_now=True)),
                 (
                     "rating",
-                    models.DecimalField(
-                        blank=True, decimal_places=2, max_digits=3, null=True
-                    ),
+                    models.DecimalField(blank=True, decimal_places=2, max_digits=3, null=True),
                 ),
             ],
             options={

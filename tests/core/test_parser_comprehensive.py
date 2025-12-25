@@ -4,14 +4,15 @@ Comprehensive tests for OData query parser based on ODATA_TEST_URLS_COMPREHENSIV
 This test suite covers ~360+ test URLs across all OData query options and combinations.
 """
 
-from fc_selector.core.parsers.query import parse_odata_query
-from fc_selector.core.parsers.query.models import (
+from fc_selector.protocols.odata.parsers.query import parse_odata_query
+from fc_selector.protocols.odata.parsers.query.models import (
     ODataQuery,
 )
 
 # ==============================================================================
 # 1. BASIC OPTIONS - $select
 # ==============================================================================
+
 
 class TestSelectBasic:
     """Tests for $select parameter - basic field selection."""
@@ -114,6 +115,7 @@ class TestSelectBasic:
 # ==============================================================================
 # 1. BASIC OPTIONS - $expand
 # ==============================================================================
+
 
 class TestExpandBasic:
     """Tests for $expand parameter - relation expansion."""
@@ -220,6 +222,7 @@ class TestExpandBasic:
 # ==============================================================================
 # 1. BASIC OPTIONS - $filter
 # ==============================================================================
+
 
 class TestFilterBasic:
     """Tests for $filter parameter - basic filtering."""
@@ -537,6 +540,7 @@ class TestFilterFunctions:
 # 1. BASIC OPTIONS - $orderby
 # ==============================================================================
 
+
 class TestOrderByBasic:
     """Tests for $orderby parameter."""
 
@@ -633,6 +637,7 @@ class TestOrderByBasic:
 # ==============================================================================
 # 1. BASIC OPTIONS - $top and $skip
 # ==============================================================================
+
 
 class TestPaginationBasic:
     """Tests for $top and $skip parameters."""
@@ -798,6 +803,7 @@ class TestPaginationBasic:
 # 1. BASIC OPTIONS - $count
 # ==============================================================================
 
+
 class TestCountBasic:
     """Tests for $count parameter."""
 
@@ -841,6 +847,7 @@ class TestCountBasic:
 # ==============================================================================
 # 2. NESTED EXPANDS - With $select
 # ==============================================================================
+
 
 class TestNestedExpandsWithSelect:
     """Tests for nested expands with $select options."""
@@ -912,6 +919,7 @@ class TestNestedExpandsWithSelect:
 # ==============================================================================
 # 2. NESTED EXPANDS - With nested $expand
 # ==============================================================================
+
 
 class TestNestedExpandsRecursive:
     """Tests for recursive nested expands."""
@@ -1003,6 +1011,7 @@ class TestNestedExpandsRecursive:
 # ==============================================================================
 # 2. NESTED EXPANDS - With multiple options
 # ==============================================================================
+
 
 class TestNestedExpandsMultipleOptions:
     """Tests for nested expands with multiple query options."""
@@ -1096,6 +1105,7 @@ class TestNestedExpandsMultipleOptions:
 # 2. NESTED EXPANDS - Deeply nested
 # ==============================================================================
 
+
 class TestDeeplyNestedExpands:
     """Tests for deeply nested expands (3+ levels)."""
 
@@ -1129,14 +1139,18 @@ class TestDeeplyNestedExpands:
 
     def test_deep_nesting_with_options_at_each_level(self):
         """Test deep nesting with options at each level."""
-        query = parse_odata_query("$expand=author($select=id;$expand=user($select=id,username;$expand=profile($select=bio)))")
+        query = parse_odata_query(
+            "$expand=author($select=id;$expand=user($select=id,username;$expand=profile($select=bio)))"
+        )
 
         assert query.expand is not None
         assert "$select" in query.expand.nested_options["author"]
 
     def test_deep_nesting_all_selects(self):
         """Test deep nesting with select at all levels."""
-        query = parse_odata_query("$expand=post($select=title;$expand=author($select=name;$expand=user($select=email;$expand=profile)))")
+        query = parse_odata_query(
+            "$expand=post($select=title;$expand=author($select=name;$expand=user($select=email;$expand=profile)))"
+        )
 
         assert query.expand is not None
         assert "post" in query.expand.nested_options
@@ -1160,6 +1174,7 @@ class TestDeeplyNestedExpands:
 # ==============================================================================
 # 3. OPTION COMBINATIONS - 2 options
 # ==============================================================================
+
 
 class TestTwoOptionCombinations:
     """Tests for combinations of two query options."""
@@ -1450,6 +1465,7 @@ class TestAllOptionsCombined:
 # 4. EDGE CASES AND SPECIAL CASES
 # ==============================================================================
 
+
 class TestEdgeCasesEmptyAndWhitespace:
     """Tests for empty strings and whitespace."""
 
@@ -1557,10 +1573,7 @@ class TestComplexRealWorldQueries:
     def test_blog_posts_by_author(self):
         """Test blog: posts from specific author."""
         query = parse_odata_query(
-            "$expand=author($select=name)"
-            "&$filter=author/id eq 123"
-            "&$orderby=published_at desc"
-            "&$top=20"
+            "$expand=author($select=name)&$filter=author/id eq 123&$orderby=published_at desc&$top=20"
         )
 
         assert query.expand is not None
@@ -1570,10 +1583,7 @@ class TestComplexRealWorldQueries:
     def test_blog_search_by_title(self):
         """Test blog: search posts by title."""
         query = parse_odata_query(
-            "$select=id,title,excerpt"
-            "&$filter=contains(title,'Django')"
-            "&$orderby=published_at desc"
-            "&$top=20"
+            "$select=id,title,excerpt&$filter=contains(title,'Django')&$orderby=published_at desc&$top=20"
         )
 
         assert query.select is not None
@@ -1684,9 +1694,7 @@ class TestParserValidation:
 
     def test_to_dict_method(self):
         """Test ODataQuery.to_dict() method."""
-        query = parse_odata_query(
-            "$select=id,name&$filter=status eq 'published'&$top=10&$count=true"
-        )
+        query = parse_odata_query("$select=id,name&$filter=status eq 'published'&$top=10&$count=true")
 
         result = query.to_dict()
 
@@ -1714,10 +1722,7 @@ class TestParserDictInput:
 
     def test_dict_input_basic(self):
         """Test parsing dictionary input."""
-        query_dict = {
-            "$select": "id,name",
-            "$filter": "status eq 'published'"
-        }
+        query_dict = {"$select": "id,name", "$filter": "status eq 'published'"}
         query = parse_odata_query(query_dict)
 
         assert query.select is not None
@@ -1725,11 +1730,7 @@ class TestParserDictInput:
 
     def test_dict_input_with_expand(self):
         """Test dict input with expand."""
-        query_dict = {
-            "$select": "id,title",
-            "$expand": "author",
-            "$top": "10"
-        }
+        query_dict = {"$select": "id,title", "$expand": "author", "$top": "10"}
         query = parse_odata_query(query_dict)
 
         assert query.select is not None
@@ -1745,7 +1746,7 @@ class TestParserDictInput:
             "$orderby": "created_at desc",
             "$top": "10",
             "$skip": "20",
-            "$count": "true"
+            "$count": "true",
         }
         query = parse_odata_query(query_dict)
 

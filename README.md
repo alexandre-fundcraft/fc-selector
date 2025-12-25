@@ -38,6 +38,13 @@ If you need full CRUD operations, this library is not suitable for your use case
 - **Flexible Architecture**: Easy to customize for specific requirements
 - **Auto-Generated API Documentation**: All OData parameters automatically documented in OpenAPI/Swagger
 
+### 🛡️ **Type-Safe Fluent API**
+- **Field Class**: Build filters with `Field("name").eq("John")` instead of strings
+- **Python Operators**: Use `&`, `|`, `~` for AND, OR, NOT
+- **Expand Class**: Type-safe nested queries with `Expand("author").select("name").top(5)`
+- **OrderBy Class**: Explicit ordering with `OrderBy("created_at").desc()`
+- **QueryIntent**: Protocol-agnostic query representation, decoupled from OData
+
 ### 📚 **API Documentation**
 - **Automatic Schema Generation**: All OData query parameters are automatically documented
 - **OpenAPI/Swagger Compatible**: Works with any OpenAPI-compatible documentation tool
@@ -339,6 +346,54 @@ GET /api/posts/?$filter=status eq 'published'&$count=true
   "value": [...]
 }
 ```
+
+### Type-Safe Fluent API (Python)
+
+Build queries programmatically with full IDE support:
+
+```python
+from fc_selector.core.query_builder import QueryBuilder
+from fc_selector.core.filters import Field, Expand, OrderBy
+
+# Type-safe query building
+intent = (
+    QueryBuilder()
+    .where(
+        Field("status").eq("published") &
+        Field("rating").gt(4.0)
+    )
+    .select("id", "title", "rating")
+    .expand(
+        Expand("author").select("id", "name"),
+        Expand("comments")
+            .filter(Field("approved").eq(True))
+            .top(5)
+    )
+    .orderby(OrderBy("created_at").desc())
+    .top(10)
+    .build()
+)
+
+# Execute directly (protocol-agnostic)
+selector = BlogPostSelector()
+results = selector.execute(intent)
+```
+
+**Filter Examples:**
+```python
+Field("name").eq("John")              # Equality
+Field("age").gt(18)                   # Greater than
+Field("status").is_in(["a", "b"])     # In list
+Field("name").contains("john")        # String contains
+Field("price").between(10, 100)       # Range
+
+# Combine with operators
+Field("a").eq(1) & Field("b").gt(2)   # AND
+Field("x").eq(1) | Field("y").eq(2)   # OR
+~Field("deleted").eq(True)            # NOT
+```
+
+See [Query Builder Documentation](docs/query-builder.md) for complete fluent API reference.
 
 ## API Documentation
 

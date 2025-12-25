@@ -38,9 +38,7 @@ class ODataTestModel(models.Model):
 class ODataRelatedModel(models.Model):
     """Related model for testing navigation properties."""
 
-    test_model = models.ForeignKey(
-        ODataTestModel, on_delete=models.CASCADE, related_name="related_items"
-    )
+    test_model = models.ForeignKey(ODataTestModel, on_delete=models.CASCADE, related_name="related_items")
     title = models.CharField(max_length=50)
     value = models.IntegerField()
 
@@ -72,9 +70,7 @@ class PerformanceTestModel(models.Model):
 class PerformanceRelatedModel(models.Model):
     """Related model for testing join performance."""
 
-    parent = models.ForeignKey(
-        PerformanceTestModel, on_delete=models.CASCADE, related_name="related_items"
-    )
+    parent = models.ForeignKey(PerformanceTestModel, on_delete=models.CASCADE, related_name="related_items")
     tag = models.CharField(max_length=30)
     weight = models.IntegerField()
 

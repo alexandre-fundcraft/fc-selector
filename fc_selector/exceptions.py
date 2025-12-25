@@ -226,15 +226,9 @@ class ODataInvalidPaginationError(ODataFilterError):
         if "$" in str(value) and parameter in ["$top", "$skip"]:
             suggestion = "\n\nDid you forget to use '&' between query parameters?\n"
             suggestion += "Example: ?$top=10&$skip=5 (not ?$top=10$skip=5)"
-            message = (
-                f"Invalid value '{value}' for {parameter}. "
-                f"Expected a positive integer.{suggestion}"
-            )
+            message = f"Invalid value '{value}' for {parameter}. Expected a positive integer.{suggestion}"
         else:
-            message = (
-                f"Invalid value '{value}' for {parameter}. "
-                f"Expected a positive integer."
-            )
+            message = f"Invalid value '{value}' for {parameter}. Expected a positive integer."
 
         super().__init__(
             message=message,

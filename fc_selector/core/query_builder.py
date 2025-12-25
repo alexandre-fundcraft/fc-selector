@@ -1,20 +1,55 @@
 """
-OData Query Builder - Fluent interface for building OData queries.
+Query Builder - Fluent interface for building queries.
 
-This module provides a builder class that allows constructing OData queries
-using method chaining. It can be initialized with an existing query string
+This module provides a protocol-agnostic builder class that allows constructing
+queries using method chaining. It can be initialized with an existing query string
 and allows incrementally adding query options.
 
+The builder supports two output modes:
+1. build_query_string() - Returns OData query string (for OData endpoints)
+2. build() - Returns QueryIntent (protocol-agnostic, recommended)
+
 Example:
-    >>> query = ODataQueryBuilder("$filter=Price gt 100").select("Name,Price").top(10)
+    >>> # Using QueryIntent (recommended)
+    >>> intent = QueryBuilder().filter("status eq 'active'").top(10).build()
+    >>> selector.execute(intent)
+
+    >>> # Using OData string (legacy)
+    >>> query = QueryBuilder("$filter=Price gt 100").select("Name,Price").top(10)
     >>> query.build_query_string()
     '$filter=Price gt 100&$select=Name,Price&$top=10'
+
 """
 
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 from urllib.parse import unquote_plus
 
+from fc_selector.core.ast.nodes import And, BoolOp, Or
+from fc_selector.core.filters import Expand, Expression, OrderBy
+from fc_selector.core.intent import (
+    ExpandIntent,
+    FilterIntent,
+    OrderIntent,
+    PaginationIntent,
+    QueryIntent,
+    SelectIntent,
+)
 
-class ODataQueryBuilder:
+if TYPE_CHECKING:
+    from fc_selector.core.ast.nodes import Node
+
+
+def _default_parse_filter(expression: str) -> "Node":
+    """Default filter parser using OData protocol. Lazy import to avoid circular dependency."""
+    from fc_selector.protocols.odata.parsers.filter import parse_filter  # noqa: PLC0415
+
+    return parse_filter(expression)
+
+
+class QueryBuilder:
     """
     Fluent builder for OData queries.
 
@@ -22,24 +57,35 @@ class ODataQueryBuilder:
     returns self to enable fluent chaining.
 
     Example:
-        >>> query = ODataQueryBuilder(request_query_string).and_filter(f"id eq {pk}")
+        >>> query = QueryBuilder(request_query_string).and_filter(f"id eq {pk}")
         >>> dto = selector.get_one(query)
     """
 
-    def __init__(self, query_string: str = ""):
+    def __init__(
+        self,
+        query_string: str = "",
+        filter_parser: Callable[[str], "Node"] | None = None,
+    ):
         """
         Initialize the query builder, optionally parsing an existing query string.
 
         Args:
             query_string: OData query string (e.g., "$filter=Price gt 100&$select=Name")
+            filter_parser: Optional callable to parse filter strings into AST nodes.
+                          Defaults to OData filter parser. Allows dependency injection
+                          for testing or alternative query languages.
         """
         self._filter: str | None = None
+        self._filter_ast: Node | None = None  # Pre-built AST from fluent API
         self._select: list[str] | None = None
         self._expand: list[str] | None = None
+        self._expand_objects: list[Expand] | None = None  # Type-safe Expand objects
         self._orderby: list[str] | None = None
+        self._orderby_objects: list[OrderBy] | None = None  # Type-safe OrderBy objects
         self._top: int | None = None
         self._skip: int | None = None
         self._count: bool | None = None
+        self._filter_parser = filter_parser or _default_parse_filter
 
         if query_string and query_string.strip():
             self._parse_query_string(query_string)
@@ -47,7 +93,7 @@ class ODataQueryBuilder:
     def _parse_query_string(self, query_string: str) -> None:
         """Parse an OData query string and populate internal state."""
         if query_string:
-            # Handle encoded strings
+            # Handle URL-encoded strings ('+' becomes space, %2B becomes '+')
             if "%" in query_string or "+" in query_string:
                 query_string = unquote_plus(query_string)
 
@@ -84,21 +130,21 @@ class ODataQueryBuilder:
                 self._count = value.lower() == "true"
 
     @classmethod
-    def from_query_string(cls, query_string: str) -> "ODataQueryBuilder":
+    def from_query_string(cls, query_string: str) -> QueryBuilder:
         """
-        Create an ODataQueryBuilder from an existing OData query string.
+        Create a QueryBuilder from an existing OData query string.
 
-        Deprecated: Use ODataQueryBuilder(query_string) directly instead.
+        Deprecated: Use QueryBuilder(query_string) directly instead.
 
         Args:
             query_string: OData query string
 
         Returns:
-            ODataQueryBuilder instance with parsed options
+            QueryBuilder instance with parsed options
         """
         return cls(query_string)
 
-    def filter(self, expression: str) -> "ODataQueryBuilder":
+    def filter(self, expression: str) -> QueryBuilder:
         """
         Add or replace the $filter option.
 
@@ -111,7 +157,7 @@ class ODataQueryBuilder:
         self._filter = expression
         return self
 
-    def and_filter(self, expression: str) -> "ODataQueryBuilder":
+    def and_filter(self, expression: str) -> QueryBuilder:
         """
         Add an AND condition to the existing filter.
 
@@ -127,7 +173,7 @@ class ODataQueryBuilder:
             self._filter = expression
         return self
 
-    def or_filter(self, expression: str) -> "ODataQueryBuilder":
+    def or_filter(self, expression: str) -> QueryBuilder:
         """
         Add an OR condition to the existing filter.
 
@@ -143,7 +189,117 @@ class ODataQueryBuilder:
             self._filter = expression
         return self
 
-    def select(self, *fields: str) -> "ODataQueryBuilder":
+    def where(self, expression: Expression) -> QueryBuilder:
+        """
+        Set filter using a type-safe Expression.
+
+        This is the preferred alternative to string-based .filter() method.
+        Expressions are built using the Field class from fc_selector.core.filters.
+
+        Args:
+            expression: Filter expression built using Field()
+
+        Returns:
+            self for method chaining
+
+        Example:
+            >>> from fc_selector.core.filters import Field
+            >>> query = QueryBuilder().where(
+            ...     Field("name").eq("John") & Field("age").gt(18)
+            ... )
+        """
+
+        if not isinstance(expression, Expression):
+            raise TypeError(
+                f"where() expects an Expression, got {type(expression).__name__}. "
+                "Use Field('name').eq('value') to create expressions."
+            )
+
+        self._filter_ast = expression.to_ast()
+        self._filter = None  # Clear string filter
+        return self
+
+    def and_where(self, expression: Expression) -> QueryBuilder:
+        """
+        Add an AND condition using a type-safe Expression.
+
+        Can be combined with string-based .filter() - the expressions
+        will be combined with AND.
+
+        Args:
+            expression: Filter expression to AND with existing filter
+
+        Returns:
+            self for method chaining
+
+        Example:
+            >>> query = QueryBuilder("$filter=status eq 'active'").and_where(
+            ...     Field("age").gt(18)
+            ... )
+        """
+        if not isinstance(expression, Expression):
+            raise TypeError(
+                f"and_where() expects an Expression, got {type(expression).__name__}. "
+                "Use Field('name').eq('value') to create expressions."
+            )
+
+        new_ast = expression.to_ast()
+
+        if self._filter_ast:
+            # Combine with existing AST
+            self._filter_ast = BoolOp(op=And(), left=self._filter_ast, right=new_ast)
+        elif self._filter:
+            # Parse existing string filter and combine
+            existing_ast = self._filter_parser(self._filter)
+            self._filter_ast = BoolOp(op=And(), left=existing_ast, right=new_ast)
+            self._filter = None
+        else:
+            self._filter_ast = new_ast
+
+        return self
+
+    def or_where(self, expression: Expression) -> QueryBuilder:
+        """
+        Add an OR condition using a type-safe Expression.
+
+        Can be combined with string-based .filter() - the expressions
+        will be combined with OR.
+
+        Args:
+            expression: Filter expression to OR with existing filter
+
+        Returns:
+            self for method chaining
+
+        Example:
+            >>> query = QueryBuilder().where(
+            ...     Field("role").eq("admin")
+            ... ).or_where(
+            ...     Field("role").eq("superuser")
+            ... )
+        """
+        if not isinstance(expression, Expression):
+            raise TypeError(
+                f"or_where() expects an Expression, got {type(expression).__name__}. "
+                "Use Field('name').eq('value') to create expressions."
+            )
+
+        new_ast = expression.to_ast()
+
+        if self._filter_ast:
+            # Combine with existing AST
+            self._filter_ast = BoolOp(op=Or(), left=self._filter_ast, right=new_ast)
+        elif self._filter:
+            # Parse existing string filter and combine
+            existing_ast = self._filter_parser(self._filter)
+            self._filter_ast = BoolOp(op=Or(), left=existing_ast, right=new_ast)
+            self._filter = None
+        else:
+            self._filter_ast = new_ast
+
+        return self
+
+    def select(self, *fields: str) -> QueryBuilder:
         """
         Set the $select option.
 
@@ -164,49 +320,104 @@ class ODataQueryBuilder:
             self._select = list(fields)
         return self
 
-    def expand(self, *relations: str) -> "ODataQueryBuilder":
+    def expand(self, *relations) -> QueryBuilder:
         """
         Set the $expand option.
 
         Args:
-            *relations: Relation names to expand. Can be individual arguments
-                       or a single comma-separated string.
+            *relations: Relation names (strings) or Expand objects.
+                       Can be individual arguments or a single comma-separated string.
 
         Returns:
             self for method chaining
 
         Examples:
+            >>> # String-based (legacy)
             >>> query.expand("Author", "Category")
             >>> query.expand("Author,Category")
+            >>>
+            >>> # Type-safe Expand objects
+            >>> query.expand(
+            ...     Expand("author").select("id", "name"),
+            ...     Expand("comments").filter(Field("approved").eq(True)).top(5)
+            ... )
         """
-        if len(relations) == 1 and "," in relations[0]:
-            self._expand = [r.strip() for r in relations[0].split(",")]
+        # Check if any argument is an Expand object
+        has_expand_objects = any(isinstance(r, Expand) for r in relations)
+
+        if has_expand_objects:
+            # All must be Expand objects
+            expand_list = []
+            for r in relations:
+                if isinstance(r, Expand):
+                    expand_list.append(r)
+                else:
+                    raise TypeError(
+                        f"expand() cannot mix Expand objects with strings. Got {type(r).__name__}. "
+                        "Use either all strings or all Expand objects."
+                    )
+            self._expand_objects = expand_list
+            self._expand = None  # Clear string-based expand
         else:
-            self._expand = list(relations)
+            # String-based expand (legacy)
+            if len(relations) == 1 and isinstance(relations[0], str) and "," in relations[0]:
+                self._expand = [r.strip() for r in relations[0].split(",")]
+            else:
+                self._expand = [str(r) for r in relations]
+            self._expand_objects = None  # Clear object-based expand
+
         return self
 
-    def orderby(self, *fields: str) -> "ODataQueryBuilder":
+    def orderby(self, *fields) -> QueryBuilder:
         """
         Set the $orderby option.
 
         Args:
-            *fields: Field names with optional direction (asc/desc).
+            *fields: Field names (strings) with optional direction (asc/desc),
+                    or OrderBy objects for type-safe ordering.
                     Can be individual arguments or a single comma-separated string.
 
         Returns:
             self for method chaining
 
         Examples:
+            >>> # String-based (legacy)
             >>> query.orderby("Price desc", "Name asc")
             >>> query.orderby("Price desc,Name asc")
+            >>>
+            >>> # Type-safe OrderBy objects
+            >>> query.orderby(
+            ...     OrderBy("created_at").desc(),
+            ...     OrderBy("name").asc()
+            ... )
         """
-        if len(fields) == 1 and "," in fields[0]:
-            self._orderby = [f.strip() for f in fields[0].split(",")]
+        # Check if any argument is an OrderBy object
+        has_orderby_objects = any(isinstance(f, OrderBy) for f in fields)
+
+        if has_orderby_objects:
+            # All must be OrderBy objects
+            orderby_list = []
+            for f in fields:
+                if isinstance(f, OrderBy):
+                    orderby_list.append(f)
+                else:
+                    raise TypeError(
+                        f"orderby() cannot mix OrderBy objects with strings. Got {type(f).__name__}. "
+                        "Use either all strings or all OrderBy objects."
+                    )
+            self._orderby_objects = orderby_list
+            self._orderby = None  # Clear string-based orderby
         else:
-            self._orderby = list(fields)
+            # String-based orderby (legacy)
+            if len(fields) == 1 and isinstance(fields[0], str) and "," in fields[0]:
+                self._orderby = [f.strip() for f in fields[0].split(",")]
+            else:
+                self._orderby = [str(f) for f in fields]
+            self._orderby_objects = None  # Clear object-based orderby
+
         return self
 
-    def top(self, count: int) -> "ODataQueryBuilder":
+    def top(self, count: int) -> QueryBuilder:
         """
         Set the $top option (limit).
 
@@ -219,7 +430,7 @@ class ODataQueryBuilder:
         self._top = count
         return self
 
-    def skip(self, count: int) -> "ODataQueryBuilder":
+    def skip(self, count: int) -> QueryBuilder:
         """
         Set the $skip option (offset).
 
@@ -232,7 +443,7 @@ class ODataQueryBuilder:
         self._skip = count
         return self
 
-    def count(self, include: bool = True) -> "ODataQueryBuilder":
+    def count(self, include: bool = True) -> QueryBuilder:
         """
         Set the $count option.
 
@@ -297,10 +508,109 @@ class ODataQueryBuilder:
 
         return result
 
+    def build(self) -> QueryIntent:
+        """
+        Build a QueryIntent from the current builder state.
+
+        This is the recommended way to use the builder output with selectors.
+        QueryIntent is protocol-agnostic and can be executed directly.
+
+        Returns:
+            QueryIntent instance representing this query
+
+        Example:
+            >>> query = QueryBuilder().filter("status eq 'active'").top(10)
+            >>> intent = query.build()
+            >>> results = selector.execute(intent)
+        """
+        intent = QueryIntent()
+
+        # Build filter intent
+        if self._filter or self._filter_ast:
+            ast_to_use = self._filter_ast
+            if ast_to_use is None and self._filter:
+                ast_to_use = self._filter_parser(self._filter)
+            intent.filter = FilterIntent(expression=self._filter, ast=ast_to_use)
+
+        # Build select intent
+        if self._select:
+            intent.select = SelectIntent(fields=list(self._select))
+
+        # Build expand intent
+        if self._expand_objects:
+            # Type-safe Expand objects
+            relations = {}
+            for expand_obj in self._expand_objects:
+                relations[expand_obj.relation] = expand_obj.to_intent()
+            intent.expand = ExpandIntent(relations=relations)
+        elif self._expand:
+            # String-based expand (legacy)
+            relations = {}
+            for relation in self._expand:
+                # Handle complex expand with nested options
+                if "(" in relation:
+                    # For now, store as single relation with empty nested intent
+                    # Full parsing would require the expand parser
+                    base_relation = relation.split("(")[0].strip()
+                    relations[base_relation] = QueryIntent()
+                else:
+                    relations[relation] = QueryIntent()
+            intent.expand = ExpandIntent(relations=relations)
+
+        # Build orderby intent
+        if self._orderby_objects:
+            # Type-safe OrderBy objects
+            order_tuples: list[tuple[str, str]] = [(obj.field, obj.direction) for obj in self._orderby_objects]
+            intent.orderby = OrderIntent.from_tuples(order_tuples)
+        elif self._orderby:
+            # String-based orderby (legacy)
+            order_tuples_legacy: list[tuple[str, str]] = []
+            for field_spec in self._orderby:
+                parts = field_spec.strip().split()
+                field_name = parts[0]
+                direction = parts[1].lower() if len(parts) > 1 else "asc"
+                if direction not in ("asc", "desc"):
+                    direction = "asc"
+                order_tuples_legacy.append((field_name, direction))
+            intent.orderby = OrderIntent.from_tuples(order_tuples_legacy)
+
+        # Build pagination intent
+        if self._top is not None or self._skip is not None or self._count:
+            intent.pagination = PaginationIntent(limit=self._top, offset=self._skip, include_count=self._count or False)
+
+        return intent
+
+    def to_odata_string(self) -> str:
+        """
+        Serialize to OData query string format.
+
+        This is an alias for build_query_string() with a more explicit name.
+
+        Returns:
+            OData query string (e.g., "$filter=Price gt 100&$top=10")
+        """
+        return self.build_query_string()
+
+    def get_filter_ast(self) -> Node | None:
+        """
+        Get the filter as an AST node.
+
+        If a string filter was set, it will be parsed. If an AST was set
+        directly (via where()), it will be returned as-is.
+
+        Returns:
+            AST node representing the filter, or None if no filter
+        """
+        if self._filter_ast is not None:
+            return self._filter_ast
+        if self._filter:
+            return self._filter_parser(self._filter)
+        return None
+
     def __str__(self) -> str:
         """Return the query string."""
         return self.build_query_string()
 
     def __repr__(self) -> str:
         """Return a detailed representation."""
-        return f"ODataQueryBuilder({self.build_query_string()!r})"
+        return f"QueryBuilder({self.build_query_string()!r})"

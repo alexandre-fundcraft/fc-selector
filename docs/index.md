@@ -14,13 +14,12 @@ Think of it as a **dynamic read-only repository** that:
 - Never exposes the ORM layer
 
 ```python
-from fc_selector.django.selector import ODataSelector
-from fc_selector.core import ODataQueryBuilder
+from fc_selector.django.selector import ODataSelector, QueryBuilder
 
 # From a service or use case
 selector = BlogPostSelector()
 posts = selector.get_many(
-    ODataQueryBuilder()
+    QueryBuilder()
     .filter("status eq 'published'")
     .select("id", "title", "author")
     .expand("author")
@@ -67,7 +66,7 @@ Selectors return DTOs, not Django models. This:
 class GetPublishedPostsUseCase:
     def execute(self, author_id: int = None) -> List[BlogPostDTO]:
         selector = BlogPostSelector()
-        query = ODataQueryBuilder().filter("status eq 'published'")
+        query = QueryBuilder().filter("status eq 'published'")
 
         if author_id:
             query.and_filter(f"author/id eq {author_id}")
@@ -120,11 +119,11 @@ class BlogPostSelector(ODataSelector):
 selector = BlogPostSelector()
 
 # Get one
-post = selector.get_by_pk(1, ODataQueryBuilder().expand("author"))
+post = selector.get_by_pk(1, QueryBuilder().expand("author"))
 
 # Get many with complex filter
 posts = selector.get_many(
-    ODataQueryBuilder()
+    QueryBuilder()
     .filter("rating gt 4.0 and status eq 'published'")
     .select("id", "title", "rating")
     .orderby("rating desc")
@@ -133,12 +132,12 @@ posts = selector.get_many(
 
 # Check existence
 exists = selector.exists_by(
-    ODataQueryBuilder().filter("slug eq 'my-post'")
+    QueryBuilder().filter("slug eq 'my-post'")
 )
 
 # Count
 count = selector.count_by(
-    ODataQueryBuilder().filter("status eq 'draft'")
+    QueryBuilder().filter("status eq 'draft'")
 )
 ```
 

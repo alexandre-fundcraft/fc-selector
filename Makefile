@@ -1,4 +1,4 @@
-.PHONY: help sync install install-dev test test-unit test-integration test-coverage clean lint format example-setup example-run example-clean docs docs-serve docs-build
+.PHONY: help sync install install-dev test test-unit test-integration test-e2e test-coverage clean lint format example-setup example-run example-clean docs docs-serve docs-build
 
 # Default target
 help:
@@ -10,9 +10,10 @@ help:
 	@echo "  make install-dev      Install package with development dependencies"
 	@echo ""
 	@echo "Testing:"
-	@echo "  make test             Run all tests (unit + integration)"
+	@echo "  make test             Run all tests (unit + integration + e2e)"
 	@echo "  make test-unit        Run only unit tests (fast)"
 	@echo "  make test-integration Run only integration tests"
+	@echo "  make test-e2e         Run end-to-end tests"
 	@echo "  make test-coverage    Run tests with coverage report"
 	@echo ""
 	@echo "Code Quality:"
@@ -57,15 +58,23 @@ install-dev:
 
 # Testing
 test:
+	@echo "Running all tests (Unit + Integration + E2E)..."
 	PYTHONPATH=. DJANGO_SETTINGS_MODULE=tests.settings uv run pytest tests/ --ignore=tests/performance/ -v --no-migrations
 
 test-unit:
-	PYTHONPATH=. DJANGO_SETTINGS_MODULE=tests.settings uv run pytest tests/ --ignore=tests/performance/ --ignore=tests/integration/ -v
+	@echo "Running unit tests (Core)..."
+	PYTHONPATH=. DJANGO_SETTINGS_MODULE=tests.settings uv run pytest tests/core/ -v
 
 test-integration:
+	@echo "Running integration tests..."
 	PYTHONPATH=. DJANGO_SETTINGS_MODULE=tests.settings uv run pytest tests/integration/ -v
 
+test-e2e:
+	@echo "Running end-to-end tests..."
+	PYTHONPATH=. DJANGO_SETTINGS_MODULE=tests.settings uv run pytest tests/e2e/ -v
+
 test-coverage:
+	@echo "Running tests with coverage report..."
 	PYTHONPATH=. DJANGO_SETTINGS_MODULE=tests.settings uv run pytest tests/ --ignore=tests/performance/ --cov=fc_selector --cov-report=html --cov-report=term
 
 # Code Quality
@@ -129,11 +138,11 @@ clean:
 
 docs-serve:
 	@echo "Serving documentation at http://localhost:9999..."
-	uv run mkdocs serve -a localhost:9999
+	uv run python -m mkdocs serve -a localhost:9999
 
 docs-build:
 	@echo "Building documentation..."
-	uv run mkdocs build
+	uv run python -m mkdocs build
 	@echo "Documentation built in site/ directory"
 
 # Development workflow shortcuts

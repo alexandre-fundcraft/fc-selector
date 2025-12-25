@@ -7,11 +7,17 @@ a baseline for comparison after implementing native field selection/expansion.
 Run with: pytest tests/performance/test_baseline.py -v --benchmark-only
 """
 
+from dataclasses import dataclass
+from typing import Optional
+
 import pytest
+from django.contrib.auth.models import User
+from django.urls import resolve
 from rest_framework.test import APIRequestFactory
 
-# Import test models and serializers
 from example.blog.models import Author, BlogPost, Category
+from fc_selector.core.dtos import UNSET, BaseODataDTO
+from fc_selector.django.drf.serializers import ODataDTOSerializer
 
 
 @pytest.fixture
@@ -24,8 +30,6 @@ def api_factory():
 def sample_data(db):
     """Create sample data for performance testing."""
     # Create authors
-    from django.contrib.auth.models import User
-
     users = [
         User.objects.create_user(
             username=f"author{i}",
@@ -35,17 +39,11 @@ def sample_data(db):
         )
         for i in range(10)
     ]
-    authors = [
-        Author.objects.create(user=users[i], bio=f"Bio for author {i}")
-        for i in range(10)
-    ]
+    authors = [Author.objects.create(user=users[i], bio=f"Bio for author {i}") for i in range(10)]
 
     # Create categories
     categories = [
-        Category.objects.create(
-            name=f"Category {i}", description=f"Description for category {i}"
-        )
-        for i in range(5)
+        Category.objects.create(name=f"Category {i}", description=f"Description for category {i}") for i in range(5)
     ]
 
     # Create blog posts
@@ -72,7 +70,6 @@ class TestFieldSelectionPerformance:
 
     def test_select_single_field(self, benchmark, api_factory, sample_data):
         """Measure performance of selecting a single field."""
-        from django.urls import resolve
 
         def run_query():
             request = api_factory.get("/posts/", {"$select": "id"})
@@ -85,7 +82,6 @@ class TestFieldSelectionPerformance:
 
     def test_select_multiple_fields(self, benchmark, api_factory, sample_data):
         """Measure performance of selecting multiple fields."""
-        from django.urls import resolve
 
         def run_query():
             request = api_factory.get("/posts/", {"$select": "id,title,status"})
@@ -98,7 +94,6 @@ class TestFieldSelectionPerformance:
 
     def test_select_all_fields(self, benchmark, api_factory, sample_data):
         """Measure performance with no $select (all fields)."""
-        from django.urls import resolve
 
         def run_query():
             request = api_factory.get("/posts/")
@@ -116,7 +111,6 @@ class TestFieldExpansionPerformance:
 
     def test_expand_single_relation(self, benchmark, api_factory, sample_data):
         """Measure performance of expanding a single relation."""
-        from django.urls import resolve
 
         def run_query():
             request = api_factory.get("/posts/", {"$expand": "author"})
@@ -129,7 +123,6 @@ class TestFieldExpansionPerformance:
 
     def test_expand_multiple_relations(self, benchmark, api_factory, sample_data):
         """Measure performance of expanding multiple relations."""
-        from django.urls import resolve
 
         def run_query():
             request = api_factory.get("/posts/", {"$expand": "author,categories"})
@@ -142,12 +135,9 @@ class TestFieldExpansionPerformance:
 
     def test_expand_with_nested_select(self, benchmark, api_factory, sample_data):
         """Measure performance of expansion with nested field selection."""
-        from django.urls import resolve
 
         def run_query():
-            request = api_factory.get(
-                "/posts/", {"$expand": "author($select=name,email)"}
-            )
+            request = api_factory.get("/posts/", {"$expand": "author($select=name,email)"})
             view = resolve("/api/posts/").func
             response = view(request)
             return response
@@ -162,12 +152,9 @@ class TestCombinedQueryPerformance:
 
     def test_select_and_expand(self, benchmark, api_factory, sample_data):
         """Measure performance of combined select and expand."""
-        from django.urls import resolve
 
         def run_query():
-            request = api_factory.get(
-                "/posts/", {"$select": "id,title,status", "$expand": "author"}
-            )
+            request = api_factory.get("/posts/", {"$select": "id,title,status", "$expand": "author"})
             view = resolve("/api/posts/").func
             response = view(request)
             return response
@@ -177,7 +164,6 @@ class TestCombinedQueryPerformance:
 
     def test_complex_query(self, benchmark, api_factory, sample_data):
         """Measure performance of complex query with multiple operations."""
-        from django.urls import resolve
 
         def run_query():
             request = api_factory.get(
@@ -200,51 +186,69 @@ class TestCombinedQueryPerformance:
 
 @pytest.mark.benchmark
 class TestSerializationPerformance:
-    """Benchmark serialization performance."""
+    """Benchmark serialization performance using DTOs."""
 
     def test_serialize_100_posts_no_expansion(self, benchmark, sample_data):
-        """Measure serialization time for 100 posts without expansion."""
-        from example.blog.models import BlogPost
-        from fc_selector.django.drf.serializers import ODataModelSerializer
+        """Measure serialization time for 100 posts without expansion using DTOs."""
 
-        class BlogPostSerializer(ODataModelSerializer):
+        @dataclass
+        class BlogPostDTO(BaseODataDTO):
+            id: int = UNSET
+            title: str = UNSET
+            content: str = UNSET
+            status: str = UNSET
+            created_at: Optional[str] = UNSET
+
+        class BlogPostDTOSerializer(ODataDTOSerializer):
             class Meta:
-                model = BlogPost
-                fields = ["id", "title", "content", "status", "created_at"]
+                dto_class = BlogPostDTO
 
         posts = BlogPost.objects.all()[:100]
+        dtos = [
+            BlogPostDTO.from_model(p, selected_fields={"id", "title", "content", "status", "created_at"}) for p in posts
+        ]
 
         def serialize():
-            serializer = BlogPostSerializer(posts, many=True)
+            serializer = BlogPostDTOSerializer(dtos, many=True)
             return serializer.data
 
         result = benchmark(serialize)
         assert len(result) == 100
 
     def test_serialize_100_posts_with_expansion(self, benchmark, sample_data):
-        """Measure serialization time for 100 posts with author expansion."""
-        from example.blog.models import Author, BlogPost
-        from fc_selector.django.drf.serializers import ODataModelSerializer
+        """Measure serialization time for 100 posts with author expansion using DTOs."""
 
-        class AuthorSerializer(ODataModelSerializer):
-            class Meta:
-                model = Author
-                fields = ["id", "name", "email"]
+        @dataclass
+        class AuthorDTO(BaseODataDTO):
+            id: int = UNSET
+            name: str = UNSET
+            email: str = UNSET
 
-        class BlogPostSerializer(ODataModelSerializer):
+        @dataclass
+        class BlogPostDTO(BaseODataDTO):
+            id: int = UNSET
+            title: str = UNSET
+            content: str = UNSET
+            status: str = UNSET
+            created_at: Optional[str] = UNSET
+            author: Optional[AuthorDTO] = UNSET
+
+        class BlogPostDTOSerializer(ODataDTOSerializer):
             class Meta:
-                model = BlogPost
-                fields = ["id", "title", "content", "status", "created_at"]
-                expandable_fields = {"author": (AuthorSerializer, {"many": False})}
+                dto_class = BlogPostDTO
 
         posts = BlogPost.objects.select_related("author").all()[:100]
+        dtos = [
+            BlogPostDTO.from_model(
+                p,
+                selected_fields={"id", "title", "content", "status", "created_at", "author"},
+                expanded_fields={"author"},
+            )
+            for p in posts
+        ]
 
         def serialize():
-            context = {
-                "odata_params": {"$expand": "author"},
-                "request": type("Request", (), {"query_params": {}})(),
-            }
-            serializer = BlogPostSerializer(posts, many=True, context=context)
+            serializer = BlogPostDTOSerializer(dtos, many=True)
             return serializer.data
 
         result = benchmark(serialize)

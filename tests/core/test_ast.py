@@ -14,8 +14,8 @@ from uuid import UUID
 
 import pytest
 
-from fc_selector.core.parsers.filter.ast import nodes
-from fc_selector.core.parsers.filter.ast.visitor import (
+from fc_selector.core.ast import nodes
+from fc_selector.core.ast.visitor import (
     NodeTransformer,
     NodeVisitor,
     iter_dataclass_fields,
@@ -200,7 +200,11 @@ class TestLiteralNodes:
 
     def test_list_literal_mixed(self):
         """Test List literal with mixed types."""
-        items = [nodes.Integer(val="42"), nodes.String(val="'text'"), nodes.Boolean(val="true")]
+        items = [
+            nodes.Integer(val="42"),
+            nodes.String(val="'text'"),
+            nodes.Boolean(val="true"),
+        ]
         node = nodes.List(val=items)
         assert node.py_val == [42, "'text'", True]
 
@@ -375,10 +379,7 @@ class TestComparisonOperators:
     def test_in_operator(self):
         """Test In operator with list."""
         left = nodes.Identifier(name="status")
-        right = nodes.List(val=[
-            nodes.String(val="'active'"),
-            nodes.String(val="'pending'")
-        ])
+        right = nodes.List(val=[nodes.String(val="'active'"), nodes.String(val="'pending'")])
         node = nodes.Compare(comparator=nodes.In(), left=left, right=right)
 
         assert isinstance(node.comparator, nodes.In)
@@ -394,12 +395,12 @@ class TestBooleanOperators:
         left = nodes.Compare(
             comparator=nodes.Eq(),
             left=nodes.Identifier(name="status"),
-            right=nodes.String(val="'active'")
+            right=nodes.String(val="'active'"),
         )
         right = nodes.Compare(
             comparator=nodes.Gt(),
             left=nodes.Identifier(name="age"),
-            right=nodes.Integer(val="18")
+            right=nodes.Integer(val="18"),
         )
         node = nodes.BoolOp(op=nodes.And(), left=left, right=right)
 
@@ -412,12 +413,12 @@ class TestBooleanOperators:
         left = nodes.Compare(
             comparator=nodes.Eq(),
             left=nodes.Identifier(name="status"),
-            right=nodes.String(val="'active'")
+            right=nodes.String(val="'active'"),
         )
         right = nodes.Compare(
             comparator=nodes.Eq(),
             left=nodes.Identifier(name="status"),
-            right=nodes.String(val="'pending'")
+            right=nodes.String(val="'pending'"),
         )
         node = nodes.BoolOp(op=nodes.Or(), left=left, right=right)
 
@@ -428,17 +429,17 @@ class TestBooleanOperators:
         a = nodes.Compare(
             comparator=nodes.Eq(),
             left=nodes.Identifier(name="a"),
-            right=nodes.Boolean(val="true")
+            right=nodes.Boolean(val="true"),
         )
         b = nodes.Compare(
             comparator=nodes.Eq(),
             left=nodes.Identifier(name="b"),
-            right=nodes.Boolean(val="true")
+            right=nodes.Boolean(val="true"),
         )
         c = nodes.Compare(
             comparator=nodes.Eq(),
             left=nodes.Identifier(name="c"),
-            right=nodes.Boolean(val="true")
+            right=nodes.Boolean(val="true"),
         )
 
         and_op = nodes.BoolOp(op=nodes.And(), left=a, right=b)
@@ -456,7 +457,7 @@ class TestUnaryOperators:
         operand = nodes.Compare(
             comparator=nodes.Eq(),
             left=nodes.Identifier(name="active"),
-            right=nodes.Boolean(val="false")
+            right=nodes.Boolean(val="false"),
         )
         node = nodes.UnaryOp(op=nodes.Not(), operand=operand)
 
@@ -476,7 +477,7 @@ class TestUnaryOperators:
         inner = nodes.Compare(
             comparator=nodes.Eq(),
             left=nodes.Identifier(name="flag"),
-            right=nodes.Boolean(val="true")
+            right=nodes.Boolean(val="true"),
         )
         inner_not = nodes.UnaryOp(op=nodes.Not(), operand=inner)
         outer_not = nodes.UnaryOp(op=nodes.Not(), operand=inner_not)
@@ -496,10 +497,7 @@ class TestFunctionCalls:
     def test_simple_function_call(self):
         """Test simple function call: contains(name, 'John')"""
         func = nodes.Identifier(name="contains")
-        args = [
-            nodes.Identifier(name="name"),
-            nodes.String(val="'John'")
-        ]
+        args = [nodes.Identifier(name="name"), nodes.String(val="'John'")]
         node = nodes.Call(func=func, args=args)
 
         assert node.func.name == "contains"
@@ -518,10 +516,7 @@ class TestFunctionCalls:
     def test_namespaced_function(self):
         """Test namespaced function: geo.distance()"""
         func = nodes.Identifier(name="distance", namespace=("geo",))
-        args = [
-            nodes.Identifier(name="location"),
-            nodes.Identifier(name="point")
-        ]
+        args = [nodes.Identifier(name="location"), nodes.Identifier(name="point")]
         node = nodes.Call(func=func, args=args)
 
         assert node.func.full_name() == "geo.distance"
@@ -529,10 +524,7 @@ class TestFunctionCalls:
 
     def test_named_parameter(self):
         """Test named parameter in function call."""
-        param = nodes.NamedParam(
-            name=nodes.Identifier(name="param"),
-            param=nodes.String(val="'value'")
-        )
+        param = nodes.NamedParam(name=nodes.Identifier(name="param"), param=nodes.String(val="'value'"))
 
         assert param.name.name == "param"
         assert param.param.val == "'value'"
@@ -541,14 +533,8 @@ class TestFunctionCalls:
         """Test function call with named parameters."""
         func = nodes.Identifier(name="func")
         args = [
-            nodes.NamedParam(
-                name=nodes.Identifier(name="x"),
-                param=nodes.Integer(val="1")
-            ),
-            nodes.NamedParam(
-                name=nodes.Identifier(name="y"),
-                param=nodes.Integer(val="2")
-            )
+            nodes.NamedParam(name=nodes.Identifier(name="x"), param=nodes.Integer(val="1")),
+            nodes.NamedParam(name=nodes.Identifier(name="y"), param=nodes.Integer(val="2")),
         ]
         node = nodes.Call(func=func, args=args)
 
@@ -573,14 +559,10 @@ class TestCollectionLambda:
         lambda_expr = nodes.Compare(
             comparator=nodes.Gt(),
             left=nodes.Attribute(owner=lambda_var, attr="rating"),
-            right=nodes.Float(val="4.0")
+            right=nodes.Float(val="4.0"),
         )
         lambda_node = nodes.Lambda(identifier=lambda_var, expression=lambda_expr)
-        node = nodes.CollectionLambda(
-            owner=owner,
-            operator=nodes.Any(),
-            lambda_=lambda_node
-        )
+        node = nodes.CollectionLambda(owner=owner, operator=nodes.Any(), lambda_=lambda_node)
 
         assert isinstance(node.operator, nodes.Any)
         assert node.owner.name == "comments"
@@ -591,11 +573,7 @@ class TestCollectionLambda:
         """Test any operator without lambda (just check non-empty)."""
         # tags/any()
         owner = nodes.Identifier(name="tags")
-        node = nodes.CollectionLambda(
-            owner=owner,
-            operator=nodes.Any(),
-            lambda_=None
-        )
+        node = nodes.CollectionLambda(owner=owner, operator=nodes.Any(), lambda_=None)
 
         assert isinstance(node.operator, nodes.Any)
         assert node.owner.name == "tags"
@@ -609,14 +587,10 @@ class TestCollectionLambda:
         lambda_expr = nodes.Compare(
             comparator=nodes.Eq(),
             left=nodes.Attribute(owner=lambda_var, attr="status"),
-            right=nodes.String(val="'approved'")
+            right=nodes.String(val="'approved'"),
         )
         lambda_node = nodes.Lambda(identifier=lambda_var, expression=lambda_expr)
-        node = nodes.CollectionLambda(
-            owner=owner,
-            operator=nodes.All(),
-            lambda_=lambda_node
-        )
+        node = nodes.CollectionLambda(owner=owner, operator=nodes.All(), lambda_=lambda_node)
 
         assert isinstance(node.operator, nodes.All)
         assert node.lambda_.expression.left.attr == "status"
@@ -633,20 +607,16 @@ class TestCollectionLambda:
             expression=nodes.Compare(
                 comparator=nodes.Gt(),
                 left=nodes.Attribute(owner=c_var, attr="rating"),
-                right=nodes.Float(val="4.0")
-            )
+                right=nodes.Float(val="4.0"),
+            ),
         )
         inner_collection = nodes.CollectionLambda(
             owner=nodes.Attribute(owner=p_var, attr="comments"),
             operator=nodes.Any(),
-            lambda_=inner_lambda
+            lambda_=inner_lambda,
         )
         outer_lambda = nodes.Lambda(identifier=p_var, expression=inner_collection)
-        outer_collection = nodes.CollectionLambda(
-            owner=posts,
-            operator=nodes.Any(),
-            lambda_=outer_lambda
-        )
+        outer_collection = nodes.CollectionLambda(owner=posts, operator=nodes.Any(), lambda_=outer_lambda)
 
         assert isinstance(outer_collection.lambda_.expression, nodes.CollectionLambda)
         assert outer_collection.lambda_.identifier.name == "p"
@@ -693,7 +663,7 @@ class TestNodeVisitor:
         node = nodes.Compare(
             comparator=nodes.Eq(),
             left=nodes.Identifier(name="status"),
-            right=nodes.String(val="'active'")
+            right=nodes.String(val="'active'"),
         )
         visitor.visit(node)
 
@@ -717,13 +687,13 @@ class TestNodeVisitor:
             left=nodes.Compare(
                 comparator=nodes.Eq(),
                 left=nodes.Identifier(name="a"),
-                right=nodes.Integer(val="1")
+                right=nodes.Integer(val="1"),
             ),
             right=nodes.Compare(
                 comparator=nodes.Gt(),
                 left=nodes.Identifier(name="b"),
-                right=nodes.Integer(val="2")
-            )
+                right=nodes.Integer(val="2"),
+            ),
         )
 
         visitor.visit(tree)
@@ -747,8 +717,8 @@ class TestNodeVisitor:
             args=[
                 nodes.Integer(val="1"),
                 nodes.Integer(val="2"),
-                nodes.Integer(val="3")
-            ]
+                nodes.Integer(val="3"),
+            ],
         )
         visitor.visit(node)
 
@@ -769,7 +739,7 @@ class TestNodeVisitor:
         node = nodes.Compare(
             comparator=nodes.Eq(),
             left=nodes.Identifier(name="x"),
-            right=nodes.Integer(val="1")
+            right=nodes.Integer(val="1"),
         )
         visitor.visit(node)
 
@@ -828,13 +798,13 @@ class TestNodeTransformer:
             left=nodes.Compare(
                 comparator=nodes.Gt(),
                 left=nodes.Identifier(name="age"),
-                right=nodes.Integer(val="10")
+                right=nodes.Integer(val="10"),
             ),
             right=nodes.Compare(
                 comparator=nodes.Eq(),
                 left=nodes.Identifier(name="score"),
-                right=nodes.Integer(val="100")
-            )
+                right=nodes.Integer(val="100"),
+            ),
         )
 
         result = transformer.visit(tree)
@@ -869,7 +839,7 @@ class TestNodeTransformer:
         tree = nodes.Compare(
             comparator=nodes.Eq(),
             left=nodes.Identifier(name="x"),
-            right=nodes.Integer(val="1")
+            right=nodes.Integer(val="1"),
         )
 
         result = transformer.visit(tree)
@@ -897,7 +867,7 @@ class TestNodeTransformer:
         inner = nodes.Compare(
             comparator=nodes.Eq(),
             left=nodes.Identifier(name="x"),
-            right=nodes.Integer(val="1")
+            right=nodes.Integer(val="1"),
         )
         inner_not = nodes.UnaryOp(op=nodes.Not(), operand=inner)
         outer_not = nodes.UnaryOp(op=nodes.Not(), operand=inner_not)
@@ -922,7 +892,7 @@ class TestUtilityFunctions:
         node = nodes.Compare(
             comparator=nodes.Eq(),
             left=nodes.Identifier(name="x"),
-            right=nodes.Integer(val="1")
+            right=nodes.Integer(val="1"),
         )
 
         fields = list(iter_dataclass_fields(node))
@@ -937,7 +907,7 @@ class TestUtilityFunctions:
         """Test iter_dataclass_fields with list field."""
         node = nodes.Call(
             func=nodes.Identifier(name="func"),
-            args=[nodes.Integer(val="1"), nodes.Integer(val="2")]
+            args=[nodes.Integer(val="1"), nodes.Integer(val="2")],
         )
 
         fields = dict(iter_dataclass_fields(node))
@@ -962,17 +932,17 @@ class TestASTIntegration:
         status_check = nodes.Compare(
             comparator=nodes.Eq(),
             left=nodes.Identifier(name="status"),
-            right=nodes.String(val="'active'")
+            right=nodes.String(val="'active'"),
         )
         age_check = nodes.Compare(
             comparator=nodes.Gt(),
             left=nodes.Identifier(name="age"),
-            right=nodes.Integer(val="18")
+            right=nodes.Integer(val="18"),
         )
         role_check = nodes.Compare(
             comparator=nodes.Eq(),
             left=nodes.Identifier(name="role"),
-            right=nodes.String(val="'admin'")
+            right=nodes.String(val="'admin'"),
         )
 
         and_expr = nodes.BoolOp(op=nodes.And(), left=status_check, right=age_check)
@@ -1003,7 +973,7 @@ class TestASTIntegration:
         tree = nodes.Compare(
             comparator=nodes.Eq(),
             left=nodes.Identifier(name="x"),
-            right=nodes.Integer(val="10")
+            right=nodes.Integer(val="10"),
         )
 
         # Count nodes

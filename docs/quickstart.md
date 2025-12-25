@@ -36,7 +36,7 @@ This creates `myapp/selectors/blog_post.py` with:
 ```python
 from dataclasses import dataclass
 from fc_selector.core.dtos import BaseODataDTO, UNSET
-from fc_selector.django.selector import ODataSelector
+from fc_selector.django.selector import ODataSelector, QueryBuilder
 
 @dataclass
 class AuthorDTO(BaseODataDTO):
@@ -64,16 +64,16 @@ class BlogPostSelector(ODataSelector):
 
 ## 3. Use the Selector
 
-### From a Service or Use Case
+### From a Service or Use Case (String API)
 
 ```python
-from fc_selector.core import ODataQueryBuilder
+from fc_selector.django.selector import QueryBuilder
 from myapp.selectors.blog_post import BlogPostSelector
 
 def get_published_posts(limit: int = 10):
     selector = BlogPostSelector()
     return selector.get_many(
-        ODataQueryBuilder()
+        QueryBuilder()
         .filter("status eq 'published'")
         .orderby("created_at desc")
         .top(limit)
@@ -83,8 +83,47 @@ def get_post_by_id(post_id: int):
     selector = BlogPostSelector()
     return selector.get_by_pk(
         post_id,
-        ODataQueryBuilder().expand("author")
+        QueryBuilder().expand("author")
     )
+```
+
+### Type-Safe Fluent API (Recommended)
+
+For better IDE support and type safety, use the fluent API:
+
+```python
+from fc_selector.django.selector import QueryBuilder
+from fc_selector.core.filters import Field, Expand, OrderBy
+from myapp.selectors.blog_post import BlogPostSelector
+
+def get_published_posts(limit: int = 10):
+    selector = BlogPostSelector()
+    intent = (
+        QueryBuilder()
+        .where(Field("status").eq("published"))
+        .orderby(OrderBy("created_at").desc())
+        .top(limit)
+        .build()
+    )
+    return selector.execute(intent)
+
+def get_featured_posts_with_author():
+    selector = BlogPostSelector()
+    intent = (
+        QueryBuilder()
+        .where(
+            Field("status").eq("published") &
+            Field("featured").eq(True)
+        )
+        .select("id", "title", "created_at")
+        .expand(
+            Expand("author").select("id", "name")
+        )
+        .orderby(OrderBy("created_at").desc())
+        .top(10)
+        .build()
+    )
+    return selector.execute(intent)
 ```
 
 ### From a ViewSet
@@ -93,7 +132,7 @@ def get_post_by_id(post_id: int):
 # viewsets.py
 from rest_framework import viewsets
 from rest_framework.response import Response
-from fc_selector.core import ODataQueryBuilder
+from fc_selector.django.selector import QueryBuilder
 from fc_selector.django.drf.viewsets import ODataSelectorViewSetMixin
 from fc_selector.django.drf.serializers import ODataDTOSerializer
 
@@ -145,5 +184,5 @@ curl "http://localhost:8000/api/posts/?$filter=status eq 'published'&$select=id,
 
 - [Core Concepts](concepts.md) - Understand the Selector pattern and architecture
 - [Selectors Guide](selectors.md) - Learn all selector methods
-- [Query Builder](query-builder.md) - Master the ODataQueryBuilder
+- [Query Builder](query-builder.md) - Master the QueryBuilder
 - [OData Syntax](odata-syntax.md) - Full OData query reference

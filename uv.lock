@@ -320,6 +320,7 @@ dev = [
 [package.dev-dependencies]
 dev = [
     { name = "flake8" },
+    { name = "mkdocs-auto-refresh-build-pages" },
     { name = "mkdocs-material" },
     { name = "mypy" },
     { name = "pytest" },
@@ -350,6 +351,7 @@ provides-extras = ["dev"]
 [package.metadata.requires-dev]
 dev = [
     { name = "flake8", specifier = ">=3.8" },
+    { name = "mkdocs-auto-refresh-build-pages", specifier = ">=1.0.3" },
     { name = "mkdocs-material", specifier = ">=9.0" },
     { name = "mypy", specifier = ">=0.900" },
     { name = "pytest", specifier = ">=6.0" },
@@ -574,6 +576,17 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/bc/c6/bbd4f061bd16b378247f12953ffcb04786a618ce5e904b8c5a01a0309061/mkdocs-1.6.1.tar.gz", hash = "sha256:7b432f01d928c084353ab39c57282f29f92136665bdd6abf7c1ec8d822ef86f2", size = 3889159, upload_time = "2024-08-30T12:24:06.899Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/22/5b/dbc6a8cddc9cfa9c4971d59fb12bb8d42e161b7e7f8cc89e49137c5b279c/mkdocs-1.6.1-py3-none-any.whl", hash = "sha256:db91759624d1647f3f34aa0c3f327dd2601beae39a366d6e064c03468d35c20e", size = 3864451, upload_time = "2024-08-30T12:24:05.054Z" },
+]
+
+[[package]]
+name = "mkdocs-auto-refresh-build-pages"
+version = "1.0.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "mkdocs" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/74/df/45d477950cf17fcbb64ceed78092fc1d9d5bc1ca6530bb5167da22f83dd2/mkdocs_auto_refresh_build_pages-1.0.3-py3-none-any.whl", hash = "sha256:0c9d2b5d65a48f078dd576df91a234aab43b36329ab713332e65ab8119d13949", size = 6986, upload_time = "2025-07-06T08:43:03.688Z" },
 ]
 
 [[package]]

@@ -39,7 +39,7 @@ Add custom endpoints that combine OData with business logic:
 ```python
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from fc_selector.core import ODataQueryBuilder
+from fc_selector.django.selector import QueryBuilder
 
 class BlogPostViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
     serializer_class = BlogPostDTOSerializer
@@ -48,7 +48,7 @@ class BlogPostViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
     @action(detail=False, methods=['get'])
     def published(self, request):
         """GET /api/posts/published/"""
-        query = ODataQueryBuilder(request.META.get('QUERY_STRING', ''))
+        query = QueryBuilder(request.META.get('QUERY_STRING', ''))
         query.and_filter("status eq 'published'")
 
         dtos = BlogPostSelector().get_many(query)
@@ -58,7 +58,7 @@ class BlogPostViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
     @action(detail=False, methods=['get'])
     def featured(self, request):
         """GET /api/posts/featured/"""
-        query = ODataQueryBuilder(request.META.get('QUERY_STRING', ''))
+        query = QueryBuilder(request.META.get('QUERY_STRING', ''))
         query.and_filter("featured eq true")
         query.orderby("created_at desc")
 
@@ -69,7 +69,7 @@ class BlogPostViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
     @action(detail=False, methods=['get'], url_path='by-author/(?P<author_id>[^/.]+)')
     def by_author(self, request, author_id=None):
         """GET /api/posts/by-author/1/"""
-        query = ODataQueryBuilder(request.META.get('QUERY_STRING', ''))
+        query = QueryBuilder(request.META.get('QUERY_STRING', ''))
         query.and_filter(f"author/id eq {author_id}")
 
         dtos = BlogPostSelector().get_many(query)
@@ -80,7 +80,7 @@ class BlogPostViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
     def stats(self, request, pk=None):
         """GET /api/posts/1/stats/"""
         query = (
-            ODataQueryBuilder()
+            QueryBuilder()
             .select('id', 'title', 'view_count', 'word_count')
             .and_filter(f"id eq {pk}")
         )
@@ -120,7 +120,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 
-from fc_selector.core import ODataQueryBuilder
+from fc_selector.django.selector import QueryBuilder
 from fc_selector.django.drf.viewsets import ODataSelectorViewSetMixin
 from fc_selector.django.drf.serializers import ODataDTOSerializer
 
@@ -146,14 +146,14 @@ class BlogPostViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
 
     @action(detail=False, methods=['get'])
     def published(self, request):
-        query = ODataQueryBuilder(request.META.get('QUERY_STRING', ''))
+        query = QueryBuilder(request.META.get('QUERY_STRING', ''))
         query.and_filter("status eq 'published'")
         dtos = BlogPostSelector().get_many(query)
         return Response(self.get_serializer(dtos, many=True).data)
 
     @action(detail=False, methods=['get'])
     def featured(self, request):
-        query = ODataQueryBuilder(request.META.get('QUERY_STRING', ''))
+        query = QueryBuilder(request.META.get('QUERY_STRING', ''))
         query.and_filter("featured eq true")
         dtos = BlogPostSelector().get_many(query)
         return Response(self.get_serializer(dtos, many=True).data)
@@ -173,12 +173,12 @@ class AuthorViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
         """GET /api/authors/1/posts/"""
         # Verify author exists
         if not AuthorSelector().exists_by(
-            ODataQueryBuilder().and_filter(f"id eq {pk}")
+            QueryBuilder().and_filter(f"id eq {pk}")
         ):
             return Response({'detail': 'Author not found'}, status=404)
 
         # Get author's posts with OData support
-        query = ODataQueryBuilder(request.META.get('QUERY_STRING', ''))
+        query = QueryBuilder(request.META.get('QUERY_STRING', ''))
         query.and_filter(f"author/id eq {pk}")
 
         dtos = BlogPostSelector().get_many(query)
@@ -194,7 +194,7 @@ class CategoryViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
     def posts(self, request, pk=None):
         """GET /api/categories/1/posts/"""
         # ManyToMany: use any() in filter
-        query = ODataQueryBuilder(request.META.get('QUERY_STRING', ''))
+        query = QueryBuilder(request.META.get('QUERY_STRING', ''))
         query.and_filter(f"categories/any(c: c/id eq {pk})")
 
         dtos = BlogPostSelector().get_many(query)
@@ -268,7 +268,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema, extend_schema_view
 
-from fc_selector.core import ODataQueryBuilder
+from fc_selector.django.selector import QueryBuilder
 from fc_selector.django.drf.viewsets import ODataSelectorViewSetMixin
 from fc_selector.django.drf import ODATA_PARAMETERS, ODATA_RETRIEVE_PARAMETERS
 
@@ -290,7 +290,7 @@ class BlogPostViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
     @action(detail=False, methods=['get'])
     def published(self, request):
         """List published posts only."""
-        query = ODataQueryBuilder(request.META.get('QUERY_STRING', ''))
+        query = QueryBuilder(request.META.get('QUERY_STRING', ''))
         query.and_filter("status eq 'published'")
         dtos = self.selector_class().get_many(query)
         return Response(self.get_serializer(dtos, many=True).data)

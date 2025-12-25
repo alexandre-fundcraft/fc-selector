@@ -15,8 +15,8 @@ Each test validates:
 3. The nodes have proper types and values
 """
 
-from fc_selector.core.parsers.filter.ast import nodes
-from fc_selector.core.parsers.query import parse_odata_query
+from fc_selector.core.ast import nodes
+from fc_selector.protocols.odata.parsers.query import parse_odata_query
 
 
 # Helper functions for AST validation
@@ -50,8 +50,7 @@ def assert_has_field(ast, field_name):
     elif isinstance(ast, nodes.Compare):
         return assert_has_field(ast.left, field_name)
     elif isinstance(ast, nodes.BoolOp):
-        return (assert_has_field(ast.left, field_name) or
-                assert_has_field(ast.right, field_name))
+        return assert_has_field(ast.left, field_name) or assert_has_field(ast.right, field_name)
     return False
 
 
@@ -235,9 +234,7 @@ class TestFilterLogicalAnd:
 
     def test_and_with_dates(self):
         """Test AND with date comparisons."""
-        query = parse_odata_query(
-            "$filter=created_at gt '2024-01-01' and created_at lt '2024-12-31'"
-        )
+        query = parse_odata_query("$filter=created_at gt '2024-01-01' and created_at lt '2024-12-31'")
 
         assert query.filter is not None
         assert query.filter.ast is not None
@@ -249,9 +246,7 @@ class TestFilterLogicalAnd:
 
     def test_and_mixed_types(self):
         """Test AND with mixed data types."""
-        query = parse_odata_query(
-            "$filter=status eq 'published' and rating gt 4.0 and is_active eq true"
-        )
+        query = parse_odata_query("$filter=status eq 'published' and rating gt 4.0 and is_active eq true")
 
         assert query.filter is not None
         assert query.filter.ast is not None
@@ -287,9 +282,7 @@ class TestFilterLogicalOr:
 
     def test_or_three_conditions(self):
         """Test OR with three conditions."""
-        query = parse_odata_query(
-            "$filter=status eq 'draft' or status eq 'published' or status eq 'archived'"
-        )
+        query = parse_odata_query("$filter=status eq 'draft' or status eq 'published' or status eq 'archived'")
 
         assert query.filter is not None
         assert query.filter.ast is not None
@@ -363,9 +356,7 @@ class TestFilterAndOrCombinations:
 
     def test_and_or_with_parentheses(self):
         """Test AND and OR with explicit parentheses."""
-        query = parse_odata_query(
-            "$filter=(status eq 'published' or status eq 'draft') and rating gt 4.0"
-        )
+        query = parse_odata_query("$filter=(status eq 'published' or status eq 'draft') and rating gt 4.0")
 
         assert_ast_exists(query)
 
@@ -385,9 +376,7 @@ class TestFilterAndOrCombinations:
 
     def test_and_or_reverse_order(self):
         """Test AND before OR with parentheses."""
-        query = parse_odata_query(
-            "$filter=status eq 'published' and (rating gt 4.0 or views gt 1000)"
-        )
+        query = parse_odata_query("$filter=status eq 'published' and (rating gt 4.0 or views gt 1000)")
 
         assert_ast_exists(query)
 
@@ -406,8 +395,7 @@ class TestFilterAndOrCombinations:
     def test_multiple_or_groups_with_and(self):
         """Test multiple OR groups connected with AND."""
         query = parse_odata_query(
-            "$filter=(status eq 'published' or status eq 'draft') "
-            "and (category eq 'tech' or category eq 'science')"
+            "$filter=(status eq 'published' or status eq 'draft') and (category eq 'tech' or category eq 'science')"
         )
 
         assert_ast_exists(query)
@@ -434,8 +422,7 @@ class TestFilterAndOrCombinations:
     def test_nested_parentheses(self):
         """Test nested parentheses in complex expression."""
         query = parse_odata_query(
-            "$filter=((status eq 'published' or status eq 'draft') and rating gt 4.0) "
-            "or is_featured eq true"
+            "$filter=((status eq 'published' or status eq 'draft') and rating gt 4.0) or is_featured eq true"
         )
 
         assert_ast_exists(query)
@@ -462,8 +449,7 @@ class TestFilterAndOrCombinations:
     def test_three_way_or_with_and(self):
         """Test three conditions with OR, then AND."""
         query = parse_odata_query(
-            "$filter=(status eq 'published' or status eq 'draft' or status eq 'pending') "
-            "and rating gt 3.0"
+            "$filter=(status eq 'published' or status eq 'draft' or status eq 'pending') and rating gt 3.0"
         )
 
         assert_ast_exists(query)
@@ -558,9 +544,7 @@ class TestFilterNotOperator:
 
     def test_not_with_and(self):
         """Test NOT combined with AND."""
-        query = parse_odata_query(
-            "$filter=not (status eq 'archived') and rating gt 4.0"
-        )
+        query = parse_odata_query("$filter=not (status eq 'archived') and rating gt 4.0")
 
         assert_ast_exists(query)
 
@@ -642,9 +626,7 @@ class TestFilterNavigationPaths:
 
     def test_navigation_with_and(self):
         """Test navigation combined with AND."""
-        query = parse_odata_query(
-            "$filter=author/name eq 'John' and author/is_active eq true"
-        )
+        query = parse_odata_query("$filter=author/name eq 'John' and author/is_active eq true")
 
         assert_ast_exists(query)
 
@@ -667,9 +649,7 @@ class TestFilterNavigationPaths:
 
     def test_multiple_navigation_paths(self):
         """Test multiple different navigation paths."""
-        query = parse_odata_query(
-            "$filter=author/name eq 'John' and category/slug eq 'tech'"
-        )
+        query = parse_odata_query("$filter=author/name eq 'John' and category/slug eq 'tech'")
 
         assert_ast_exists(query)
 
@@ -689,9 +669,7 @@ class TestFilterNavigationPaths:
 
     def test_navigation_with_or(self):
         """Test navigation combined with OR."""
-        query = parse_odata_query(
-            "$filter=author/name eq 'John' or author/name eq 'Jane'"
-        )
+        query = parse_odata_query("$filter=author/name eq 'John' or author/name eq 'Jane'")
 
         assert_ast_exists(query)
 
@@ -711,9 +689,7 @@ class TestFilterNavigationPaths:
 
     def test_deep_navigation_with_comparison(self):
         """Test deep navigation with different comparison operators."""
-        query = parse_odata_query(
-            "$filter=post/author/user/profile/age gt 18"
-        )
+        query = parse_odata_query("$filter=post/author/user/profile/age gt 18")
 
         assert_ast_exists(query)
 
@@ -779,9 +755,7 @@ class TestFilterFunctions:
 
     def test_function_with_and(self):
         """Test function combined with AND."""
-        query = parse_odata_query(
-            "$filter=startswith(title,'Hello') and rating gt 4.0"
-        )
+        query = parse_odata_query("$filter=startswith(title,'Hello') and rating gt 4.0")
 
         assert query.filter is not None
         assert "startswith" in query.filter.value
@@ -790,9 +764,7 @@ class TestFilterFunctions:
 
     def test_multiple_functions_with_or(self):
         """Test multiple functions combined with OR."""
-        query = parse_odata_query(
-            "$filter=startswith(title,'Hello') or endswith(title,'World')"
-        )
+        query = parse_odata_query("$filter=startswith(title,'Hello') or endswith(title,'World')")
 
         assert query.filter is not None
         assert "startswith" in query.filter.value
@@ -801,9 +773,7 @@ class TestFilterFunctions:
 
     def test_function_with_navigation(self):
         """Test function on navigation path."""
-        query = parse_odata_query(
-            "$filter=startswith(author/name,'John')"
-        )
+        query = parse_odata_query("$filter=startswith(author/name,'John')")
 
         assert query.filter is not None
         assert "startswith" in query.filter.value
@@ -845,9 +815,7 @@ class TestFilterDateFunctions:
 
     def test_date_function_with_and(self):
         """Test date function combined with AND."""
-        query = parse_odata_query(
-            "$filter=year(created_at) eq 2024 and month(created_at) eq 12"
-        )
+        query = parse_odata_query("$filter=year(created_at) eq 2024 and month(created_at) eq 12")
 
         assert query.filter is not None
         assert "year" in query.filter.value
@@ -940,8 +908,13 @@ class TestFilterEdgeCases:
         assert "Hello World" in query.filter.value
 
     def test_filter_with_special_characters(self):
-        """Test filter with special characters."""
-        query = parse_odata_query("$filter=email eq 'user+tag@example.com'")
+        """Test filter with special characters.
+
+        Note: In URL-encoded query strings, '+' means space.
+        To include a literal '+' character, use %2B encoding.
+        """
+        # Use %2B for literal '+' in URL-encoded query strings
+        query = parse_odata_query("$filter=email eq 'user%2Btag@example.com'")
 
         assert query.filter is not None
         assert "user+tag@example.com" in query.filter.value
@@ -988,9 +961,7 @@ class TestFilterRealWorldScenarios:
 
     def test_blog_published_posts_high_rating(self):
         """Test blog: find published posts with high rating."""
-        query = parse_odata_query(
-            "$filter=status eq 'published' and rating ge 4.5 and views gt 1000"
-        )
+        query = parse_odata_query("$filter=status eq 'published' and rating ge 4.5 and views gt 1000")
 
         assert query.filter is not None
         assert "status eq 'published'" in query.filter.value
@@ -999,9 +970,7 @@ class TestFilterRealWorldScenarios:
 
     def test_ecommerce_price_range_in_stock(self):
         """Test e-commerce: products in price range and in stock."""
-        query = parse_odata_query(
-            "$filter=price ge 10.00 and price le 100.00 and stock gt 0 and is_active eq true"
-        )
+        query = parse_odata_query("$filter=price ge 10.00 and price le 100.00 and stock gt 0 and is_active eq true")
 
         assert query.filter is not None
         assert "price ge 10.00" in query.filter.value
@@ -1011,8 +980,7 @@ class TestFilterRealWorldScenarios:
     def test_users_active_in_country(self):
         """Test users: active users in specific country."""
         query = parse_odata_query(
-            "$filter=is_active eq true and profile/country eq 'Spain' "
-            "and year(created_at) ge 2023"
+            "$filter=is_active eq true and profile/country eq 'Spain' and year(created_at) ge 2023"
         )
 
         assert query.filter is not None
@@ -1022,8 +990,7 @@ class TestFilterRealWorldScenarios:
     def test_search_title_or_content(self):
         """Test search: find posts by title or content."""
         query = parse_odata_query(
-            "$filter=(contains(title,'Python') or contains(content,'Python')) "
-            "and status eq 'published'"
+            "$filter=(contains(title,'Python') or contains(content,'Python')) and status eq 'published'"
         )
 
         assert query.filter is not None

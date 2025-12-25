@@ -1,15 +1,15 @@
 # django_odata/core - Framework-Agnostic OData Layer
 
-**Total**: 3,823 línies de codi Python distribuïdes en 7 submòduls.
+**Total**: 3,823 lines of Python code distributed across 7 submodules.
 
-Aquest package conté tota la lògica central d'OData que **no depèn de Django ni cap altre framework**. Pot ser reutilitzat en altres contexts (Flask, FastAPI, standalone, etc.).
+This package contains all the central OData logic that **does not depend on Django or any other framework**. It can be reused in other contexts (Flask, FastAPI, standalone, etc.).
 
 ---
 
-## 📋 Índex
+## Table of Contents
 
-1. [Estructura General](#estructura-general)
-2. [Submòduls](#submòduls)
+1. [General Structure](#general-structure)
+2. [Submodules](#submodules)
    - [AST (Abstract Syntax Tree)](#1-ast-abstract-syntax-tree)
    - [Parser](#2-parser-lexerparser-odata)
    - [Rewrite](#3-rewrite-ast-transformers)
@@ -18,71 +18,83 @@ Aquest package conté tota la lògica central d'OData que **no depèn de Django 
    - [DTOs](#6-dtos-data-transfer-objects)
    - [Selector](#7-selector-base-selector)
    - [Utils](#8-utils)
-3. [Diagrama d'Arquitectura](#diagrama-darquitectura)
-4. [Flux de Dades](#flux-de-dades)
-5. [Exemples d'Ús](#exemples-dús)
+3. [Architecture Diagram](#architecture-diagram)
+4. [Data Flow](#data-flow)
+5. [Usage Examples](#usage-examples)
 
 ---
 
-## Estructura General
+## General Structure
 
 ```
 django_odata/core/
 ├── __init__.py                    # Entry point: parse_odata_query, get_filter_engine
 │
-├── ast/                           # ✅ Copiat de odata-query (1,150 línies)
-│   ├── nodes.py (729 línies)     # 40+ tipus de nodes AST
-│   ├── visitor.py (266 línies)   # NodeVisitor, NodeTransformer
-│   └── __init__.py (155 línies)  # Exports
+├── ast/                           # ✅ Copied from odata-query (1,150 lines)
+│   ├── nodes.py (729 lines)       # 40+ AST node types
+│   ├── visitor.py (266 lines)     # NodeVisitor, NodeTransformer
+│   └── __init__.py (155 lines)    # Exports
 │
-├── parser/                        # ✅ Copiat de odata-query (921 línies)
-│   ├── grammar.py (721 línies)   # ODataLexer, ODataParser (SLY)
-│   ├── exceptions.py (152 línies) # OData exceptions
-│   └── __init__.py (48 línies)   # Exports
+├── parser/                        # ✅ Copied from odata-query (921 lines)
+│   ├── grammar.py (721 lines)     # ODataLexer, ODataParser (SLY)
+│   ├── exceptions.py (152 lines)  # OData exceptions
+│   └── __init__.py (48 lines)     # Exports
 │
-├── rewrite.py (90 línies)        # ✅ Copiat de odata-query - AST transformers
-├── typing.py (134 línies)        # ✅ Copiat de odata-query - Type inference
-├── utils.py (35 línies)          # ✅ Copiat de odata-query - AST utils
+├── rewrite.py (90 lines)          # ✅ Copied from odata-query - AST transformers
+├── typing.py (134 lines)          # ✅ Copied from odata-query - Type inference
+├── utils.py (35 lines)            # ✅ Copied from odata-query - AST utils
 │
-├── query/                         # 📦 Original (475 línies)
-│   ├── models.py (137 línies)    # ODataQuery, ExpandItem, OrderByItem
-│   ├── parser.py (232 línies)    # parse_odata_query()
-│   ├── validators.py (94 línies) # Query validators
-│   └── __init__.py (14 línies)   # Exports
+├── query/                         # 📦 Original code (475 lines)
+│   ├── models.py (137 lines)      # ODataQuery, ExpandItem, OrderByItem
+│   ├── parser.py (232 lines)      # parse_odata_query()
+│   ├── validators.py (94 lines)   # Query validators
+│   └── __init__.py (14 lines)     # Exports
 │
-├── filter/                        # 📦 Original (327 línies)
-│   ├── engine.py (151 línies)    # FilterEngine genèric
-│   ├── operators.py (131 línies) # Filter operators
-│   ├── exceptions.py (28 línies) # Filter exceptions
-│   └── __init__.py (17 línies)   # Exports
+├── filter/                        # 📦 Original code (327 lines)
+│   ├── engine.py (151 lines)      # Generic FilterEngine
+│   ├── operators.py (131 lines)   # Filter operators
+│   ├── exceptions.py (28 lines)   # Filter exceptions
+│   └── __init__.py (17 lines)     # Exports
 │
-├── dtos/                          # 📦 Original (454 línies)
-│   ├── base.py (290 línies)      # Base DTO classes
-│   ├── converter.py (156 línies) # Model ↔ DTO converters
-│   └── __init__.py (8 línies)    # Exports
+├── dtos/                          # 📦 Original code (454 lines)
+│   ├── base.py (290 lines)        # Base DTO classes
+│   ├── converter.py (156 lines)   # Model ↔ DTO converters
+│   └── __init__.py (8 lines)      # Exports
 │
-└── selector/                      # 📦 Original (222 línies)
-    ├── base.py (209 línies)      # BaseSelector protocol
-    └── __init__.py (13 línies)   # Exports
+├── selector/                      # 📦 Original code (222 lines)
+│   ├── base.py (209 lines)        # BaseSelector protocol
+│   └── __init__.py (13 lines)     # Exports
+│
+├── intent/                        # 📦 Original - Protocol-Agnostic Query Intent
+│   ├── models.py                  # QueryIntent, FilterIntent, SelectIntent, etc.
+│   ├── converters.py              # ODataQuery ↔ QueryIntent converters
+│   └── __init__.py                # Exports
+│
+└── filters/                       # 📦 Original - Type-Safe Fluent API
+    ├── fields.py                  # Field("name").eq("John")
+    ├── expressions.py             # Expression wrapper with & | ~ operators
+    ├── expand.py                  # Expand("author").select("name").top(5)
+    ├── orderby.py                 # OrderBy("created_at").desc()
+    └── __init__.py                # Exports: Field, Expand, OrderBy, Expression
 ```
 
-**Llegenda:**
-- ✅ = Copiat de [odata-query](https://github.com/gorilla-co/odata-query) (MIT License)
-- 📦 = Codi original nostre
+**Legend:**
+- ✅ = Copied from [odata-query](https://github.com/gorilla-co/odata-query) (MIT License)
+- 📦 = Our original code
 
 ---
 
-## Submòduls
+## Submodules
 
 ### 1. AST (Abstract Syntax Tree)
 
-**Origen**: Copiat de `odata-query`
-**Total**: 1,150 línies
-**Propòsit**: Representar expressions OData com arbres de nodes immutables.
+**Source**: Copied from `odata-query`
+**Total**: 1,150 lines
+**Purpose**: Represent OData expressions as immutable node trees.
 
-#### 1.1 `ast/nodes.py` (729 línies) - El fitxer més gran
+#### 1.1 `ast/nodes.py` (729 lines) - The largest file
 
-Defineix 40+ tipus de nodes AST amb `@dataclass(frozen=True)`:
+Defines 40+ AST node types with `@dataclass(frozen=True)`:
 
 **Literals:**
 ```python
@@ -96,93 +108,93 @@ class Integer(_Literal):
     val: str
     py_val: int
 
-# També: Float, Boolean, Date, DateTime, Duration, Null
+# Also: Float, Boolean, Date, DateTime, Duration, Null
 ```
 
-**Comparadors:**
+**Comparators:**
 ```python
 @dataclass(frozen=True)
 class Eq(_Comparator):
     """Equality (eq)"""
 
-# També: NotEq, Lt, LtE, Gt, GtE
+# Also: NotEq, Lt, LtE, Gt, GtE
 ```
 
 **Expressions:**
 ```python
 @dataclass(frozen=True)
-class Compare(_Node):
+class Compare(Node):
     """name eq 'John'"""
     comparator: _Comparator  # Eq, NotEq, etc.
-    left: _Node              # Identifier('name')
-    right: _Node             # String('John')
+    left: Node              # Identifier('name')
+    right: Node             # String('John')
 
 @dataclass(frozen=True)
-class BoolOp(_Node):
+class BoolOp(Node):
     """name eq 'John' and age gt 30"""
     op: _BoolOperator        # And, Or
-    values: List[_Node]      # [Compare(...), Compare(...)]
+    values: List[Node]      # [Compare(...), Compare(...)]
 
 @dataclass(frozen=True)
-class Call(_Node):
+class Call(Node):
     """contains(name, 'John')"""
     func: Identifier         # Identifier('contains')
-    args: List[_Node]        # [Identifier('name'), String('John')]
+    args: List[Node]        # [Identifier('name'), String('John')]
 ```
 
 **Lambda Expressions:**
 ```python
 @dataclass(frozen=True)
-class CollectionLambda(_Node):
+class CollectionLambda(Node):
     """comments/any(c: c/rating gt 4)"""
-    collection: _Node        # Attribute('comments')
-    expression: _Node        # Compare(...)
+    collection: Node        # Attribute('comments')
+    expression: Node        # Compare(...)
     iterator_variable_name: str  # 'c'
 ```
 
-**Identificadors:**
+**Identifiers:**
 ```python
 @dataclass(frozen=True)
-class Identifier(_Node):
+class Identifier(Node):
     """name"""
     name: str
     namespace: Tuple[str, ...] = ()
 
 @dataclass(frozen=True)
-class Attribute(_Node):
+class Attribute(Node):
     """author/name"""
-    owner: _Node  # Identifier('author')
+    owner: Node  # Identifier('author')
     attr: str     # 'name'
 ```
 
-#### 1.2 `ast/visitor.py` (266 línies)
+#### 1.2 `ast/visitor.py` (266 lines)
 
-Implementació del **Visitor Pattern** (PEP 544):
+Implementation of the **Visitor Pattern** (PEP 544):
 
 ```python
 class NodeVisitor:
-    """Base class per traversar AST."""
+    """Base class for traversing AST."""
 
-    def visit(self, node: nodes._Node) -> Any:
-        """Crida al mètode visit_<NodeType> apropiat."""
+    def visit(self, node: nodes.Node) -> Any:
+        """Calls the appropriate visit_<NodeType> method."""
         method = "visit_" + node.__class__.__name__
         visitor = getattr(self, method, self.generic_visit)
         return visitor(node)
 
-    def generic_visit(self, node: nodes._Node) -> Any:
-        """Fallback per nodes sense visitor."""
+    def generic_visit(self, node: nodes.Node) -> Any:
+        """Fallback for nodes without a visitor."""
         return node
 
 class NodeTransformer(NodeVisitor):
-    """Visitor que permet modificar nodes."""
+    """Visitor that allows modifying nodes."""
 
-    def generic_visit(self, node: nodes._Node) -> nodes._Node:
-        """Visita recursivament i retorna node transformat."""
-        # Traversa i transforma fills
-        # Retorna nou node amb fills transformats
+    def generic_visit(self, node: nodes.Node) -> nodes.Node:
+        """Recursively visits and returns transformed node."""
+        # Traverse and transform children
+        # Return new node with transformed children
 ```
 
-**Exemple d'ús:**
+**Usage example:**
 ```python
 class MyVisitor(NodeVisitor):
     def visit_Compare(self, node):
@@ -197,43 +209,43 @@ visitor.visit(ast_node)
 
 ### 2. Parser (Lexer/Parser OData)
 
-**Origen**: Copiat de `odata-query`
-**Total**: 921 línies
-**Propòsit**: Parsejar expressions OData a AST utilitzant SLY (Sly Lex-Yacc).
+**Source**: Copied from `odata-query`
+**Total**: 921 lines
+**Purpose**: Parse OData expressions to AST using SLY (Sly Lex-Yacc).
 
-#### 2.1 `parser/grammar.py` (721 línies) - El segon fitxer més gran
+#### 2.1 `parser/grammar.py` (721 lines) - The second largest file
 
-**ODataLexer** - Tokenització:
+**ODataLexer** - Tokenization:
 ```python
 class ODataLexer(Lexer):
     tokens = {
-        # Identificadors i literals
+        # Identifiers and literals
         IDENTIFIER, STRING, INTEGER, FLOAT,
 
-        # Comparadors
+        # Comparators
         EQ, NE, LT, LE, GT, GE,
 
-        # Operadors lògics
+        # Logical operators
         AND, OR, NOT,
 
-        # Funcions
+        # Functions
         CONTAINS, STARTSWITH, ENDSWITH, TOLOWER, TOUPPER,
         YEAR, MONTH, DAY, HOUR, MINUTE, SECOND,
 
         # Lambda
         ANY, ALL,
 
-        # Geographic (per netejar més endavant)
+        # Geographic (to clean up later)
         GEO_DISTANCE, GEO_INTERSECTS,
 
-        # Altres
+        # Other
         LPAREN, RPAREN, COMMA, SLASH,
     }
 
-    # Regles de tokenització
+    # Tokenization rules
     @_(r'[a-zA-Z_][a-zA-Z0-9_]*')
     def IDENTIFIER(self, t):
-        # Converteix keywords (eq, and, contains, etc.)
+        # Converts keywords (eq, and, contains, etc.)
         t.type = self.keywords.get(t.value, 'IDENTIFIER')
         return t
 
@@ -243,12 +255,12 @@ class ODataLexer(Lexer):
         return t
 ```
 
-**ODataParser** - Parsing a AST:
+**ODataParser** - Parsing to AST:
 ```python
 class ODataParser(Parser):
     tokens = ODataLexer.tokens
 
-    # Gramàtica
+    # Grammar
     @_('bool_expr')
     def filter_expr(self, p):
         return p.bool_expr
@@ -282,37 +294,37 @@ class ODataParser(Parser):
         )
 ```
 
-**Funcions suportades:**
+**Supported functions:**
 - **String**: contains, startswith, endswith, tolower, toupper, trim, length, concat, substring, indexof
 - **Date/Time**: year, month, day, hour, minute, second, now, date, time, fractionalseconds, totalseconds
 - **Math**: ceiling, floor, round
-- **Geographic**: geo.distance, geo.intersects, geo.length (per netejar)
+- **Geographic**: geo.distance, geo.intersects, geo.length (to clean up)
 - **Lambda**: any, all
 
-#### 2.2 `parser/exceptions.py` (152 línies)
+#### 2.2 `parser/exceptions.py` (152 lines)
 
-Jerarquia d'excepcions:
+Exception hierarchy:
 ```python
 class ODataException(Exception):
-    """Base exception per OData."""
+    """Base exception for OData."""
 
 class ODataSyntaxError(ODataException):
-    """Error de sintaxi."""
+    """Syntax error."""
 
 class TokenizingException(ODataSyntaxError):
-    """Error durant tokenització."""
+    """Error during tokenization."""
 
 class ParsingException(ODataSyntaxError):
-    """Error durant parsing."""
+    """Error during parsing."""
 
 class UnsupportedFunctionException(ODataException):
-    """Funció no suportada."""
+    """Unsupported function."""
 
 class ArgumentTypeException(ODataException):
-    """Error de tipus d'argument."""
+    """Argument type error."""
 ```
 
-**Exemple d'ús:**
+**Usage example:**
 ```python
 from django_odata.core.parser import ODataLexer, ODataParser
 
@@ -323,24 +335,24 @@ query = "name eq 'John' and age gt 30"
 tokens = lexer.tokenize(query)
 ast = parser.parse(tokens)
 
-# ast és un BoolOp amb And i dos Compare nodes
+# ast is a BoolOp with And and two Compare nodes
 ```
 
 ---
 
 ### 3. Rewrite (AST Transformers)
 
-**Origen**: Copiat de `odata-query`
-**Total**: 224 línies (90 + 134)
-**Propòsit**: Transformar i manipular AST nodes.
+**Source**: Copied from `odata-query`
+**Total**: 224 lines (90 + 134)
+**Purpose**: Transform and manipulate AST nodes.
 
-#### 3.1 `rewrite.py` (90 línies)
+#### 3.1 `rewrite.py` (90 lines)
 
-**AliasRewriter** - Reemplaça àlies:
+**AliasRewriter** - Replaces aliases:
 ```python
 from django_odata.core.rewrite import AliasRewriter
 
-# Defineix àlies
+# Define aliases
 aliases = {
     'author_name': 'author/name',
     'post_count': 'posts/count()',
@@ -352,51 +364,51 @@ new_ast = rewriter.visit(original_ast)
 # author_name eq 'John' → author/name eq 'John'
 ```
 
-**IdentifierStripper** - Elimina prefixos:
+**IdentifierStripper** - Removes prefixes:
 ```python
 from django_odata.core.rewrite import IdentifierStripper
 from django_odata.core import ast
 
-# Elimina 'author' de l'expressió
+# Remove 'author' from the expression
 stripper = IdentifierStripper(ast.Identifier('author'))
 new_ast = stripper.visit(original_ast)
 
 # author/name → name
 ```
 
-#### 3.2 `typing.py` (134 línies)
+#### 3.2 `typing.py` (134 lines)
 
-**Type Inference** per AST nodes:
+**Type Inference** for AST nodes:
 
 ```python
 from django_odata.core import typing
 
-# Valida tipus
+# Validate types
 typing.typecheck(
     node=string_node,
     expected_type=ast.String,
     field_name='name'
-)  # Raises ArgumentTypeException si no és String
+)  # Raises ArgumentTypeException if not String
 
-# Infereix tipus
+# Infer type
 node_type = typing.infer_type(node)
 # → ast.Boolean, ast.Integer, ast.String, etc.
 
-# Infereix tipus de retorn de funcions
+# Infer function return type
 return_type = typing.infer_return_type(call_node)
 # contains() → ast.Boolean
 # length() → ast.Integer
 # tolower() → ast.String
 ```
 
-#### 3.3 `utils.py` (35 línies)
+#### 3.3 `utils.py` (35 lines)
 
-**Utilities per AST:**
+**AST Utilities:**
 ```python
 from django_odata.core.utils import expression_relative_to_identifier
 from django_odata.core import ast
 
-# Fa l'expressió relativa a un identificador
+# Make expression relative to an identifier
 identifier = ast.Identifier('author')
 new_expr = expression_relative_to_identifier(identifier, expression)
 
@@ -408,20 +420,20 @@ new_expr = expression_relative_to_identifier(identifier, expression)
 
 ### 4. Query (OData Query Models)
 
-**Origen**: Codi original
-**Total**: 475 línies
-**Propòsit**: Models i parsing de queries OData completes.
+**Source**: Original code
+**Total**: 475 lines
+**Purpose**: Models and parsing of complete OData queries.
 
-#### 4.1 `query/models.py` (137 línies)
+#### 4.1 `query/models.py` (137 lines)
 
-Models per representar queries OData:
+Models for representing OData queries:
 
 ```python
 from django_odata.core.query.models import ODataQuery, ExpandItem, OrderByItem
 
 @dataclass
 class ODataQuery:
-    """Representa una query OData completa."""
+    """Represents a complete OData query."""
     filter: Optional[str] = None           # $filter=name eq 'John'
     select: Optional[List[str]] = None     # $select=name,age
     expand: Optional[List[ExpandItem]] = None  # $expand=posts($select=title)
@@ -448,9 +460,9 @@ class OrderByItem:
     direction: str = 'asc'                 # 'asc' | 'desc'
 ```
 
-#### 4.2 `query/parser.py` (232 línies)
+#### 4.2 `query/parser.py` (232 lines)
 
-Parser de query strings a `ODataQuery`:
+Parser for query strings to `ODataQuery`:
 
 ```python
 from django_odata.core.query import parse_odata_query
@@ -468,15 +480,15 @@ query_params = {
 
 odata_query = parse_odata_query(query_params)
 
-# Accedeix als camps
+# Access fields
 print(odata_query.filter)  # "name eq 'John' and age gt 30"
 print(odata_query.select)  # ['name', 'age', 'posts']
 print(odata_query.top)     # 10
 ```
 
-#### 4.3 `query/validators.py` (94 línies)
+#### 4.3 `query/validators.py` (94 lines)
 
-Validadors per paràmetres OData:
+Validators for OData parameters:
 
 ```python
 from django_odata.core.query.validators import (
@@ -485,11 +497,11 @@ from django_odata.core.query.validators import (
     validate_orderby,
 )
 
-# Valida que top és un enter positiu
+# Validate that top is a positive integer
 validate_top('10')    # OK
 validate_top('-5')    # Raises ValidationError
 
-# Valida que skip és un enter no negatiu
+# Validate that skip is a non-negative integer
 validate_skip('20')   # OK
 validate_skip('abc')  # Raises ValidationError
 ```
@@ -498,19 +510,19 @@ validate_skip('abc')  # Raises ValidationError
 
 ### 5. Filter (Filter Engine)
 
-**Origen**: Codi original
-**Total**: 327 línies
-**Propòsit**: Motor genèric de filtres framework-agnostic.
+**Source**: Original code
+**Total**: 327 lines
+**Purpose**: Generic framework-agnostic filter engine.
 
-#### 5.1 `filter/engine.py` (151 línies)
+#### 5.1 `filter/engine.py` (151 lines)
 
 ```python
 from django_odata.core.filter import get_filter_engine
 
-# Obté el motor de filtres
+# Get the filter engine
 engine = get_filter_engine()
 
-# Aplica filtre a una llista de dicts
+# Apply filter to a list of dicts
 data = [
     {'name': 'John', 'age': 30},
     {'name': 'Jane', 'age': 25},
@@ -525,9 +537,9 @@ filtered = engine.filter(
 # filtered = [{'name': 'John', 'age': 30}]
 ```
 
-#### 5.2 `filter/operators.py` (131 línies)
+#### 5.2 `filter/operators.py` (131 lines)
 
-Operadors de filtre:
+Filter operators:
 
 ```python
 # Comparison
@@ -553,13 +565,13 @@ not_(a)          # not a
 
 ### 6. DTOs (Data Transfer Objects)
 
-**Origen**: Codi original
-**Total**: 454 línies
-**Propòsit**: Conversió entre models Django i DTOs.
+**Source**: Original code
+**Total**: 454 lines
+**Purpose**: Conversion between Django models and DTOs.
 
-#### 6.1 `dtos/base.py` (290 línies)
+#### 6.1 `dtos/base.py` (290 lines)
 
-Classes base per DTOs:
+Base classes for DTOs:
 
 ```python
 from django_odata.core.dtos.base import BaseDTO
@@ -571,9 +583,9 @@ class UserDTO(BaseDTO):
     posts: List['PostDTO'] = []
 ```
 
-#### 6.2 `dtos/converter.py` (156 línies)
+#### 6.2 `dtos/converter.py` (156 lines)
 
-Conversors:
+Converters:
 
 ```python
 from django_odata.core.dtos.converter import ModelToDTOConverter
@@ -591,53 +603,240 @@ user_model = converter.from_dto(user_dto, User)
 
 ### 7. Selector (Base Selector)
 
-**Origen**: Codi original
-**Total**: 222 línies
-**Propòsit**: Protocol/Interface per selectors.
+**Source**: Original code
+**Total**: 222 lines
+**Purpose**: Protocol/Interface for selectors.
 
-#### 7.1 `selector/base.py` (209 línies)
+#### 7.1 `selector/base.py` (209 lines)
 
 ```python
 from django_odata.core.selector.base import BaseSelector
 from django_odata.core.query.models import ODataQuery
 
 class BaseSelector(Protocol):
-    """Protocol per selectors que apliquen queries OData."""
+    """Protocol for selectors that apply OData queries."""
 
     def apply_query(
         self,
         queryset: Any,
         odata_query: ODataQuery
     ) -> Any:
-        """Aplica una query OData al queryset."""
+        """Applies an OData query to the queryset."""
         ...
 
     def apply_filter(self, queryset: Any, filter_expr: str) -> Any:
-        """Aplica $filter."""
+        """Applies $filter."""
         ...
 
     def apply_select(self, queryset: Any, fields: List[str]) -> Any:
-        """Aplica $select."""
+        """Applies $select."""
         ...
 
     def apply_expand(self, queryset: Any, expands: List[ExpandItem]) -> Any:
-        """Aplica $expand."""
+        """Applies $expand."""
         ...
 ```
 
 ---
 
-### 8. Utils
+### 8. Intent (Protocol-Agnostic Query)
 
-**Origen**: Copiat de `odata-query`
-**Total**: 35 línies
-**Propòsit**: Utilities per manipular AST.
+**Source**: Original code
+**Purpose**: Protocol-agnostic query representation, decoupled from OData.
 
-Veure apartat 3.3 més amunt.
+#### 8.1 `intent/models.py`
+
+Models for representing queries in an agnostic way:
+
+```python
+from fc_selector.core.intent import (
+    QueryIntent,
+    FilterIntent,
+    SelectIntent,
+    ExpandIntent,
+    OrderIntent,
+    PaginationIntent,
+)
+
+# QueryIntent is independent of the OData protocol
+intent = QueryIntent(
+    filter=FilterIntent(expression="status eq 'active'"),
+    select=SelectIntent(fields=["id", "name"]),
+    expand=ExpandIntent(relations={"author": QueryIntent()}),
+    orderby=OrderIntent.from_tuples([("created_at", "desc")]),
+    pagination=PaginationIntent(limit=10, offset=0),
+)
+```
+
+#### 8.2 `intent/converters.py`
+
+Bidirectional converters:
+
+```python
+from fc_selector.core.intent import odata_query_to_intent, intent_to_odata_query
+
+# ODataQuery → QueryIntent
+intent = odata_query_to_intent(odata_query)
+
+# QueryIntent → ODataQuery
+odata_query = intent_to_odata_query(intent)
+```
 
 ---
 
-## Diagrama d'Arquitectura
+### 9. Filters (Type-Safe Fluent API)
+
+**Source**: Original code
+**Purpose**: Type-safe fluent API for building queries without strings.
+
+#### 9.1 `filters/fields.py` - Field Class
+
+```python
+from fc_selector.core.filters import Field
+
+# Comparisons
+Field("name").eq("John")           # name eq 'John'
+Field("age").gt(18)                # age gt 18
+Field("status").ne("deleted")      # status ne 'deleted'
+
+# Null checks
+Field("deleted_at").is_null()      # deleted_at eq null
+
+# String operations
+Field("name").contains("john")     # contains(name, 'john')
+Field("email").startswith("admin") # startswith(email, 'admin')
+
+# Collections
+Field("status").is_in(["a", "b"])  # status in ('a', 'b')
+
+# Range
+Field("price").between(10, 100)    # price ge 10 and price le 100
+
+# Nested fields
+Field("author.name").eq("John")    # author/name eq 'John'
+```
+
+#### 9.2 `filters/expressions.py` - Expression Class
+
+```python
+# Python operators for composition
+expr1 = Field("status").eq("active")
+expr2 = Field("age").gt(18)
+
+# AND: &
+combined = expr1 & expr2
+
+# OR: |
+alternative = expr1 | expr2
+
+# NOT: ~
+negated = ~expr1
+
+# Complex
+complex_expr = (
+    (Field("status").eq("active") & Field("age").gt(18))
+    | Field("vip").eq(True)
+)
+```
+
+#### 9.3 `filters/expand.py` - Expand Class
+
+```python
+from fc_selector.core.filters import Expand, OrderBy
+
+# Simple expand
+Expand("author")
+
+# Expand with nested options
+Expand("author").select("id", "name", "email")
+
+# Expand with filter
+Expand("comments").filter(Field("approved").eq(True))
+
+# Full expand
+Expand("comments")
+    .select("id", "text")
+    .filter(Field("approved").eq(True))
+    .orderby(OrderBy("created_at").desc())
+    .top(5)
+
+# Nested expand
+Expand("author").expand(
+    Expand("profile").select("avatar", "bio")
+)
+```
+
+#### 9.4 `filters/orderby.py` - OrderBy Class
+
+```python
+from fc_selector.core.filters import OrderBy
+
+# Ascending (default)
+OrderBy("name")
+OrderBy("name").asc()
+
+# Descending
+OrderBy("created_at").desc()
+```
+
+#### 9.5 Integration with QueryBuilder
+
+```python
+from fc_selector.core.query_builder import QueryBuilder
+from fc_selector.core.filters import Field, Expand, OrderBy
+
+# Fully type-safe query
+intent = (
+    QueryBuilder()
+    .where(Field("status").eq("published") & Field("rating").gt(4.0))
+    .select("id", "title", "rating")
+    .expand(
+        Expand("author").select("id", "name"),
+        Expand("comments")
+            .filter(Field("approved").eq(True))
+            .orderby(OrderBy("created_at").desc())
+            .top(5)
+    )
+    .orderby(OrderBy("created_at").desc())
+    .top(10)
+    .build()  # Returns QueryIntent
+)
+
+# Execute directly (without text parsing)
+results = selector.execute(intent)
+```
+
+#### 9.6 Custom Filter Parser (Dependency Injection)
+
+The `QueryBuilder` accepts a custom filter parser for testing or alternative query languages:
+
+```python
+from fc_selector.core.query_builder import QueryBuilder
+from fc_selector.core.ast import Node
+
+def my_custom_parser(expression: str) -> Node:
+    """Custom parser implementation."""
+    # Your parsing logic here
+    ...
+
+# Use custom parser
+builder = QueryBuilder(filter_parser=my_custom_parser)
+builder.filter("my custom syntax").build()
+```
+
+---
+
+### 10. Utils
+
+**Source**: Copied from `odata-query`
+**Total**: 35 lines
+**Purpose**: Utilities for manipulating AST.
+
+See section 3.3 above.
+
+---
+
+## Architecture Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -697,20 +896,20 @@ Veure apartat 3.3 més amunt.
 
 ---
 
-## Flux de Dades
+## Data Flow
 
-### 1. Parsing d'una Query OData
+### 1. Parsing an OData Query
 
 ```python
 # INPUT: Query string
 query_string = "name eq 'John' and age gt 30"
 
-# STEP 1: Lexer tokenitza
+# STEP 1: Lexer tokenizes
 lexer = ODataLexer()
 tokens = lexer.tokenize(query_string)
 # → [IDENTIFIER('name'), EQ, STRING('John'), AND, IDENTIFIER('age'), GT, INTEGER(30)]
 
-# STEP 2: Parser genera AST
+# STEP 2: Parser generates AST
 parser = ODataParser()
 ast = parser.parse(tokens)
 # → BoolOp(
@@ -721,19 +920,19 @@ ast = parser.parse(tokens)
 #     ]
 #   )
 
-# STEP 3: Type checking (opcional)
+# STEP 3: Type checking (optional)
 typing.typecheck(ast.values[0].left, ast.Identifier, 'name')
 
-# STEP 4: Rewrite (opcional)
+# STEP 4: Rewrite (optional)
 aliases = {'full_name': 'name'}
 rewriter = AliasRewriter(aliases)
 new_ast = rewriter.visit(ast)
 
-# STEP 5: Visitor (específic de framework)
-# Veure django/visitors/ per transformar a Django Q
+# STEP 5: Visitor (framework-specific)
+# See django/visitors/ to transform to Django Q
 ```
 
-### 2. Parsing d'una Query Completa
+### 2. Parsing a Complete Query
 
 ```python
 from django_odata.core.query import parse_odata_query
@@ -761,9 +960,9 @@ odata_query = parse_odata_query(params)
 
 ---
 
-## Exemples d'Ús
+## Usage Examples
 
-### Exemple 1: Parsejar i Traversar AST
+### Example 1: Parse and Traverse AST
 
 ```python
 from django_odata.core.parser import ODataLexer, ODataParser
@@ -776,7 +975,7 @@ query = "contains(name, 'John') and age gt 30"
 tokens = lexer.tokenize(query)
 ast = parser.parse(tokens)
 
-# Traversa AST
+# Traverse AST
 class MyVisitor(visitor.NodeVisitor):
     def visit_Call(self, node):
         print(f"Function: {node.func.name}")
@@ -794,13 +993,13 @@ v.visit(ast)
 # Comparison: Identifier('age') Gt() Integer('30', 30)
 ```
 
-### Exemple 2: Transform AST
+### Example 2: Transform AST
 
 ```python
 from django_odata.core.ast import visitor, nodes
 
 class UppercaseStrings(visitor.NodeTransformer):
-    """Converteix tots els strings a uppercase."""
+    """Converts all strings to uppercase."""
 
     def visit_String(self, node):
         return nodes.String(
@@ -814,7 +1013,7 @@ new_ast = transformer.visit(ast)
 # "name eq 'john'" → "name eq 'JOHN'"
 ```
 
-### Exemple 3: Parse Query Completa
+### Example 3: Parse Complete Query
 
 ```python
 from django_odata.core.query import parse_odata_query
@@ -840,74 +1039,88 @@ print(f"Count: {odata_query.count}")
 
 ---
 
-## Notes Importants
+## Important Notes
 
 ### 1. Framework-Agnostic
 
-**Tot el codi en `core/` NO depèn de Django.** Això permet:
-- Reutilitzar en altres frameworks (Flask, FastAPI)
-- Testejar sense Django
-- Usar standalone per validació OData
+**All code in `core/` does NOT depend on Django.** This allows:
+- Reuse in other frameworks (Flask, FastAPI)
+- Testing without Django
+- Standalone use for OData validation
 
-### 2. Immutabilitat
+### 2. Security Features
 
-**Tots els nodes AST són immutables** (`frozen=True`). Per modificar-los cal crear nous nodes amb `NodeTransformer`.
+The library includes built-in security measures:
+- **Field validation**: `InvalidFieldError` blocks access to private fields (`_password`)
+- **Input length limits**: `MAX_FILTER_LENGTH=4000` prevents DoS attacks
+- **Type-safe API**: The `Field`, `Expand`, `OrderBy` classes prevent injection
 
-### 3. Parser Gran (721 línies)
+### 3. Performance Optimizations
 
-El parser `grammar.py` és gran perquè suporta **totes** les funcions OData:
+- **Thread-local parser caching**: Lexer/parser instances are cached per-thread
+- **Dependency injection**: `QueryBuilder` accepts custom filter parsers
+
+### 4. Immutability
+
+**All AST nodes are immutable** (`frozen=True`). To modify them, you need to create new nodes with `NodeTransformer`.
+
+### 5. Large Parser (721 lines)
+
+The `grammar.py` parser is large because it supports **all** OData functions:
 - String functions (20+)
 - Date/time functions (15+)
 - Math functions (10+)
 - Geographic functions (5+)
 - Lambda expressions (any/all)
 
-**Pla de neteja**: Veure `/PARSER_CLEANUP_TASKS.md` per eliminar funcions no utilitzades.
+**Cleanup plan**: See `/PARSER_CLEANUP_TASKS.md` to remove unused functions.
 
-### 4. Crèdits
+### 6. Credits
 
-Gran part del core (AST, Parser, Rewrite, Typing, Utils) està **copiat de [odata-query](https://github.com/gorilla-co/odata-query)**:
-- Llicència: MIT
-- Autors: gorilla-co
-- Modificacions: Imports actualitzats per usar `django_odata.core.*`
+Much of the core (AST, Parser, Rewrite, Typing, Utils) is **copied from [odata-query](https://github.com/gorilla-co/odata-query)**:
+- License: MIT
+- Authors: gorilla-co
+- Modifications: Imports updated to use `django_odata.core.*`
 
-Tots els fitxers copiats tenen headers amb crèdits originals.
+All copied files have headers with original credits.
 
 ---
 
-## Pròxims Passos
+## Next Steps
 
 1. **Tests** (`/tests/core/`):
-   - Test per cada node AST
-   - Test per parser (funcions, lambdas)
-   - Test per visitors
-   - Test per rewriters
+   - Test for each AST node
+   - Test for parser (functions, lambdas)
+   - Test for visitors
+   - Test for rewriters
 
-2. **Optimització**:
-   - Eliminar funcions OData no utilitzades
-   - Reduir parser de 721 a ~500 línies
+2. **Optimization**:
+   - Remove unused OData functions
+   - Reduce parser from 721 to ~500 lines
    - Coverage >90%
 
-3. **Documentació**:
-   - Crear `SUPPORTED_ODATA_FUNCTIONS.md`
-   - Exemples d'ús per cada funció
+3. **Documentation**:
+   - Create `SUPPORTED_ODATA_FUNCTIONS.md`
+   - Usage examples for each function
    - Tutorials
 
 ---
 
-## Resum
+## Summary
 
-| Mòdul | Línies | Origen | Propòsit |
-|-------|--------|--------|----------|
-| **ast/** | 1,150 | odata-query | Nodes AST immutables + Visitor pattern |
-| **parser/** | 921 | odata-query | Lexer/Parser OData → AST (SLY) |
-| **rewrite.py** | 90 | odata-query | Transformadors AST (aliases, stripping) |
-| **typing.py** | 134 | odata-query | Type inference per nodes |
-| **utils.py** | 35 | odata-query | Utils AST |
-| **query/** | 475 | Original | Models i parsing queries OData |
-| **filter/** | 327 | Original | Motor de filtres genèric |
-| **dtos/** | 454 | Original | Conversió Model ↔ DTO |
-| **selector/** | 222 | Original | Protocol base per selectors |
-| **TOTAL** | **3,823** | 60% / 40% | Core framework-agnostic |
+| Module | Lines | Source | Purpose |
+|--------|-------|--------|---------|
+| **ast/** | 1,150 | odata-query | Immutable AST nodes + Visitor pattern |
+| **parser/** | 921 | odata-query | OData Lexer/Parser → AST (SLY) |
+| **rewrite.py** | 90 | odata-query | AST transformers (aliases, stripping) |
+| **typing.py** | 134 | odata-query | Type inference for nodes |
+| **utils.py** | 35 | odata-query | AST utils |
+| **query/** | 475 | Original | OData query models and parsing |
+| **filter/** | 327 | Original | Generic filter engine |
+| **dtos/** | 454 | Original | Model ↔ DTO conversion |
+| **selector/** | 222 | Original | Base protocol for selectors |
+| **intent/** | ~300 | Original | Protocol-agnostic QueryIntent |
+| **filters/** | ~500 | Original | Type-safe fluent API (Field, Expand, OrderBy) |
+| **TOTAL** | **~4,600** | 50% / 50% | Framework-agnostic core |
 
-**Arquitectura**: Clean, extensible, testable, reusable ✨
+**Architecture**: Clean, extensible, testable, reusable

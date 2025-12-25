@@ -21,7 +21,35 @@ class MySelector(ODataSelector):
         field_aliases = {                  # Optional: field name aliases
             'apiName': 'internal__name',
         }
+
+        # Field restrictions (hybrid approach)
+        filterable_fields = ['status', 'created_at']  # Positive list (takes priority)
+        non_filterable_fields = ['password']          # Negative list (if no positive list)
+        sortable_fields = ['title', 'created_at']     # Positive list (takes priority)
+        non_sortable_fields = ['content']             # Negative list (if no positive list)
+
+        # Pagination defaults
+        default_ordering = ['-created_at']  # Default sort order
+        default_limit = 100                 # Default page size
+        max_limit = 500                     # Maximum page size
 ```
+
+### Meta Options
+
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| `model` | Model | Yes | Django model class |
+| `dto_class` | class | Yes | DTO class for serialization |
+| `expandable_fields` | dict | No | Map relation name → DTO class |
+| `field_aliases` | dict | No | Map API name → internal field path |
+| `allowed_fields` | list | No | Fields available for $select |
+| `filterable_fields` | list | No | Fields available for $filter (positive) |
+| `non_filterable_fields` | list | No | Fields NOT available for $filter (negative) |
+| `sortable_fields` | list | No | Fields available for $orderby (positive) |
+| `non_sortable_fields` | list | No | Fields NOT available for $orderby (negative) |
+| `default_ordering` | list | No | Default sort fields (e.g., `['-created_at']`) |
+| `default_limit` | int | No | Default $top value (default: 100) |
+| `max_limit` | int | No | Maximum $top value (default: 500) |
 
 ### Methods
 
@@ -31,7 +59,7 @@ Get multiple DTOs.
 
 ```python
 posts = selector.get_many()
-posts = selector.get_many(ODataQueryBuilder().filter("status eq 'published'"))
+posts = selector.get_many(QueryBuilder().filter("status eq 'published'"))
 ```
 
 #### get_one(query_builder) -> Optional[DTO]
@@ -39,7 +67,7 @@ posts = selector.get_many(ODataQueryBuilder().filter("status eq 'published'"))
 Get a single DTO. Returns `None` if not found.
 
 ```python
-post = selector.get_one(ODataQueryBuilder().filter("slug eq 'my-post'"))
+post = selector.get_one(QueryBuilder().filter("slug eq 'my-post'"))
 ```
 
 #### get_by_pk(pk, query_builder=None) -> Optional[DTO]
@@ -48,7 +76,7 @@ Get by primary key.
 
 ```python
 post = selector.get_by_pk(1)
-post = selector.get_by_pk(1, ODataQueryBuilder().expand("author"))
+post = selector.get_by_pk(1, QueryBuilder().expand("author"))
 ```
 
 #### count_by(query_builder=None) -> int
@@ -56,7 +84,7 @@ post = selector.get_by_pk(1, ODataQueryBuilder().expand("author"))
 Count matching records.
 
 ```python
-count = selector.count_by(ODataQueryBuilder().filter("status eq 'draft'"))
+count = selector.count_by(QueryBuilder().filter("status eq 'draft'"))
 ```
 
 #### exists_by(query_builder=None) -> bool
@@ -64,7 +92,7 @@ count = selector.count_by(ODataQueryBuilder().filter("status eq 'draft'"))
 Check if any records match.
 
 ```python
-exists = selector.exists_by(ODataQueryBuilder().filter("slug eq 'my-post'"))
+exists = selector.exists_by(QueryBuilder().filter("slug eq 'my-post'"))
 ```
 
 #### query(query_string, model_class=None, base_queryset=None) -> QuerySet
@@ -94,22 +122,28 @@ def get_queryset(self):
 
 ---
 
-## ODataQueryBuilder
+## QueryBuilder
 
 Fluent API for building OData queries.
 
 ```python
-from fc_selector.core import ODataQueryBuilder
+from fc_selector.django.selector import QueryBuilder
 ```
 
 ### Constructor
 
 ```python
 # Empty
-query = ODataQueryBuilder()
+query = QueryBuilder()
 
 # From existing query string
-query = ODataQueryBuilder("$filter=status eq 'published'")
+query = QueryBuilder("$filter=status eq 'published'")
+
+# With custom filter parser (dependency injection)
+def my_parser(expression: str) -> Node:
+    # Custom parsing logic
+    ...
+query = QueryBuilder(filter_parser=my_parser)
 ```
 
 ### Methods
@@ -360,16 +394,48 @@ Options:
 
 ## Exceptions
 
+### Core Exceptions
+
 ```python
-from fc_selector.exceptions import (
-    ODataFilterError,
-    ODataFieldNotFoundError,
-    ODataInvalidFilterSyntaxError,
-    ODataInvalidOperatorError,
-    ODataInvalidValueError,
-    ODataExpandError,
-    ODataInvalidPaginationError,
+from fc_selector.core.exceptions import (
+    SelectorError,        # Base class
+    QueryError,           # Query processing errors
+    FieldNotFoundError,   # Field doesn't exist
+    InvalidFieldError,    # Field access denied (security)
+    InvalidValueError,    # Invalid value for type
+    TypeMismatchError,    # Type mismatch in operation
+    UnsupportedFunctionError,  # Unsupported function
 )
 ```
 
-All exceptions inherit from `ODataFilterError` and produce OData-compliant error responses.
+Core exceptions are framework-agnostic and are translated to OData exceptions at the protocol layer.
+
+---
+
+## Security
+
+### Field Validation
+
+The `AstToDjangoQVisitor` validates field names:
+
+```python
+# Constructor with optional allowed fields
+visitor = AstToDjangoQVisitor(
+    root_model=MyModel,
+    allowed_fields={'id', 'name', 'status'}  # Optional whitelist
+)
+```
+
+**Automatic protections:**
+- Private fields (starting with `_`) are blocked
+- Non-existent fields raise `InvalidFieldError`
+- Fields not in `allowed_fields` (if specified) are rejected
+
+### Parser Limits
+
+```python
+from fc_selector.protocols.odata.parsers.filter import MAX_FILTER_LENGTH
+
+# Default: 4000 characters
+# Exceeding this raises ODataSyntaxError
+```

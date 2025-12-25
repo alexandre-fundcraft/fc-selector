@@ -56,7 +56,7 @@ class DTOConverter:
         instance: Any,
         selected_fields: set[str] | None = None,
         expanded_fields: set[str] | None = None,
-        expand_options: dict | None = None
+        expand_options: dict | None = None,
     ) -> Any:
         """
         Convert single ORM instance to DTO.
@@ -88,11 +88,8 @@ class DTOConverter:
             ... )
         """
         # Verify dto_class has from_model method (from BaseODataDTO)
-        if not hasattr(dto_class, 'from_model'):
-            raise ValueError(
-                f"{dto_class.__name__} must inherit from BaseODataDTO "
-                f"to use automatic conversion"
-            )
+        if not hasattr(dto_class, "from_model"):
+            raise ValueError(f"{dto_class.__name__} must inherit from BaseODataDTO to use automatic conversion")
 
         # Initialize defaults
         expanded_fields = expanded_fields or set()
@@ -103,7 +100,7 @@ class DTOConverter:
             instance,
             selected_fields=selected_fields,
             expanded_fields=expanded_fields,
-            expand_options=expand_options
+            expand_options=expand_options,
         )
 
     @staticmethod
@@ -112,7 +109,7 @@ class DTOConverter:
         instances: list[Any],
         selected_fields: set[str] | None = None,
         expanded_fields: set[str] | None = None,
-        expand_options: dict | None = None
+        expand_options: dict | None = None,
     ) -> list[Any]:
         """
         Convert list of ORM instances to DTOs.
@@ -138,14 +135,7 @@ class DTOConverter:
             ... )
         """
         return [
-            DTOConverter.to_dto(
-                dto_class,
-                inst,
-                selected_fields,
-                expanded_fields,
-                expand_options
-            )
-            for inst in instances
+            DTOConverter.to_dto(dto_class, inst, selected_fields, expanded_fields, expand_options) for inst in instances
         ]
 
 
@@ -153,4 +143,4 @@ class DTOConverter:
 to_dto = DTOConverter.to_dto
 to_dtos = DTOConverter.to_dtos
 
-__all__ = ['DTOConverter', 'to_dto', 'to_dtos']
+__all__ = ["DTOConverter", "to_dto", "to_dtos"]

@@ -5,8 +5,8 @@ This test suite ensures the parser correctly handles all OData query parameters
 and combinations WITHOUT any Django dependencies.
 """
 
-from fc_selector.core.parsers.query import parse_odata_query
-from fc_selector.core.parsers.query.models import (
+from fc_selector.protocols.odata.parsers.query import parse_odata_query
+from fc_selector.protocols.odata.parsers.query.models import (
     ExpandOption,
     FilterOption,
     ODataQuery,
@@ -224,20 +224,14 @@ class TestOrderByParsing:
         result = parse_odata_query("$orderby=status asc,created_at desc")
 
         assert result.orderby is not None
-        assert result.orderby.fields == [
-            ("status", "asc"),
-            ("created_at", "desc")
-        ]
+        assert result.orderby.fields == [("status", "asc"), ("created_at", "desc")]
 
     def test_orderby_with_spaces(self):
         """Test parsing $orderby with extra spaces."""
         result = parse_odata_query("$orderby=name  asc , created_at   desc")
 
         assert result.orderby is not None
-        assert result.orderby.fields == [
-            ("name", "asc"),
-            ("created_at", "desc")
-        ]
+        assert result.orderby.fields == [("name", "asc"), ("created_at", "desc")]
 
     def test_no_orderby(self):
         """Test query without $orderby."""
@@ -405,10 +399,7 @@ class TestEdgeCases:
 
     def test_dict_input(self):
         """Test parsing dictionary input."""
-        query_dict = {
-            "$select": "id,name",
-            "$filter": "status eq 'published'"
-        }
+        query_dict = {"$select": "id,name", "$filter": "status eq 'published'"}
         result = parse_odata_query(query_dict)
 
         assert result.select is not None

@@ -9,9 +9,17 @@ from django.db import connection, reset_queries
 from rest_framework import status
 from rest_framework.response import Response
 
+from fc_selector.core import exceptions as core_ex
+from fc_selector.exceptions import (
+    ODataFieldNotFoundError,
+    ODataFilterError,
+    ODataInvalidPaginationError,
+)
+
 try:
     from drf_spectacular.types import OpenApiTypes
     from drf_spectacular.utils import OpenApiParameter, extend_schema
+
     HAS_SPECTACULAR = True
 except ImportError:
     HAS_SPECTACULAR = False
@@ -149,7 +157,7 @@ def get_odata_openapi_parameters():
     return params
 
 
-def build_odata_response(request, serializer_data, query_string, entity_set_name, selector=None):
+def build_odata_response(request, serializer_data, query_string, entity_set_name, selector=None, total_count=None):
     """
     Build OData-compliant response with pagination, count, and debug info.
 
@@ -159,56 +167,58 @@ def build_odata_response(request, serializer_data, query_string, entity_set_name
         query_string: OData query string
         entity_set_name: Name of the entity set (posts, authors, etc.)
         selector: Optional selector instance for count queries
+        total_count: Optional pre-calculated total count (use when additional filters
+                     are applied that aren't in the query_string, e.g., RLS filters)
 
     Returns:
         dict: OData response with @odata.context, value, @odata.count, @odata.nextLink, @debug
     """
     response_data = {
         "@odata.context": f"{request.build_absolute_uri('/odata/')}$metadata#{entity_set_name}",
-        "value": serializer_data
+        "value": serializer_data,
     }
 
     # Parse query string
     parsed_qs = {}
-    for param in query_string.split('&'):
-        if '=' in param:
-            key, value = param.split('=', 1)
+    for param in query_string.split("&"):
+        if "=" in param:
+            key, value = param.split("=", 1)
             parsed_qs[key] = value
 
     # Add OData count if requested
-    if '$count' in parsed_qs and parsed_qs.get('$count', '').lower() == 'true':
-        if selector:
-            # Remove $count from query to get accurate count
-            count_query = '&'.join([f"{k}={v}" for k, v in parsed_qs.items() if k != '$count'])
-            total_count = selector.query(count_query).count()
+    if "$count" in parsed_qs and parsed_qs.get("$count", "").lower() == "true":
+        if total_count is not None:
+            # Use pre-calculated count (when RLS or additional filters are applied)
             response_data["@odata.count"] = total_count
+        elif selector:
+            # Remove $count, $top, $skip from query to get accurate total count
+            # (count should be independent of pagination)
+            count_query = "&".join([f"{k}={v}" for k, v in parsed_qs.items() if k not in ("$count", "$top", "$skip")])
+            response_data["@odata.count"] = selector.query(count_query).count()
 
     # Add pagination links (nextLink)
-    top = int(parsed_qs.get('$top', 50))
-    skip = int(parsed_qs.get('$skip', 0))
+    top = int(parsed_qs.get("$top", 50))
+    skip = int(parsed_qs.get("$skip", 0))
 
     # Check if there are more results
     if len(serializer_data) == top:  # If we got exactly 'top' results, there might be more
         next_skip = skip + top
         # Build next link
         next_params = parsed_qs.copy()
-        next_params['$skip'] = str(next_skip)
-        next_query = '&'.join([f"{k}={v}" for k, v in next_params.items()])
+        next_params["$skip"] = str(next_skip)
+        next_query = "&".join([f"{k}={v}" for k, v in next_params.items()])
         response_data["@odata.nextLink"] = f"{request.build_absolute_uri(request.path)}?{next_query}"
 
-    # Add debug queries if in debug mode
-    if settings.DEBUG and hasattr(connection, 'queries'):
+    # Add debug queries ONLY if explicitly enabled via dedicated setting
+    # SECURITY: settings.DEBUG alone is not sufficient - SQL queries contain sensitive information
+    # Users must explicitly set FC_SELECTOR_DEBUG_QUERIES = True to enable this feature
+    odata_debug_enabled = getattr(settings, "FC_SELECTOR_DEBUG_QUERIES", False)
+    if odata_debug_enabled and settings.DEBUG and hasattr(connection, "queries"):
         queries = connection.queries
         response_data["@debug"] = {
             "query_count": len(queries),
-            "queries": [
-                {
-                    "sql": q['sql'],
-                    "time": q['time']
-                }
-                for q in queries
-            ],
-            "total_time": f"{sum(float(q['time']) for q in queries):.4f}"
+            "queries": [{"sql": q["sql"], "time": q["time"]} for q in queries],
+            "total_time": f"{sum(float(q['time']) for q in queries):.4f}",
         }
 
     return response_data
@@ -259,10 +269,7 @@ class ODataSelectorViewSetMixin:
         if not HAS_SPECTACULAR:
             return lambda f: f
         return extend_schema(
-            parameters=[
-                p for p in get_odata_openapi_parameters()
-                if p.name in ('$select', '$expand')
-            ],
+            parameters=[p for p in get_odata_openapi_parameters() if p.name in ("$select", "$expand")],
             description="Retrieve a single entity. Supports $select and $expand.",
         )
 
@@ -279,11 +286,30 @@ class ODataSelectorViewSetMixin:
             reset_queries()
 
         # Get OData query string from request
-        query_string = request.META.get('QUERY_STRING', '')
+        query_string = request.META.get("QUERY_STRING", "")
 
         # Use selector to query database with OData parameters
         selector = self.get_selector()
-        dtos = selector.query_as_dtos(query_string)
+
+        try:
+            dtos = selector.query_as_dtos(query_string)
+        except core_ex.InvalidFieldError as e:
+            raise ODataFieldNotFoundError(
+                field_name=e.field_name,
+                model_name=e.model_name,
+                original_exception=e,
+            )
+        except core_ex.InvalidValueError as e:
+            raise ODataInvalidPaginationError(
+                parameter=e.context or "$top",
+                value=str(e.value),
+                original_exception=e,
+            )
+        except core_ex.QueryError as e:
+            raise ODataFilterError(
+                message=str(e),
+                original_exception=e,
+            )
 
         # Serialize DTOs to JSON
         serializer = self.get_serializer(dtos, many=True)
@@ -294,7 +320,7 @@ class ODataSelectorViewSetMixin:
             serializer_data=serializer.data,
             query_string=query_string,
             entity_set_name=self.odata_entity_set_name,
-            selector=selector
+            selector=selector,
         )
 
         return Response(response_data)
@@ -303,25 +329,41 @@ class ODataSelectorViewSetMixin:
         """
         Retrieve a single entity with OData support.
 
-        Uses ODataQueryBuilder to filter by pk without exposing QuerySet.
+        Uses QueryBuilder to filter by pk without exposing QuerySet.
         """
-        from fc_selector.core import ODataQueryBuilder
+        from fc_selector.core import QueryBuilder
 
         # Get OData query string
-        query_string = request.META.get('QUERY_STRING', '')
+        query_string = request.META.get("QUERY_STRING", "")
 
-        # Use selector with ODataQueryBuilder (no QuerySet exposure)
+        # Use selector with QueryBuilder (no QuerySet exposure)
         selector = self.get_selector()
 
         # Build query with pk filter using pure OData syntax
-        query = ODataQueryBuilder(query_string).and_filter(f"id eq {pk}")
-        dto = selector.get_one(query)
+        query = QueryBuilder(query_string).and_filter(f"id eq {pk}")
+
+        try:
+            dto = selector.get_one(query)
+        except core_ex.InvalidFieldError as e:
+            raise ODataFieldNotFoundError(
+                field_name=e.field_name,
+                model_name=e.model_name,
+                original_exception=e,
+            )
+        except core_ex.InvalidValueError as e:
+            raise ODataInvalidPaginationError(
+                parameter=e.context or "$top",
+                value=str(e.value),
+                original_exception=e,
+            )
+        except core_ex.QueryError as e:
+            raise ODataFilterError(
+                message=str(e),
+                original_exception=e,
+            )
 
         if not dto:
-            return Response(
-                {'detail': 'Not found.'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
         # Serialize
         serializer = self.get_serializer(dto)

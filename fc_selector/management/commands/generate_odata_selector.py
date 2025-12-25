@@ -94,9 +94,7 @@ class Command(BaseCommand):
                     app_path = Path(app_config.module.__file__).parent
                     output_dir = app_path / "selectors"
         else:
-            raise CommandError(
-                "Please specify models or use --app flag to specify an app"
-            )
+            raise CommandError("Please specify models or use --app flag to specify an app")
 
         # Override output directory if specified
         if options.get("output"):
@@ -109,11 +107,7 @@ class Command(BaseCommand):
         if options.get("single", False):
             models_to_generate = self._discover_related_models(models_to_generate)
 
-        self.stdout.write(
-            self.style.SUCCESS(
-                f"Generating selectors for {len(models_to_generate)} model(s)..."
-            )
-        )
+        self.stdout.write(self.style.SUCCESS(f"Generating selectors for {len(models_to_generate)} model(s)..."))
 
         # Get model info
         all_model_info = {}
@@ -140,9 +134,7 @@ class Command(BaseCommand):
                 )
             )
             for cycle in cycles:
-                self.stdout.write(
-                    self.style.WARNING(f"  Cycle: {' -> '.join(cycle.cycle)}")
-                )
+                self.stdout.write(self.style.WARNING(f"  Cycle: {' -> '.join(cycle.cycle)}"))
 
         # Generate selectors
         selector_codes = {}
@@ -165,9 +157,7 @@ class Command(BaseCommand):
             filtered_relationships = [
                 rel
                 for rel in info["relationships"]
-                if should_include_relationship(
-                    model_path, rel.related_model, excluded_edges
-                )
+                if should_include_relationship(model_path, rel.related_model, excluded_edges)
             ]
 
             code = generate_selector_file(
@@ -192,9 +182,7 @@ class Command(BaseCommand):
         )
 
         self.stdout.write(
-            self.style.SUCCESS(
-                f"Successfully generated {len(selector_codes)} selector(s) in {output_dir}"
-            )
+            self.style.SUCCESS(f"Successfully generated {len(selector_codes)} selector(s) in {output_dir}")
         )
 
     def _load_model_from_path(self, model_path: str):
@@ -284,15 +272,11 @@ class Command(BaseCommand):
         if single:
             # For single mode, pass the actual filename used (without .py extension)
             actual_filename = file_name[:-3]  # Remove .py extension
-            self._generate_init_file(
-                output_dir, selector_codes.keys(), single, actual_filename
-            )
+            self._generate_init_file(output_dir, selector_codes.keys(), single, actual_filename)
         else:
             self._generate_init_file(output_dir, selector_codes.keys(), single, None)
 
-    def _write_file_with_overwrite_check(
-        self, output_file: Path, content: str, force: bool
-    ):
+    def _write_file_with_overwrite_check(self, output_file: Path, content: str, force: bool):
         """Write file with overwrite check unless force is True.
 
         Args:
@@ -309,9 +293,7 @@ class Command(BaseCommand):
         output_file.write_text(content)
         self.stdout.write(self.style.SUCCESS(f"  Written to {output_file}"))
 
-    def _generate_init_file(
-        self, output_dir: Path, model_paths, single: bool, primary_model_name=None
-    ):
+    def _generate_init_file(self, output_dir: Path, model_paths, single: bool, primary_model_name=None):
         """Generate __init__.py with imports.
 
         Args:
@@ -324,9 +306,7 @@ class Command(BaseCommand):
 
         if single:
             # Import all selectors and DTOs from the primary model file
-            primary_file_name = (
-                primary_model_name if primary_model_name else "blog_post"
-            )
+            primary_file_name = primary_model_name if primary_model_name else "blog_post"
             for model_path in model_paths:
                 model_name = model_path.split(".")[-1]
                 selector_name = f"{model_name}Selector"
@@ -385,15 +365,11 @@ class Command(BaseCommand):
 
                     # To get the model, we need the app_label (e.g., 'blog'), not the full app name
                     try:
-                        related_model = apps.get_model(
-                            related_app_name, related_model_name
-                        )
+                        related_model = apps.get_model(related_app_name, related_model_name)
                     except LookupError:
                         # If that fails, try with just the app_label (last part of the app name)
                         related_app_label = parts[-2] if len(parts) > 1 else parts[0]
-                        related_model = apps.get_model(
-                            related_app_label, related_model_name
-                        )
+                        related_model = apps.get_model(related_app_label, related_model_name)
 
                     # If this is a new model, add it to be processed
                     if related_model not in discovered_models:
@@ -403,9 +379,7 @@ class Command(BaseCommand):
                 except (ValueError, LookupError) as e:
                     # Skip if related model cannot be found
                     self.stdout.write(
-                        self.style.WARNING(
-                            f"Could not load related model {relationship.related_model}: {e}"
-                        )
+                        self.style.WARNING(f"Could not load related model {relationship.related_model}: {e}")
                     )
                     continue
 
@@ -417,9 +391,7 @@ class Command(BaseCommand):
 
         return list(discovered_models)
 
-    def _combine_selectors(
-        self, selector_codes: dict[str, str], primary_app: str
-    ) -> str:
+    def _combine_selectors(self, selector_codes: dict[str, str], primary_app: str) -> str:
         """Combine multiple selector codes into one file with deduplicated imports.
 
         Args:
@@ -484,27 +456,30 @@ class Command(BaseCommand):
                 # Extract Selector section (after SELECTOR marker)
                 selector_section = code[selector_start:].strip()
                 # Remove the marker line
-                selector_section = selector_section.replace("# ==================== SELECTORS ====================", "").strip()
+                selector_section = selector_section.replace(
+                    "# ==================== SELECTORS ====================", ""
+                ).strip()
 
                 if dto_section:
                     dto_dict[model_name] = dto_section
 
                     # Extract dependencies (other DTOs referenced in this DTO)
                     dependencies = []
-                    for line in dto_section.split('\n'):
-                        if 'Optional[' in line and 'DTO]' in line:
+                    for line in dto_section.split("\n"):
+                        if "Optional[" in line and "DTO]" in line:
                             # Find DTO reference like: Optional[AuthorDTO]
                             import re
-                            matches = re.findall(r'Optional\[(\w+DTO)\]', line)
+
+                            matches = re.findall(r"Optional\[(\w+DTO)\]", line)
                             dependencies.extend(matches)
-                        elif 'Optional[List[' in line and 'DTO]]' in line:
+                        elif "Optional[List[" in line and "DTO]]" in line:
                             # Find DTO reference like: Optional[List[CategoryDTO]]
-                            matches = re.findall(r'Optional\[List\[(\w+DTO)\]\]', line)
+                            matches = re.findall(r"Optional\[List\[(\w+DTO)\]\]", line)
                             dependencies.extend(matches)
 
                     # Remove self-references and convert to model names
                     dto_name = f"{model_name}DTO"
-                    dependencies = [d.replace('DTO', '') for d in dependencies if d != dto_name]
+                    dependencies = [d.replace("DTO", "") for d in dependencies if d != dto_name]
                     dto_dependencies[model_name] = dependencies
 
                 if selector_section:

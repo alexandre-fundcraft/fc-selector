@@ -28,8 +28,10 @@ posts = repository.get_published()
 
 **With Selector:**
 ```python
+from fc_selector.django.selector import ODataSelector, QueryBuilder
+
 posts = selector.get_many(
-    ODataQueryBuilder()
+    QueryBuilder()
     .select("id", "title", "slug")  # Only what you need
     .filter("status eq 'published'")
 )
@@ -55,7 +57,7 @@ for post in posts:
 **With Selector:**
 ```python
 posts = selector.get_many(
-    ODataQueryBuilder()
+    QueryBuilder()
     .expand("author", "categories")  # Eager load
 )
 # 1-2 queries total (JOIN or prefetch)
@@ -177,7 +179,7 @@ posts = Post.objects.filter(
 **With Selector:**
 ```python
 posts = selector.get_many(
-    ODataQueryBuilder()
+    QueryBuilder()
     .select("id", "title", "excerpt")
     .expand("author($select=name)")
     .filter("status eq 'published'")

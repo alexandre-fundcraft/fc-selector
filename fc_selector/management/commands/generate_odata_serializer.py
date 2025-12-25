@@ -94,9 +94,7 @@ class Command(BaseCommand):
                     app_path = Path(app_config.module.__file__).parent
                     output_dir = app_path / "serializers"
         else:
-            raise CommandError(
-                "Please specify models or use --app flag to specify an app"
-            )
+            raise CommandError("Please specify models or use --app flag to specify an app")
 
         # Override output directory if specified
         if options.get("output"):
@@ -109,11 +107,7 @@ class Command(BaseCommand):
         if options.get("single", False):
             models_to_generate = self._discover_related_models(models_to_generate)
 
-        self.stdout.write(
-            self.style.SUCCESS(
-                f"Generating serializers for {len(models_to_generate)} model(s)..."
-            )
-        )
+        self.stdout.write(self.style.SUCCESS(f"Generating serializers for {len(models_to_generate)} model(s)..."))
 
         # Get model info
         all_model_info = {}
@@ -140,9 +134,7 @@ class Command(BaseCommand):
                 )
             )
             for cycle in cycles:
-                self.stdout.write(
-                    self.style.WARNING(f"  Cycle: {' -> '.join(cycle.cycle)}")
-                )
+                self.stdout.write(self.style.WARNING(f"  Cycle: {' -> '.join(cycle.cycle)}"))
 
         # Generate serializers
         serializer_codes = {}
@@ -166,9 +158,7 @@ class Command(BaseCommand):
             filtered_relationships = [
                 rel
                 for rel in info["relationships"]
-                if should_include_relationship(
-                    model_path, rel.related_model, excluded_edges
-                )
+                if should_include_relationship(model_path, rel.related_model, excluded_edges)
             ]
 
             code = generate_serializer_class(
@@ -193,9 +183,7 @@ class Command(BaseCommand):
         )
 
         self.stdout.write(
-            self.style.SUCCESS(
-                f"Successfully generated {len(serializer_codes)} serializer(s) in {output_dir}"
-            )
+            self.style.SUCCESS(f"Successfully generated {len(serializer_codes)} serializer(s) in {output_dir}")
         )
 
     def _load_model_from_path(self, model_path: str):
@@ -286,15 +274,11 @@ class Command(BaseCommand):
         if single:
             # For single mode, pass the actual filename used (without .py extension)
             actual_filename = file_name[:-3]  # Remove .py extension
-            self._generate_init_file(
-                output_dir, serializer_codes.keys(), single, actual_filename
-            )
+            self._generate_init_file(output_dir, serializer_codes.keys(), single, actual_filename)
         else:
             self._generate_init_file(output_dir, serializer_codes.keys(), single, None)
 
-    def _write_file_with_overwrite_check(
-        self, output_file: Path, content: str, force: bool
-    ):
+    def _write_file_with_overwrite_check(self, output_file: Path, content: str, force: bool):
         """Write file with overwrite check unless force is True.
 
         Args:
@@ -311,9 +295,7 @@ class Command(BaseCommand):
         output_file.write_text(content)
         self.stdout.write(self.style.SUCCESS(f"  Written to {output_file}"))
 
-    def _generate_init_file(
-        self, output_dir: Path, model_paths, single: bool, primary_model_name=None
-    ):
+    def _generate_init_file(self, output_dir: Path, model_paths, single: bool, primary_model_name=None):
         """Generate __init__.py with imports.
 
         Args:
@@ -326,9 +308,7 @@ class Command(BaseCommand):
 
         if single:
             # Import all serializers from the primary model file
-            primary_file_name = (
-                primary_model_name if primary_model_name else "blog_post"
-            )
+            primary_file_name = primary_model_name if primary_model_name else "blog_post"
             for model_path in model_paths:
                 model_name = model_path.split(".")[-1]
                 serializer_name = f"{model_name}Serializer"
@@ -386,15 +366,11 @@ class Command(BaseCommand):
                     # To get the model, we need the app_label (e.g., 'blog'), not the full app name (e.g., 'example.blog')
                     # Try with the full name first, then fall back to just the last part
                     try:
-                        related_model = apps.get_model(
-                            related_app_name, related_model_name
-                        )
+                        related_model = apps.get_model(related_app_name, related_model_name)
                     except LookupError:
                         # If that fails, try with just the app_label (last part of the app name)
                         related_app_label = parts[-2] if len(parts) > 1 else parts[0]
-                        related_model = apps.get_model(
-                            related_app_label, related_model_name
-                        )
+                        related_model = apps.get_model(related_app_label, related_model_name)
 
                     # If this is a new model, add it to be processed
                     if related_model not in discovered_models:
@@ -404,9 +380,7 @@ class Command(BaseCommand):
                 except (ValueError, LookupError) as e:
                     # Skip if related model cannot be found
                     self.stdout.write(
-                        self.style.WARNING(
-                            f"Could not load related model {relationship.related_model}: {e}"
-                        )
+                        self.style.WARNING(f"Could not load related model {relationship.related_model}: {e}")
                     )
                     continue
 
@@ -418,9 +392,7 @@ class Command(BaseCommand):
 
         return list(discovered_models)
 
-    def _combine_serializers(
-        self, serializer_codes: dict[str, str], primary_app: str
-    ) -> str:
+    def _combine_serializers(self, serializer_codes: dict[str, str], primary_app: str) -> str:
         """Combine multiple serializer codes into one file with deduplicated imports.
 
         Args:
@@ -527,11 +499,6 @@ Available options:
 
         # Combine everything
         sorted_imports = sorted(imports)
-        combined = (
-            header
-            + "\n".join(sorted_imports)
-            + "\n\n\n"
-            + "\n\n\n".join(class_definitions)
-        )
+        combined = header + "\n".join(sorted_imports) + "\n\n\n" + "\n\n\n".join(class_definitions)
 
         return combined
