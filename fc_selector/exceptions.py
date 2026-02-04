@@ -47,24 +47,27 @@ class ODataFilterError(APIException):
         self.details = details or {}
         self.original_exception = original_exception
 
-        # Create OData-compliant error structure
+        # Create OData-compliant error structure with limited message size
+        safe_message = message[:512]
         error_details = [
             {
                 "code": self.error_code,
-                "message": self.message,
+                "message": safe_message,
                 "target": self.target,
             }
         ]
 
-        # Add additional details if provided
+        # Add additional details if provided, truncate potentially sensitive fields
         if self.details:
+            if "expression" in self.details:
+                self.details["expression"] = str(self.details["expression"])[:256]
             error_details[0].update(self.details)
 
         super().__init__(
             detail={
                 "error": {
                     "code": self.default_code,
-                    "message": self.message,
+                    "message": safe_message,
                     "details": error_details,
                 }
             },
@@ -194,9 +197,9 @@ class ODataExpandError(ODataFilterError):
     ):
         if valid_fields:
             choices_str = ", ".join(f"'{f}'" for f in valid_fields)
-            message = f"Invalid field name(s) given in select_related: '{field_name}'. Choices are: {choices_str}"
+            message = f"Invalid $expand field '{field_name}'. Valid expandable fields are: {choices_str}"
         else:
-            message = f"Invalid field name(s) given in select_related: '{field_name}'"
+            message = f"Invalid $expand field '{field_name}'"
 
         super().__init__(
             message=message,

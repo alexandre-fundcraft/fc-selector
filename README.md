@@ -80,7 +80,7 @@ uv pip install -e .
 ## Requirements
 
 ### Core Dependencies
-- **Python** >= 3.8 (tested on 3.8, 3.9, 3.10, 3.11, 3.12, 3.13)
+- **Python** >= 3.11 (tested on 3.11, 3.12, 3.13)
 - **Django** >= 4.2 LTS (supported until April 2026)
 - **djangorestframework** >= 3.12.0
 
