@@ -1,7 +1,11 @@
 import operator
+import re
 from collections.abc import Callable
 from typing import Any, cast
 from uuid import UUID
+
+# Security: Maximum regex pattern length to prevent ReDoS attacks
+MAX_REGEX_PATTERN_LENGTH = 256
 
 from django.db.models import (
     Case,
@@ -20,6 +24,7 @@ from django.db.models.expressions import Expression
 from fc_selector.core import ast
 from fc_selector.core import exceptions as core_ex
 from fc_selector.core.ast import visitor
+from fc_selector.django.utils import resolve_field_alias
 
 # We still use utils from parsers to manipulate AST nodes (should be moved to core later)
 from fc_selector.protocols.odata.parsers.filter import utils
@@ -56,15 +61,6 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
         # turn the Django expression into a final `Q` object.
         self._depth: int = 0
 
-    def _resolve_field_alias(self, field_name: str) -> str:
-        """Resolve field alias to actual model field name."""
-        if not self.field_aliases:
-            return field_name
-        # Handle nested fields (e.g., "relation__field")
-        parts = field_name.split("__")
-        parts[0] = self.field_aliases.get(parts[0], parts[0])
-        return "__".join(parts)
-
     def _validate_field(self, field_name: str) -> str:
         """Validate field name for security and resolve aliases.
 
@@ -86,7 +82,7 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
             )
 
         # Resolve alias to actual model field
-        resolved_field = self._resolve_field_alias(field_name)
+        resolved_field = resolve_field_alias(field_name, self.field_aliases)
 
         # Validate that resolved field exists on the model (for simple fields only)
         # Skip validation if field is in allowed_fields (might be an annotation)
@@ -393,7 +389,30 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
 
     def djangofunc_matchespattern(self, field: ast.Node, pattern: ast.Node) -> lookups.Regex:
         ":meta private:"
-        return lookups.Regex(self.visit(field), self.visit(pattern))
+        visited_pattern = self.visit(pattern)
+
+        # Extract pattern string for validation
+        pattern_str = visited_pattern.value if hasattr(visited_pattern, "value") else str(visited_pattern)
+
+        # Security: Validate pattern length to prevent ReDoS
+        if len(pattern_str) > MAX_REGEX_PATTERN_LENGTH:
+            raise core_ex.InvalidValueError(
+                pattern_str[:50] + "...",
+                expected_type="regex pattern",
+                context=f"pattern too long (max {MAX_REGEX_PATTERN_LENGTH} chars)",
+            )
+
+        # Security: Validate regex compiles (catches syntax errors and some dangerous patterns)
+        try:
+            re.compile(pattern_str)
+        except re.error as e:
+            raise core_ex.InvalidValueError(
+                pattern_str[:100],
+                expected_type="valid regex pattern",
+                context=str(e),
+            )
+
+        return lookups.Regex(self.visit(field), visited_pattern)
 
     def djangofunc_tolower(self, field: ast.Node) -> functions.Lower:
         ":meta private:"
@@ -548,17 +567,28 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
     def _gen_annotation_name(self, expr: Expression) -> str:
         ":meta private:"
         if hasattr(expr, "name"):
-            return str(expr.name)
+            base = str(expr.name)
         elif hasattr(expr, "value"):
-            return str(expr.value)
+            base = str(expr.value)
+        else:
+            base = expr.__class__.__name__
 
-        func_name = expr.__class__.__name__
+            try:
+                args = expr.get_source_expressions()
+            except AttributeError:
+                args = []
 
-        try:
-            args = expr.get_source_expressions()
-        except AttributeError:
-            args = []
+            args_str = [self._gen_annotation_name(a) for a in args]
+            base = "_".join([base] + args_str)
 
-        args_str = [self._gen_annotation_name(a) for a in args]
+        # Security: Strict sanitization - only allow safe characters for SQL identifiers
+        sanitized = re.sub(r"[^a-z0-9_]", "_", base.lower())
+        sanitized = re.sub(r"_+", "_", sanitized)  # Collapse multiple underscores
+        sanitized = sanitized.strip("_")
+        sanitized = sanitized[:63]  # PostgreSQL identifier limit
 
-        return "_".join([func_name] + args_str).replace(" ", "_").replace(",", "").replace(":", "_").lower()
+        # Ensure valid identifier (starts with letter or underscore)
+        if sanitized and sanitized[0].isdigit():
+            sanitized = f"expr_{sanitized}"
+
+        return sanitized or "expr_unknown"

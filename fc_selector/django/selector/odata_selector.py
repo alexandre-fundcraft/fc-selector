@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from django.db.models import QuerySet
 
+from fc_selector.core import exceptions as core_ex
 from fc_selector.core.query_builder import QueryBuilder
 from fc_selector.django.executor import DjangoExecutor
 
@@ -18,6 +19,13 @@ logger = logging.getLogger(__name__)
 
 # Security: Valid field name pattern (alphanumeric + underscore only)
 _VALID_FIELD_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+
+# Security: Maximum query string length to prevent DoS attacks
+MAX_QUERY_STRING_LENGTH = 4096
+
+# Pagination defaults
+DEFAULT_PAGE_SIZE = 100
+MAX_PAGE_SIZE = 500
 
 if TYPE_CHECKING:
     from django.db.models import Model
@@ -71,8 +79,8 @@ class ODataSelector:
         self.sortable_fields = getattr(meta, "sortable_fields", [])
         self.non_sortable_fields = getattr(meta, "non_sortable_fields", [])
         self.default_ordering = getattr(meta, "default_ordering", [])
-        self.default_limit = getattr(meta, "default_limit", 100)
-        self.max_limit = getattr(meta, "max_limit", 500)
+        self.default_limit = getattr(meta, "default_limit", DEFAULT_PAGE_SIZE)
+        self.max_limit = getattr(meta, "max_limit", MAX_PAGE_SIZE)
 
         # Security: Validate field aliases to prevent injection
         self._validate_field_aliases(self.field_aliases)
@@ -214,6 +222,13 @@ class ODataSelector:
         if not query_string:
             return base_queryset
 
+        # Security: Validate query string length to prevent DoS
+        if len(query_string) > MAX_QUERY_STRING_LENGTH:
+            raise core_ex.QueryError(
+                f"Query string too long ({len(query_string)} chars). "
+                f"Maximum allowed: {MAX_QUERY_STRING_LENGTH}"
+            )
+
         # Resolve aliases in query string (OData specific logic)
         resolved_qs = self._resolve_aliases_in_query_string(query_string)
 
@@ -314,6 +329,13 @@ class ODataSelector:
         if not query_string:
             return list(base_queryset.values())
 
+        # Security: Validate query string length to prevent DoS
+        if len(query_string) > MAX_QUERY_STRING_LENGTH:
+            raise core_ex.QueryError(
+                f"Query string too long ({len(query_string)} chars). "
+                f"Maximum allowed: {MAX_QUERY_STRING_LENGTH}"
+            )
+
         # Resolve aliases in query string (OData specific logic)
         resolved_qs = self._resolve_aliases_in_query_string(query_string)
 
@@ -386,7 +408,7 @@ class ODataSelector:
         dtos = self.to_dtos(instances, sel, set(opts.keys()), opts)
         t5 = time.perf_counter()
 
-        logger.warning(
+        logger.debug(
             f"[get_many] build_intent={t1-t0:.3f}s, execute={t2-t1:.3f}s, "
             f"parse_opts={t3-t2:.3f}s, fetch_db={t4-t3:.3f}s, to_dtos={t5-t4:.3f}s"
         )
@@ -448,7 +470,7 @@ class ODataSelector:
         results = list(queryset)
         t3 = time.perf_counter()
 
-        logger.info(
+        logger.debug(
             f"[get_many_dicts] build_intent={t1-t0:.3f}s, execute={t2-t1:.3f}s, fetch_db={t3-t2:.3f}s"
         )
 

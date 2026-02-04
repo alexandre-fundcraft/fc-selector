@@ -11,7 +11,7 @@ from django.db.models import Prefetch, QuerySet
 
 from fc_selector.core import exceptions as core_ex
 from fc_selector.core.intent import ExpandIntent, QueryIntent
-from fc_selector.django.utils.introspection import get_field_safe
+from fc_selector.django.utils import get_field_safe, resolve_field_alias
 from fc_selector.django.visitors import AstToDjangoQVisitor
 
 logger = logging.getLogger(__name__)
@@ -109,15 +109,6 @@ class DjangoExecutor:
                 raise
             raise core_ex.QueryError(f"Error applying filter: {e}") from e
 
-    def _resolve_field_alias(self, field_name: str) -> str:
-        """Resolve field alias to actual model field name."""
-        if not self.field_aliases:
-            return field_name
-        # Handle nested fields (e.g., "relation__field")
-        parts = field_name.split("__")
-        parts[0] = self.field_aliases.get(parts[0], parts[0])
-        return "__".join(parts)
-
     def _apply_ordering(self, queryset: QuerySet, intent: QueryIntent) -> QuerySet:
         """Apply sorting."""
         if not intent.orderby or not intent.orderby.has_ordering():
@@ -128,7 +119,7 @@ class DjangoExecutor:
             prefix = "-" if field.direction == "desc" else ""
             django_field = field.field.replace(".", "__")
             # Resolve alias to actual model field
-            resolved_field = self._resolve_field_alias(django_field)
+            resolved_field = resolve_field_alias(django_field, self.field_aliases)
             order_fields.append(f"{prefix}{resolved_field}")
 
         return queryset.order_by(*order_fields)
@@ -248,6 +239,15 @@ class DjangoExecutor:
         model = queryset.model
 
         for relation_name, nested_intent in expand_intent.relations.items():
+            # Security: Validate against allowed expandable fields if configured
+            if self.expandable_fields and relation_name not in self.expandable_fields:
+                allowed = list(self.expandable_fields.keys())
+                raise core_ex.InvalidFieldError(
+                    relation_name,
+                    model.__name__,
+                    reason=f"field is not expandable. Allowed: {allowed}",
+                )
+
             is_forward = self._is_forward_relation(model, relation_name)
             django_relation = relation_name.replace(".", "__")
 
@@ -428,7 +428,7 @@ class DjangoExecutor:
 
         # Add requested fields (resolve aliases first to handle e.g. client_uuid -> client_id)
         for field_name in intent.select.fields:
-            resolved_field = self._resolve_field_alias(field_name)
+            resolved_field = resolve_field_alias(field_name, self.field_aliases)
             if get_field_safe(model, resolved_field):
                 only_fields.add(resolved_field)
 

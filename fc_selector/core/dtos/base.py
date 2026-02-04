@@ -5,12 +5,15 @@ This module provides BaseODataDTO which uses type introspection to automatically
 convert Django model instances to DTOs without hardcoding field names.
 """
 
+import logging
 from dataclasses import dataclass
 from dataclasses import fields as dataclass_fields
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any, Protocol, cast, get_args, get_origin, get_type_hints
 
 from django.db.models import Manager
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from typing import Self
@@ -336,10 +339,27 @@ class BaseODataDTO:
         nested_options: dict,
         _depth: int = 0,
     ) -> None:
-        """Populate a one-to-many relationship field."""
+        """Populate a one-to-many relationship field.
+
+        Checks for prefetch cache to avoid N+1 queries. If the relationship
+        was prefetched, uses the cached objects; otherwise falls back to
+        .all() with a warning.
+        """
         if hasattr(instance, field_name):
-            related_manager = getattr(instance, field_name)
-            related_objs = list(related_manager.all())
+            # Check if prefetch cache exists to avoid N+1 queries
+            prefetch_cache = getattr(instance, "_prefetched_objects_cache", {})
+            if field_name in prefetch_cache:
+                # Use prefetched objects (no additional query)
+                related_objs = prefetch_cache[field_name]
+            else:
+                # Fallback: query the database (potential N+1)
+                related_manager = getattr(instance, field_name)
+                related_objs = list(related_manager.all())
+                logger.debug(
+                    f"Potential N+1 query: '{field_name}' not prefetched for "
+                    f"{instance.__class__.__name__}. Consider using prefetch_related()."
+                )
+
             data[field_name] = [
                 dto_class.from_model(
                     obj, nested_selected, nested_expanded, nested_options, _depth=_depth + 1

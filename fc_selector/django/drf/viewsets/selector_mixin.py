@@ -197,8 +197,21 @@ def build_odata_response(request, serializer_data, query_string, entity_set_name
             response_data["@odata.count"] = selector.query(count_query).count()
 
     # Add pagination links (nextLink)
-    top = int(parsed_qs.get("$top", 50))
-    skip = int(parsed_qs.get("$skip", 0))
+    # Security: Bounds checking for pagination parameters
+    max_top = 10000
+    max_skip = 1000000
+
+    try:
+        top = min(int(parsed_qs.get("$top", 50)), max_top)
+        skip = min(int(parsed_qs.get("$skip", 0)), max_skip)
+    except (ValueError, TypeError):
+        top = 50
+        skip = 0
+
+    if top < 0:
+        top = 50
+    if skip < 0:
+        skip = 0
 
     # Check if there are more results
     if len(serializer_data) == top:  # If we got exactly 'top' results, there might be more
@@ -213,13 +226,40 @@ def build_odata_response(request, serializer_data, query_string, entity_set_name
     # SECURITY: settings.DEBUG alone is not sufficient - SQL queries contain sensitive information
     # Users must explicitly set FC_SELECTOR_DEBUG_QUERIES = True to enable this feature
     odata_debug_enabled = getattr(settings, "FC_SELECTOR_DEBUG_QUERIES", False)
-    if odata_debug_enabled and settings.DEBUG and hasattr(connection, "queries"):
-        queries = connection.queries
-        response_data["@debug"] = {
-            "query_count": len(queries),
-            "queries": [{"sql": q["sql"], "time": q["time"]} for q in queries],
-            "total_time": f"{sum(float(q['time']) for q in queries):.4f}",
-        }
+
+    if odata_debug_enabled:
+        import warnings
+
+        if not settings.DEBUG:
+            warnings.warn(
+                "FC_SELECTOR_DEBUG_QUERIES is enabled but DEBUG is False. "
+                "This is a security risk in production. SQL queries will NOT be exposed.",
+                UserWarning,
+                stacklevel=2,
+            )
+        elif hasattr(connection, "queries"):
+            queries = connection.queries
+
+            # Security: Sanitize and limit query output
+            max_queries_shown = 20
+            max_sql_length = 500
+
+            sanitized_queries = []
+            for q in queries[:max_queries_shown]:
+                sql = q["sql"]
+                if len(sql) > max_sql_length:
+                    sql = sql[:max_sql_length] + "... [truncated]"
+                sanitized_queries.append({"sql": sql, "time": q["time"]})
+
+            response_data["@debug"] = {
+                "query_count": len(queries),
+                "queries_shown": len(sanitized_queries),
+                "queries": sanitized_queries,
+                "total_time": f"{sum(float(q['time']) for q in queries):.4f}",
+            }
+
+            if len(queries) > max_queries_shown:
+                response_data["@debug"]["note"] = f"Only first {max_queries_shown} queries shown"
 
     return response_data
 
