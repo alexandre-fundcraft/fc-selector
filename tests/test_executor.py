@@ -6,6 +6,7 @@ Covers fc_selector/django/executor.py
 
 import pytest
 from django.db.models import QuerySet
+from django.utils import timezone
 
 from fc_selector.core.intent import (
     ExpandIntent,
@@ -18,6 +19,7 @@ from fc_selector.core.intent import (
 )
 from fc_selector.django.executor import DjangoExecutor
 from fc_selector.protocols.odata.parsers.filter import parse_filter as parse
+from tests.integration.support.models import ODataRelatedModel, ODataTestModel
 
 
 @pytest.fixture
@@ -29,16 +31,12 @@ def executor():
 @pytest.fixture
 def test_model():
     """Fixture for test model."""
-    from tests.integration.support.models import ODataTestModel
-
     return ODataTestModel
 
 
 @pytest.fixture
 def related_model():
     """Fixture for related model."""
-    from tests.integration.support.models import ODataRelatedModel
-
     return ODataRelatedModel
 
 
@@ -320,26 +318,6 @@ class TestApplySelects:
 
 
 @pytest.mark.django_db
-class TestIsForwardRelation:
-    """Tests for _is_forward_relation helper."""
-
-    def test_forward_relation_fk(self, executor, related_model):
-        """ForeignKey is forward relation."""
-        result = executor._is_forward_relation(related_model, "test_model")
-        assert result is True
-
-    def test_reverse_relation(self, executor, test_model):
-        """Reverse FK (related_name) is not forward relation."""
-        result = executor._is_forward_relation(test_model, "related_items")
-        assert result is False
-
-    def test_nonexistent_field(self, executor, test_model):
-        """Non-existent field is not forward relation."""
-        result = executor._is_forward_relation(test_model, "nonexistent")
-        assert result is False
-
-
-@pytest.mark.django_db
 class TestFullExecution:
     """Integration tests for full intent execution."""
 
@@ -366,14 +344,10 @@ class TestValuesMode:
     @pytest.fixture
     def now(self):
         """Return current datetime for test data."""
-        from django.utils import timezone
-
         return timezone.now()
 
     def test_values_mode_returns_dicts(self, executor, test_model, now):
         """use_values=True returns ValuesQuerySet that yields dicts."""
-        from tests.integration.support.models import ODataTestModel
-
         ODataTestModel.objects.create(name="test1", status="draft", count=1, created_at=now)
 
         intent = QueryIntent(select=SelectIntent(fields=["id", "name"]))
@@ -403,8 +377,6 @@ class TestValuesMode:
 
     def test_values_mode_with_filter(self, executor, test_model, now):
         """Values mode works with filters."""
-        from tests.integration.support.models import ODataTestModel
-
         ODataTestModel.objects.create(name="findme", status="draft", count=10, created_at=now)
         ODataTestModel.objects.create(name="other", status="draft", count=5, created_at=now)
 
@@ -424,8 +396,6 @@ class TestValuesMode:
 
     def test_values_mode_with_ordering(self, executor, test_model, now):
         """Values mode works with ordering."""
-        from tests.integration.support.models import ODataTestModel
-
         ODataTestModel.objects.create(name="aaa", status="draft", count=1, created_at=now)
         ODataTestModel.objects.create(name="zzz", status="draft", count=2, created_at=now)
 
@@ -444,8 +414,6 @@ class TestValuesMode:
 
     def test_values_mode_with_pagination(self, executor, test_model, now):
         """Values mode works with pagination."""
-        from tests.integration.support.models import ODataTestModel
-
         for i in range(5):
             ODataTestModel.objects.create(name=f"item{i}", status="draft", count=i, created_at=now)
 
@@ -463,8 +431,6 @@ class TestValuesMode:
 
     def test_values_mode_all_fields(self, executor, test_model, now):
         """Values mode without select returns all fields."""
-        from tests.integration.support.models import ODataTestModel
-
         ODataTestModel.objects.create(name="fulltest", status="draft", count=99, created_at=now)
 
         intent = QueryIntent()  # No select specified

@@ -120,6 +120,9 @@ def _convert_expand_to_intent(
     Returns:
         ExpandIntent with converted nested QueryIntents
     """
+    from fc_selector.protocols.odata.parsers.orderby import parse_orderby
+    from fc_selector.protocols.odata.parsers.select import parse_select
+
     relations: dict[str, QueryIntent] = {}
 
     for relation_name, options in nested_options.items():
@@ -131,7 +134,7 @@ def _convert_expand_to_intent(
         if "$select" in options:
             select_value = options["$select"]
             if isinstance(select_value, str):
-                fields = [f.strip() for f in select_value.split(",") if f.strip()]
+                fields = parse_select(select_value)
             else:
                 fields = select_value
             nested_intent.select = SelectIntent(fields=fields)
@@ -139,13 +142,7 @@ def _convert_expand_to_intent(
         if "$orderby" in options:
             orderby_value = options["$orderby"]
             if isinstance(orderby_value, str):
-                # Parse orderby string: "name desc,created_at asc"
-                orderby_fields: list[tuple[str, str]] = []
-                for part in orderby_value.split(","):
-                    parts = part.strip().split()
-                    field_name = parts[0]
-                    direction = parts[1] if len(parts) > 1 else "asc"
-                    orderby_fields.append((field_name, direction))
+                orderby_fields = parse_orderby(orderby_value)
                 nested_intent.orderby = OrderIntent.from_tuples(orderby_fields)
 
         if "$top" in options:

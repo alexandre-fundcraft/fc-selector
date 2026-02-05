@@ -6,6 +6,7 @@ Covers fc_selector/django/visitors/filter_visitor.py
 
 import pytest
 from django.db.models import F, Q, Value
+from django.db.models.expressions import Exists
 from django.db.models.lookups import (
     Exact,
     GreaterThan,
@@ -19,13 +20,12 @@ from fc_selector.core import exceptions as core_ex
 from fc_selector.core.ast import nodes as ast
 from fc_selector.django.visitors.filter_visitor import AstToDjangoQVisitor
 from fc_selector.protocols.odata.parsers.filter import parse_filter as parse
+from tests.integration.support.models import ODataTestModel
 
 
 @pytest.fixture
 def test_model():
     """Fixture for test model."""
-    from tests.integration.support.models import ODataTestModel
-
     return ODataTestModel
 
 
@@ -592,8 +592,6 @@ class TestLambdaExpressions:
 
     def test_any_without_lambda(self, visitor):
         """any() expression without lambda returns Exists subquery."""
-        from django.db.models.expressions import Exists
-
         # Test collection any() - checks if relation has any items
         filter_ast = parse("related_items/any()")
         result = visitor.visit(filter_ast)
@@ -602,8 +600,6 @@ class TestLambdaExpressions:
 
     def test_any_with_lambda(self, visitor):
         """any() expression with lambda filter returns Exists subquery."""
-        from django.db.models.expressions import Exists
-
         # Test any(x: x/value gt 10)
         filter_ast = parse("related_items/any(r: r/value gt 10)")
         result = visitor.visit(filter_ast)
@@ -611,8 +607,6 @@ class TestLambdaExpressions:
 
     def test_all_with_lambda(self, visitor):
         """all() expression with lambda filter returns negated Exists subquery."""
-        from django.db.models.expressions import Exists
-
         # Test all(x: x/value gt 10)
         filter_ast = parse("related_items/all(r: r/value gt 10)")
         result = visitor.visit(filter_ast)
@@ -722,8 +716,6 @@ class TestFieldValidation:
 
     def test_allowed_fields_filter(self):
         """Fields not in allowed_fields are blocked."""
-        from tests.integration.support.models import ODataTestModel
-
         visitor = AstToDjangoQVisitor(ODataTestModel, allowed_fields={"name", "count"})
         # Allowed field works
         filter_ast = parse("name eq 'test'")

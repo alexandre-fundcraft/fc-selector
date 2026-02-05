@@ -19,7 +19,7 @@ import pytest
 from rest_framework import serializers
 
 from fc_selector import core
-from fc_selector.core import QueryBuilder, QueryBuilder, ast
+from fc_selector.core import QueryBuilder, ast
 from fc_selector.core.dtos.base import BaseODataDTO
 from fc_selector.core.dtos.converter import DTOConverter
 from fc_selector.django.drf.mixins.serializer_mixin import ODataSerializerMixin
@@ -37,6 +37,8 @@ from fc_selector.protocols.odata.parsers.filter.utils import (
 )
 from fc_selector.utils import (
     QueryBuilder as UtilsQueryBuilder,
+)
+from fc_selector.utils import (
     apply_odata_query_params,
     parse_expand_fields_v2,
     parse_odata_query,
@@ -207,7 +209,7 @@ class TestSpectacularIntegration:
     def test_odata_parameters_list(self):
         """ODATA_PARAMETERS contains expected parameters."""
         try:
-            from fc_selector.django.drf.spectacular import ODATA_PARAMETERS
+            from fc_selector.django.drf.spectacular import ODATA_PARAMETERS  # noqa: PLC0415
 
             param_names = [p.name for p in ODATA_PARAMETERS]
             assert "$filter" in param_names
@@ -223,7 +225,7 @@ class TestSpectacularIntegration:
     def test_odata_retrieve_parameters(self):
         """ODATA_RETRIEVE_PARAMETERS has subset for retrieve."""
         try:
-            from fc_selector.django.drf.spectacular import ODATA_RETRIEVE_PARAMETERS
+            from fc_selector.django.drf.spectacular import ODATA_RETRIEVE_PARAMETERS  # noqa: PLC0415
 
             param_names = [p.name for p in ODATA_RETRIEVE_PARAMETERS]
             assert "$select" in param_names

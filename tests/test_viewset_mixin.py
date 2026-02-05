@@ -4,14 +4,22 @@ Tests for OData ViewSet mixin.
 Covers fc_selector/django/drf/viewsets/selector_mixin.py
 """
 
+from dataclasses import dataclass
+
 import pytest
+from django.utils import timezone
+from rest_framework import serializers, viewsets
 from rest_framework.test import APIRequestFactory
 
+from fc_selector.core.dtos.base import BaseODataDTO
+from fc_selector.django.drf.viewsets import ODataSelectorViewSetMixin
 from fc_selector.django.drf.viewsets.selector_mixin import (
     ODATA_PARAMETERS,
     build_odata_response,
     get_odata_openapi_parameters,
 )
+from fc_selector.django.selector import ODataSelector
+from tests.integration.support.models import ODataTestModel
 
 
 class TestODataParameters:
@@ -147,9 +155,6 @@ class TestODataSelectorViewSetMixin:
 
     def test_get_selector_not_implemented(self):
         """get_selector raises if selector_class not set."""
-        from rest_framework import viewsets
-
-        from fc_selector.django.drf.viewsets import ODataSelectorViewSetMixin
 
         class BadViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
             pass
@@ -160,11 +165,6 @@ class TestODataSelectorViewSetMixin:
 
     def test_get_selector_returns_instance(self):
         """get_selector returns selector instance."""
-        from rest_framework import viewsets
-
-        from fc_selector.django.drf.viewsets import ODataSelectorViewSetMixin
-        from fc_selector.django.selector import ODataSelector
-        from tests.integration.support.models import ODataTestModel
 
         class TestSelector(ODataSelector):
             class Meta:
@@ -179,9 +179,6 @@ class TestODataSelectorViewSetMixin:
 
     def test_get_list_schema_decorator(self):
         """get_list_schema_decorator returns callable."""
-        from rest_framework import viewsets
-
-        from fc_selector.django.drf.viewsets import ODataSelectorViewSetMixin
 
         class TestViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
             pass
@@ -192,9 +189,6 @@ class TestODataSelectorViewSetMixin:
 
     def test_get_retrieve_schema_decorator(self):
         """get_retrieve_schema_decorator returns callable."""
-        from rest_framework import viewsets
-
-        from fc_selector.django.drf.viewsets import ODataSelectorViewSetMixin
 
         class TestViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
             pass
@@ -205,15 +199,6 @@ class TestODataSelectorViewSetMixin:
 
     def test_retrieve_returns_dto(self):
         """retrieve method returns serialized DTO."""
-        from dataclasses import dataclass
-
-        from django.utils import timezone
-        from rest_framework import serializers, viewsets
-
-        from fc_selector.core.dtos.base import BaseODataDTO
-        from fc_selector.django.drf.viewsets import ODataSelectorViewSetMixin
-        from fc_selector.django.selector import ODataSelector
-        from tests.integration.support.models import ODataTestModel
 
         @dataclass
         class TestDTO(BaseODataDTO):
@@ -264,14 +249,6 @@ class TestODataSelectorViewSetMixin:
 
     def test_retrieve_returns_404_when_not_found(self):
         """retrieve method returns 404 when entity not found."""
-        from dataclasses import dataclass
-
-        from rest_framework import serializers, viewsets
-
-        from fc_selector.core.dtos.base import BaseODataDTO
-        from fc_selector.django.drf.viewsets import ODataSelectorViewSetMixin
-        from fc_selector.django.selector import ODataSelector
-        from tests.integration.support.models import ODataTestModel
 
         @dataclass
         class TestDTO(BaseODataDTO):
@@ -311,15 +288,6 @@ class TestODataSelectorViewSetMixin:
 
     def test_retrieve_with_select_expand(self):
         """retrieve method handles $select and $expand."""
-        from dataclasses import dataclass
-
-        from django.utils import timezone
-        from rest_framework import serializers, viewsets
-
-        from fc_selector.core.dtos.base import BaseODataDTO
-        from fc_selector.django.drf.viewsets import ODataSelectorViewSetMixin
-        from fc_selector.django.selector import ODataSelector
-        from tests.integration.support.models import ODataTestModel
 
         @dataclass
         class TestDTO(BaseODataDTO):

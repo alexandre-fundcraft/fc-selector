@@ -20,21 +20,18 @@ from fc_selector.django.visitors.utils import reverse_relationship
 from fc_selector.exceptions import (
     ODataInvalidPaginationError,
 )
+from tests.integration.support.models import ODataRelatedModel, ODataTestModel
 
 
 @pytest.fixture
 def test_model():
     """Fixture for test model."""
-    from tests.integration.support.models import ODataTestModel
-
     return ODataTestModel
 
 
 @pytest.fixture
 def related_model():
     """Fixture for related model."""
-    from tests.integration.support.models import ODataRelatedModel
-
     return ODataRelatedModel
 
 

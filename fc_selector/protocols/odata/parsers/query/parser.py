@@ -89,23 +89,14 @@ class ODataQueryParser:
 
     def _parse_query_string(self, query_string: str) -> dict[str, str]:
         """Parse raw query string into parameter dictionary."""
-        from urllib.parse import unquote_plus
+        from urllib.parse import parse_qsl
 
         # Remove leading '?' if present
         if query_string.startswith("?"):
             query_string = query_string[1:]
 
-        # Use unquote_plus to handle URL-encoded query strings.
-        # This decodes %XX sequences AND converts '+' to space (form-urlencoded).
-        # For literal '+' in values, use %2B encoding.
-        query_string = unquote_plus(query_string)
-
-        params = {}
-        for param_pair in query_string.split("&"):
-            if "=" in param_pair:
-                key, value = param_pair.split("=", 1)
-                params[key.strip()] = value.strip()
-        return params
+        # Use parse_qsl for robust query string parsing (handles decoding automatically)
+        return dict(parse_qsl(query_string))
 
     def _parse_filter(self, query: ODataQuery, value: str) -> None:
         """Parse $filter option."""

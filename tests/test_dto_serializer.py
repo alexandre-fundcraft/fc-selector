@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 import pytest
+from rest_framework import serializers
 
 from fc_selector.core.dtos import UNSET
 from fc_selector.django.drf.serializers import ODataDTOSerializer
@@ -162,7 +163,6 @@ class TestFieldTypeMapping:
 
     def test_int_field(self):
         """int maps to IntegerField."""
-        from rest_framework import serializers
 
         class TestSerializer(ODataDTOSerializer):
             class Meta:
@@ -173,7 +173,6 @@ class TestFieldTypeMapping:
 
     def test_str_field(self):
         """str maps to CharField."""
-        from rest_framework import serializers
 
         class TestSerializer(ODataDTOSerializer):
             class Meta:
@@ -184,7 +183,6 @@ class TestFieldTypeMapping:
 
     def test_bool_field(self):
         """bool maps to BooleanField."""
-        from rest_framework import serializers
 
         class TestSerializer(ODataDTOSerializer):
             class Meta:
@@ -195,7 +193,6 @@ class TestFieldTypeMapping:
 
     def test_float_field(self):
         """float maps to FloatField."""
-        from rest_framework import serializers
 
         class TestSerializer(ODataDTOSerializer):
             class Meta:

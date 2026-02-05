@@ -6,6 +6,10 @@ Covers fc_selector/protocols/odata/parsers/filter/rewrite.py
 
 from fc_selector.core import ast
 from fc_selector.protocols.odata.parsers.filter import parse_filter as parse
+from fc_selector.protocols.odata.parsers.filter.grammar import (
+    ODataLexer,
+    ODataParser,
+)
 from fc_selector.protocols.odata.parsers.filter.rewrite import (
     AliasRewriter,
     IdentifierStripper,
@@ -60,11 +64,6 @@ class TestAliasRewriter:
 
     def test_custom_lexer_parser(self):
         """Custom lexer and parser can be provided."""
-        from fc_selector.protocols.odata.parsers.filter.grammar import (
-            ODataLexer,
-            ODataParser,
-        )
-
         lexer = ODataLexer()
         parser = ODataParser()
         aliases = {"title": "name"}

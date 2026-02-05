@@ -102,10 +102,11 @@ class DjangoExecutor:
             return queryset
 
         try:
+            allowed = set(self.allowed_fields) if self.allowed_fields else None
             visitor = AstToDjangoQVisitor(
                 queryset.model,
                 field_aliases=self.field_aliases,
-                allowed_fields=self.allowed_fields,
+                allowed_fields=allowed,
             )
             q_object = visitor.visit(intent.filter.ast)
             return queryset.filter(q_object)
@@ -305,7 +306,8 @@ class DjangoExecutor:
                         only_fields.add(f"{django_relation}__{related_model._meta.pk.name}")
                     else:
                         # Fall back to DTO introspection
-                        dto_fields = get_dto_fields(expand_config.get("dto_class"))
+                        dto_class = expand_config.get("dto_class")
+                        dto_fields = get_dto_fields(dto_class) if dto_class else None
                         if dto_fields:
                             for dto_field in dto_fields:
                                 model_field = self._resolve_dto_field_to_model(related_model, dto_field)

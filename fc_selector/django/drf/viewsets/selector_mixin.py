@@ -210,8 +210,7 @@ def build_odata_response(request, serializer_data, query_string, entity_set_name
 
     if top < 0:
         top = 50
-    if skip < 0:
-        skip = 0
+    skip = max(skip, 0)
 
     # Check if there are more results
     if len(serializer_data) == top:  # If we got exactly 'top' results, there might be more

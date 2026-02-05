@@ -7,23 +7,21 @@ Covers fc_selector/django/selector/odata_selector.py
 import pytest
 from django.db.models import QuerySet
 
+from fc_selector.core.intent import PaginationIntent, QueryIntent
 from fc_selector.core.query_builder import QueryBuilder
 from fc_selector.django.selector import ODataSelector
+from tests.integration.support.models import ODataRelatedModel, ODataTestModel
 
 
 @pytest.fixture
 def test_model():
     """Fixture for test model."""
-    from tests.integration.support.models import ODataTestModel
-
     return ODataTestModel
 
 
 @pytest.fixture
 def related_model():
     """Fixture for related model."""
-    from tests.integration.support.models import ODataRelatedModel
-
     return ODataRelatedModel
 
 
@@ -196,8 +194,6 @@ class TestExecute:
 
     def test_execute_with_intent(self, test_model):
         """Execute with QueryIntent."""
-        from fc_selector.core.intent import PaginationIntent, QueryIntent
-
         selector = create_selector(test_model)
         intent = QueryIntent(pagination=PaginationIntent(limit=5))
         qs = selector.execute(intent)
@@ -205,8 +201,6 @@ class TestExecute:
 
     def test_execute_with_base_queryset(self, test_model):
         """Execute with custom base queryset."""
-        from fc_selector.core.intent import QueryIntent
-
         selector = create_selector(test_model)
         base_qs = test_model.objects.filter(is_active=True)
         intent = QueryIntent()

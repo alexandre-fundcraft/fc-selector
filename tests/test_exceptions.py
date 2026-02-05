@@ -352,4 +352,4 @@ class TestParserExceptions:
         """InvalidFieldException for unknown fields."""
         error = InvalidFieldException("nonexistent_field")
         assert error.field_name == "nonexistent_field"
-        assert "Invalid field" in str(error)
+        assert "Field 'nonexistent_field' not found" in str(error)

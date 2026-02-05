@@ -2,8 +2,14 @@ from typing import Any
 
 from sly.lex import Token
 
+from fc_selector.core.exceptions import (
+    FieldNotFoundError,
+    InvalidValueError,
+    SelectorError,
+)
 
-class ODataException(Exception):
+
+class ODataException(SelectorError):
     """
     Base class for all exceptions in this library.
     """
@@ -127,21 +133,19 @@ class TypeException(ODataException):
         super().__init__(f"Cannot apply '{operation}' to '{value}'")
 
 
-class ValueException(ODataException):
+class ValueException(InvalidValueError, ODataException):
     """
     Thrown when a value has an invalid value, such as an invalid datetime.
     """
 
     def __init__(self, value: Any):
-        self.value = value
-        super().__init__(f"Invalid value: {value}")
+        super().__init__(value)
 
 
-class InvalidFieldException(ODataException):
+class InvalidFieldException(FieldNotFoundError, ODataException):
     """
     Thrown when a field mentioned in a query does not exist.
     """
 
     def __init__(self, field_name: str):
-        self.field_name = field_name
-        super().__init__(f"Invalid field: {field_name}")
+        super().__init__(field_name)

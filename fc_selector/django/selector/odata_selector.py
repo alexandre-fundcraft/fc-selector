@@ -7,7 +7,7 @@ Provides a clean selector interface for executing OData queries on Django models
 import logging
 import re
 import time
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional, cast
 
 from django.db.models import QuerySet
 
@@ -372,7 +372,7 @@ class ODataSelector:
 
             order_fields = []
             for field in self.default_ordering:
-                direction = "desc" if field.startswith("-") else "asc"
+                direction = cast(Literal["asc", "desc"], "desc" if field.startswith("-") else "asc")
                 field_name = field.lstrip("-")
                 order_fields.append(OrderField(field=field_name, direction=direction))
             intent.orderby = OrderIntent(fields=order_fields)
@@ -445,7 +445,7 @@ class ODataSelector:
 
             order_fields = []
             for field in self.default_ordering:
-                direction = "desc" if field.startswith("-") else "asc"
+                direction = cast(Literal["asc", "desc"], "desc" if field.startswith("-") else "asc")
                 field_name = field.lstrip("-")
                 order_fields.append(OrderField(field=field_name, direction=direction))
             intent.orderby = OrderIntent(fields=order_fields)

@@ -52,26 +52,6 @@ class QueryApplier:
             # 1. Parse -> ODataQuery
             odata_query = parse_odata_query(query_params)
 
-            # Convert to dict for validation if it's a string
-            params_dict = query_params if isinstance(query_params, dict) else odata_query.to_dict()
-
-            # Validation for $top and $skip
-            if "$top" in params_dict:
-                try:
-                    top_val = int(params_dict["$top"])
-                    if top_val < 0:
-                        raise ODataInvalidPaginationError(parameter="$top", value=str(params_dict["$top"]))
-                except (ValueError, TypeError):
-                    raise ODataInvalidPaginationError(parameter="$top", value=str(params_dict["$top"]))
-
-            if "$skip" in params_dict:
-                try:
-                    skip_val = int(params_dict["$skip"])
-                    if skip_val < 0:
-                        raise ODataInvalidPaginationError(parameter="$skip", value=str(params_dict["$skip"]))
-                except (ValueError, TypeError):
-                    raise ODataInvalidPaginationError(parameter="$skip", value=str(params_dict["$skip"]))
-
             # 2. Convert ODataQuery -> QueryIntent
             intent = odata_query_to_intent(odata_query)
 
@@ -95,10 +75,17 @@ class QueryApplier:
             ) from e
 
         except core_ex.InvalidValueError as e:
+            if e.context in ["$top", "$skip"]:
+                raise ODataInvalidPaginationError(
+                    parameter=e.context,
+                    value=str(e.value),
+                    original_exception=e,
+                ) from e
+
             raise ODataInvalidValueError(
                 value=str(e.value),
                 expected_type=str(e.expected_type) if e.expected_type else "unknown",
-                field="unknown",
+                field=e.context or "unknown",
                 original_exception=e,
             ) from e
 

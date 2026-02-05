@@ -8,9 +8,11 @@ from dataclasses import dataclass
 from typing import Optional
 
 import pytest
+from django.utils import timezone
 
 from fc_selector.core.dtos import UNSET
-from fc_selector.core.dtos.base import BaseODataDTO
+from fc_selector.core.dtos.base import BaseODataDTO, Unset
+from tests.integration.support.models import ODataRelatedModel, ODataTestModel
 
 
 @dataclass
@@ -49,9 +51,8 @@ class TestUnsetSentinel:
 
     def test_unset_is_singleton(self):
         """UNSET is a singleton when imported from different locations."""
-        from fc_selector.core.dtos import UNSET as UNSET_FROM_DTOS
-        from fc_selector.core.dtos.base import UNSET as UNSET_FROM_BASE
-        from fc_selector.core.dtos.base import Unset
+        from fc_selector.core.dtos import UNSET as UNSET_FROM_DTOS  # noqa: PLC0415
+        from fc_selector.core.dtos.base import UNSET as UNSET_FROM_BASE  # noqa: PLC0415
 
         # Same object when imported from different modules
         assert UNSET_FROM_DTOS is UNSET_FROM_BASE
@@ -194,10 +195,6 @@ class TestFromModel:
     @pytest.fixture
     def test_instance(self):
         """Create test model instance."""
-        from django.utils import timezone
-
-        from tests.integration.support.models import ODataTestModel
-
         return ODataTestModel.objects.create(
             name="Test",
             description="Description",
@@ -210,8 +207,6 @@ class TestFromModel:
     @pytest.fixture
     def related_instance(self, test_instance):
         """Create related model instance."""
-        from tests.integration.support.models import ODataRelatedModel
-
         return ODataRelatedModel.objects.create(
             test_model=test_instance,
             title="Related",
@@ -327,10 +322,6 @@ class TestFromModelWithRelationships:
     @pytest.fixture
     def test_instance_with_related(self):
         """Create test model with related items."""
-        from django.utils import timezone
-
-        from tests.integration.support.models import ODataRelatedModel, ODataTestModel
-
         test_model = ODataTestModel.objects.create(
             name="Parent",
             description="Parent desc",
@@ -373,10 +364,6 @@ class TestFromModelWithRelationships:
 
     def test_from_model_null_relationship(self):
         """from_model handles null relationship."""
-        from django.utils import timezone
-
-        from tests.integration.support.models import ODataRelatedModel
-
         @dataclass
         class TestModelDTO(BaseODataDTO):
             id: int = UNSET
@@ -389,8 +376,6 @@ class TestFromModelWithRelationships:
             test_model: Optional[TestModelDTO] = UNSET
 
         # Create a related model without test_model (if nullable) or check the FK
-        from tests.integration.support.models import ODataTestModel
-
         parent = ODataTestModel.objects.create(
             name="Parent",
             description="",

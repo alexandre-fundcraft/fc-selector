@@ -4,6 +4,8 @@ Tests for OData metadata views.
 Covers fc_selector/django/views/metadata.py
 """
 
+import json
+
 import pytest
 from django.test import RequestFactory
 
@@ -14,6 +16,7 @@ from fc_selector.django.views.metadata import (
     ODataServiceDocumentView,
     register_odata_entity,
 )
+from tests.integration.support.models import ODataRelatedModel, ODataTestModel
 
 
 @pytest.fixture
@@ -130,7 +133,6 @@ class TestODataMetadataView:
 
     def test_get_metadata_with_registered_selector(self, request_factory):
         """Registered selector appears in metadata."""
-        from tests.integration.support.models import ODataTestModel
 
         class TestSelector(ODataSelector):
             class Meta:
@@ -149,7 +151,6 @@ class TestODataMetadataView:
 
     def test_get_metadata_includes_entity_properties(self, request_factory):
         """Entity type includes model properties."""
-        from tests.integration.support.models import ODataTestModel
 
         class TestSelector(ODataSelector):
             class Meta:
@@ -169,8 +170,6 @@ class TestODataMetadataView:
     def test_get_metadata_custom_namespace(self, request_factory):
         """Custom namespace is used in metadata."""
         ODataMetadataRegistry.set_namespace("CustomService")
-
-        from tests.integration.support.models import ODataTestModel
 
         class TestSelector(ODataSelector):
             class Meta:
@@ -209,8 +208,6 @@ class TestODataServiceDocumentView:
 
     def test_get_service_document_empty(self, request_factory):
         """Empty registry returns valid service document."""
-        import json
-
         request = request_factory.get("/odata/")
         view = ODataServiceDocumentView()
         response = view.get(request)
@@ -223,9 +220,6 @@ class TestODataServiceDocumentView:
 
     def test_get_service_document_with_entities(self, request_factory):
         """Service document lists registered entities."""
-        import json
-
-        from tests.integration.support.models import ODataTestModel
 
         class TestSelector(ODataSelector):
             class Meta:
@@ -245,9 +239,6 @@ class TestODataServiceDocumentView:
 
     def test_service_document_entity_structure(self, request_factory):
         """Each entity has correct structure."""
-        import json
-
-        from tests.integration.support.models import ODataTestModel
 
         class TestSelector(ODataSelector):
             class Meta:
@@ -267,8 +258,6 @@ class TestODataServiceDocumentView:
 
     def test_service_document_context_url(self, request_factory):
         """Context URL points to $metadata."""
-        import json
-
         request = request_factory.get("/odata/")
         view = ODataServiceDocumentView()
         response = view.get(request)
@@ -283,7 +272,6 @@ class TestEdmTypeMapping:
 
     def test_edm_type_mapping(self, request_factory):
         """Various Django field types map to correct EDM types."""
-        from tests.integration.support.models import ODataTestModel
 
         class TestSelector(ODataSelector):
             class Meta:
@@ -312,7 +300,6 @@ class TestNavigationProperties:
 
     def test_navigation_properties_only_for_expandable(self, request_factory):
         """Only expandable fields appear as navigation properties."""
-        from tests.integration.support.models import ODataRelatedModel, ODataTestModel
 
         class ParentSelector(ODataSelector):
             class Meta:
@@ -342,7 +329,6 @@ class TestCapabilitiesAnnotations:
 
     def test_metadata_includes_filter_restrictions(self, request_factory):
         """Metadata includes FilterRestrictions annotation."""
-        from tests.integration.support.models import ODataTestModel
 
         class TestSelector(ODataSelector):
             class Meta:
@@ -360,7 +346,6 @@ class TestCapabilitiesAnnotations:
 
     def test_metadata_includes_sort_restrictions(self, request_factory):
         """Metadata includes SortRestrictions annotation."""
-        from tests.integration.support.models import ODataTestModel
 
         class TestSelector(ODataSelector):
             class Meta:
@@ -378,8 +363,6 @@ class TestCapabilitiesAnnotations:
 
     def test_non_filterable_fields_from_positive_list(self, request_factory):
         """NonFilterableProperties generated from filterable_fields (positive list)."""
-        from tests.integration.support.models import ODataTestModel
-
         class TestSelector(ODataSelector):
             class Meta:
                 model = ODataTestModel
@@ -398,8 +381,6 @@ class TestCapabilitiesAnnotations:
 
     def test_non_filterable_fields_from_negative_list(self, request_factory):
         """NonFilterableProperties used directly from non_filterable_fields."""
-        from tests.integration.support.models import ODataTestModel
-
         class TestSelector(ODataSelector):
             class Meta:
                 model = ODataTestModel
@@ -418,8 +399,6 @@ class TestCapabilitiesAnnotations:
 
     def test_non_sortable_fields_from_positive_list(self, request_factory):
         """NonSortableProperties generated from sortable_fields (positive list)."""
-        from tests.integration.support.models import ODataTestModel
-
         class TestSelector(ODataSelector):
             class Meta:
                 model = ODataTestModel
@@ -438,8 +417,6 @@ class TestCapabilitiesAnnotations:
 
     def test_non_sortable_fields_from_negative_list(self, request_factory):
         """NonSortableProperties used directly from non_sortable_fields."""
-        from tests.integration.support.models import ODataTestModel
-
         class TestSelector(ODataSelector):
             class Meta:
                 model = ODataTestModel
@@ -457,8 +434,6 @@ class TestCapabilitiesAnnotations:
 
     def test_positive_list_takes_priority_over_negative(self, request_factory):
         """filterable_fields takes priority over non_filterable_fields."""
-        from tests.integration.support.models import ODataTestModel
-
         class TestSelector(ODataSelector):
             class Meta:
                 model = ODataTestModel
@@ -475,8 +450,6 @@ class TestCapabilitiesAnnotations:
 
     def test_no_restrictions_when_nothing_defined(self, request_factory):
         """No NonFilterableProperties when neither list is defined."""
-        from tests.integration.support.models import ODataTestModel
-
         class TestSelector(ODataSelector):
             class Meta:
                 model = ODataTestModel
@@ -495,8 +468,6 @@ class TestSelectorFieldIntrospection:
 
     def test_get_model_field_names(self):
         """_get_model_field_names returns concrete field names."""
-        from tests.integration.support.models import ODataTestModel
-
         class TestSelector(ODataSelector):
             class Meta:
                 model = ODataTestModel
@@ -511,8 +482,6 @@ class TestSelectorFieldIntrospection:
 
     def test_is_filterable_default_true(self):
         """is_filterable returns True by default."""
-        from tests.integration.support.models import ODataTestModel
-
         class TestSelector(ODataSelector):
             class Meta:
                 model = ODataTestModel
@@ -522,8 +491,6 @@ class TestSelectorFieldIntrospection:
 
     def test_is_sortable_default_true(self):
         """is_sortable returns True by default."""
-        from tests.integration.support.models import ODataTestModel
-
         class TestSelector(ODataSelector):
             class Meta:
                 model = ODataTestModel
