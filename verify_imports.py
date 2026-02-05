@@ -1,3 +1,5 @@
+import sys
+
 import django
 from django.conf import settings
 
@@ -27,4 +29,4 @@ except Exception as e:
     import traceback
 
     traceback.print_exc()
-    exit(1)
+    sys.exit(1)

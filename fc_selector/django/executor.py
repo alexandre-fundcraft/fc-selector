@@ -4,6 +4,8 @@ Django Query Executor.
 Centralizes the execution of protocol-agnostic QueryIntents on Django QuerySets.
 """
 
+# pylint: disable=protected-access  # Django's _meta is part of the public API for model introspection
+
 import logging
 from typing import Any
 

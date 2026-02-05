@@ -51,8 +51,10 @@ class TestUnsetSentinel:
 
     def test_unset_is_singleton(self):
         """UNSET is a singleton when imported from different locations."""
+        # pylint: disable=reimported
         from fc_selector.core.dtos import UNSET as UNSET_FROM_DTOS  # noqa: PLC0415
         from fc_selector.core.dtos.base import UNSET as UNSET_FROM_BASE  # noqa: PLC0415
+        # pylint: enable=reimported
 
         # Same object when imported from different modules
         assert UNSET_FROM_DTOS is UNSET_FROM_BASE

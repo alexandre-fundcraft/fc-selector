@@ -15,6 +15,8 @@ Modifications:
 - Maintained MIT license and original credits
 """
 
+# pylint: disable=function-redefined  # SLY parser grammar allows multiple definitions for same non-terminal
+
 import re
 from collections.abc import Callable
 from typing import Any, TypeVar
@@ -126,8 +128,9 @@ class ODataLexer(Lexer):
         ":meta private:"
         val = t.value.upper()
 
-        # Strip the prefix and single quotes:
-        val = val[len("DURATION") + 1 : -1]
+        # Strip the prefix "duration'" and trailing quote (9 chars + trailing quote)
+        prefix_len = 9  # len("duration'")
+        val = val[prefix_len:-1]
 
         t.value = ast.Duration(val)
         return t
@@ -363,7 +366,8 @@ class ODataParser(Parser):
     @_('"(" BWS common_expr BWS ")"')
     def common_expr(self, p):
         ":meta private:"
-        return p.common_expr
+        # common_expr is at position 2 in the grammar rule: "(" BWS common_expr BWS ")"
+        return p[2]
 
     @_("primitive_literal", "first_member_expr", "list_expr")  # type:ignore[no-redef]
     def common_expr(self, p):

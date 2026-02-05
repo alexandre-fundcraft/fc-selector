@@ -64,9 +64,6 @@ class QueryApplier:
             # 3. Execute Intent -> QuerySet
             return self.executor.execute(queryset, intent)
 
-        except ODataInvalidPaginationError:
-            raise
-
         except core_ex.FieldNotFoundError as e:
             raise ODataFieldNotFoundError(
                 field_name=e.field_name,

@@ -8,6 +8,8 @@ This serializer works with ODataSelector and DTOs to provide:
 - UNSET field handling
 """
 
+# pylint: disable=protected-access  # Legitimate access to protected DTO attributes
+
 import importlib
 from dataclasses import fields as dataclass_fields
 from dataclasses import is_dataclass
@@ -408,3 +410,21 @@ class ODataDTOSerializer(serializers.Serializer):
         """
         # Use standard DRF validation
         return super().to_internal_value(data)
+
+    def create(self, validated_data):
+        """
+        Not implemented - this is a read-only serializer for DTOs.
+
+        DTOs are data transfer objects used for reading data from ODataSelector.
+        They are not meant to be persisted directly.
+        """
+        raise NotImplementedError("ODataDTOSerializer is read-only and does not support create operations")
+
+    def update(self, instance, validated_data):
+        """
+        Not implemented - this is a read-only serializer for DTOs.
+
+        DTOs are data transfer objects used for reading data from ODataSelector.
+        They are not meant to be persisted directly.
+        """
+        raise NotImplementedError("ODataDTOSerializer is read-only and does not support update operations")

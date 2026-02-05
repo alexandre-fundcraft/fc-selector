@@ -4,6 +4,8 @@ OData Selector for Django models.
 Provides a clean selector interface for executing OData queries on Django models.
 """
 
+# pylint: disable=protected-access  # Django's _meta is part of the public API for model introspection
+
 import logging
 import re
 import time

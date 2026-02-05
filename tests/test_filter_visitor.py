@@ -669,8 +669,8 @@ class TestListNode:
 
 
 @pytest.mark.django_db
-class TestArithmeticOperators:
-    """Tests for arithmetic operators."""
+class TestArithmeticOperatorsInFilters:
+    """Integration tests for arithmetic operators in filter expressions."""
 
     def test_add_operator(self, visitor):
         """Add operator."""

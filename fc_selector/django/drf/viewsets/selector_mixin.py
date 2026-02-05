@@ -292,6 +292,8 @@ class ODataSelectorViewSetMixin:
         """Get an instance of the selector class."""
         if self.selector_class is None:
             raise NotImplementedError(f"{self.__class__.__name__} must define 'selector_class'")
+        if not callable(self.selector_class):
+            raise TypeError(f"selector_class must be callable, got {type(self.selector_class)}")
         return self.selector_class()
 
     def get_list_schema_decorator(self):

@@ -401,7 +401,8 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
 
         elif isinstance(node.operator, ast.All):
             # If ALL items in the collection must match, we invert the condition and use NOT EXISTS():
-            if subquery_filter:
+            if subquery_filter is not None:
+                # Negate the filter condition for ALL semantics
                 subquery = subquery.filter(~subquery_filter)
             return Exists(subquery, negated=True)
 

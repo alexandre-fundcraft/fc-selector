@@ -43,7 +43,8 @@ class TestODataAutoSchema(TestCase):
         operation = {"parameters": []}
         result = self.schema._add_odata_parameters(operation)
 
-        filter_param = next(p for p in result["parameters"] if p["name"] == "$filter")
+        filter_param = next((p for p in result["parameters"] if p["name"] == "$filter"), None)
+        assert filter_param is not None, "$filter parameter not found"
 
         assert filter_param["in"] == "query"
         assert filter_param["required"] is False
@@ -57,7 +58,8 @@ class TestODataAutoSchema(TestCase):
         operation = {"parameters": []}
         result = self.schema._add_odata_parameters(operation)
 
-        select_param = next(p for p in result["parameters"] if p["name"] == "$select")
+        select_param = next((p for p in result["parameters"] if p["name"] == "$select"), None)
+        assert select_param is not None, "$select parameter not found"
 
         assert select_param["required"] is False
         assert "comma-separated" in select_param["description"].lower()
@@ -68,8 +70,10 @@ class TestODataAutoSchema(TestCase):
         operation = {"parameters": []}
         result = self.schema._add_odata_parameters(operation)
 
-        top_param = next(p for p in result["parameters"] if p["name"] == "$top")
-        skip_param = next(p for p in result["parameters"] if p["name"] == "$skip")
+        top_param = next((p for p in result["parameters"] if p["name"] == "$top"), None)
+        assert top_param is not None, "$top parameter not found"
+        skip_param = next((p for p in result["parameters"] if p["name"] == "$skip"), None)
+        assert skip_param is not None, "$skip parameter not found"
 
         # Check $top
         assert top_param["schema"]["type"] == "integer"
@@ -86,7 +90,8 @@ class TestODataAutoSchema(TestCase):
         operation = {"parameters": []}
         result = self.schema._add_odata_parameters(operation)
 
-        expand_param = next(p for p in result["parameters"] if p["name"] == "$expand")
+        expand_param = next((p for p in result["parameters"] if p["name"] == "$expand"), None)
+        assert expand_param is not None, "$expand parameter not found"
 
         assert "eager loading" in expand_param["description"].lower()
         assert "examples" in expand_param
@@ -97,7 +102,8 @@ class TestODataAutoSchema(TestCase):
         operation = {"parameters": []}
         result = self.schema._add_odata_parameters(operation)
 
-        orderby_param = next(p for p in result["parameters"] if p["name"] == "$orderby")
+        orderby_param = next((p for p in result["parameters"] if p["name"] == "$orderby"), None)
+        assert orderby_param is not None, "$orderby parameter not found"
 
         assert "sort" in orderby_param["description"].lower()
         assert "asc" in orderby_param["description"]
@@ -108,7 +114,8 @@ class TestODataAutoSchema(TestCase):
         operation = {"parameters": []}
         result = self.schema._add_odata_parameters(operation)
 
-        count_param = next(p for p in result["parameters"] if p["name"] == "$count")
+        count_param = next((p for p in result["parameters"] if p["name"] == "$count"), None)
+        assert count_param is not None, "$count parameter not found"
 
         assert count_param["schema"]["type"] == "boolean"
         assert "@odata.count" in count_param["description"]
@@ -121,7 +128,8 @@ class TestODataAutoSchema(TestCase):
         params_with_examples = ["$filter", "$select", "$expand", "$orderby"]
 
         for param_name in params_with_examples:
-            param = next(p for p in result["parameters"] if p["name"] == param_name)
+            param = next((p for p in result["parameters"] if p["name"] == param_name), None)
+            assert param is not None, f"{param_name} parameter not found"
             assert "examples" in param or "example" in param, f"{param_name} should have examples"
 
     def test_parameters_include_helpful_descriptions(self):
