@@ -85,7 +85,7 @@ class ODataSelector:
         self.max_limit = getattr(meta, "max_limit", MAX_PAGE_SIZE)
 
         # Security: Validate field aliases to prevent injection
-        self._validate_field_aliases(self.field_aliases)
+        ODataSelector._validate_field_aliases(self.field_aliases)
 
         self._executor = DjangoExecutor(
             field_aliases=self.field_aliases,
@@ -156,11 +156,13 @@ class ODataSelector:
         else:
             return []
 
-    def is_filterable(self) -> bool:
+    @staticmethod
+    def is_filterable() -> bool:
         """Check if $filter is supported for this entity."""
         return True
 
-    def is_sortable(self) -> bool:
+    @staticmethod
+    def is_sortable() -> bool:
         """Check if $orderby is supported for this entity."""
         return True
 

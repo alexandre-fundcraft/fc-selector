@@ -70,7 +70,7 @@ class ODataQueryParser:
         if not query_string or not query_string.strip():
             return ODataQuery()
 
-        params = self._parse_query_string(query_string)
+        params = ODataQueryParser._parse_query_string(query_string)
         return self.parse(params)
 
     def parse_query_string(self, query_string: str) -> ODataQuery:
@@ -87,7 +87,8 @@ class ODataQueryParser:
         """
         return self.parse_from_string(query_string)
 
-    def _parse_query_string(self, query_string: str) -> dict[str, str]:
+    @staticmethod
+    def _parse_query_string(query_string: str) -> dict[str, str]:
         """Parse raw query string into parameter dictionary."""
         from urllib.parse import parse_qsl
 
@@ -98,7 +99,8 @@ class ODataQueryParser:
         # Use parse_qsl for robust query string parsing (handles decoding automatically)
         return dict(parse_qsl(query_string))
 
-    def _parse_filter(self, query: ODataQuery, value: str) -> None:
+    @staticmethod
+    def _parse_filter(query: ODataQuery, value: str) -> None:
         """Parse $filter option."""
         from ..filter import parse_filter
         from ..filter.exceptions import ODataSyntaxError, ParsingException, TokenizingException
@@ -112,30 +114,36 @@ class ODataQueryParser:
 
         query.filter = FilterOption(value=value, ast=ast_tree)
 
-    def _parse_select(self, query: ODataQuery, value: str) -> None:
+    @staticmethod
+    def _parse_select(query: ODataQuery, value: str) -> None:
         """Parse $select option."""
         fields = parse_select(value)
         query.select = SelectOption(value=value, fields=fields)
 
-    def _parse_expand(self, query: ODataQuery, value: str) -> None:
+    @staticmethod
+    def _parse_expand(query: ODataQuery, value: str) -> None:
         """Parse $expand option."""
         nested = parse_expand(value)
         query.expand = ExpandOption(value=value, nested_options=nested)
 
-    def _parse_orderby(self, query: ODataQuery, value: str) -> None:
+    @staticmethod
+    def _parse_orderby(query: ODataQuery, value: str) -> None:
         """Parse $orderby option."""
         fields = parse_orderby(value)
         query.orderby = OrderByOption(value=value, fields=fields)
 
-    def _parse_top(self, query: ODataQuery, value: str) -> None:
+    @staticmethod
+    def _parse_top(query: ODataQuery, value: str) -> None:
         """Parse $top option."""
         query.top = TopOption(value=value)
 
-    def _parse_skip(self, query: ODataQuery, value: str) -> None:
+    @staticmethod
+    def _parse_skip(query: ODataQuery, value: str) -> None:
         """Parse $skip option."""
         query.skip = SkipOption(value=value)
 
-    def _parse_count(self, query: ODataQuery, value: str) -> None:
+    @staticmethod
+    def _parse_count(query: ODataQuery, value: str) -> None:
         """Parse $count option."""
         query.count = value.lower() == "true"
 

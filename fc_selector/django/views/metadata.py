@@ -121,7 +121,7 @@ class ODataMetadataView(View):
             entity_types.append(entity_type_xml)
 
             # Collect navigation bindings (only for expandable fields)
-            nav_bindings[entity_set_name] = self._get_navigation_bindings(model_class, selectors, expandable_fields)
+            nav_bindings[entity_set_name] = ODataMetadataView._get_navigation_bindings(model_class, selectors, expandable_fields)
 
             entity_sets.append(
                 f'        <EntitySet Name="{entity_set_name}" EntityType="{namespace}.{entity_type_name}">'
@@ -131,7 +131,7 @@ class ODataMetadataView(View):
             entity_sets.append("        </EntitySet>")
 
         # Generate Capabilities annotations
-        annotations = self._generate_capabilities_annotations(selectors, namespace)
+        annotations = ODataMetadataView._generate_capabilities_annotations(selectors, namespace)
 
         metadata_xml = f'''<?xml version="1.0" encoding="utf-8"?>
 <edmx:Edmx Version="4.0" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx">
@@ -209,7 +209,7 @@ class ODataMetadataView(View):
                 )
             elif hasattr(field, "get_internal_type"):
                 # Regular field
-                edm_type = self._django_to_edm_type(field)
+                edm_type = ODataMetadataView._django_to_edm_type(field)
                 nullable = "true" if getattr(field, "null", True) else "false"
 
                 # Skip auto fields and password
@@ -223,7 +223,8 @@ class ODataMetadataView(View):
 
         return "\n".join(lines)
 
-    def _django_to_edm_type(self, field: models.Field) -> str:
+    @staticmethod
+    def _django_to_edm_type(field: models.Field) -> str:
         """Convert Django field type to EDM type."""
         type_map = {
             "AutoField": "Edm.Int32",
@@ -254,8 +255,8 @@ class ODataMetadataView(View):
         internal_type = field.get_internal_type()
         return type_map.get(internal_type, "Edm.String")
 
+    @staticmethod
     def _get_navigation_bindings(
-        self,
         model_class: type[models.Model],
         selectors: dict[str, type[ODataSelector]],
         expandable_fields: dict[str, type],
@@ -296,8 +297,8 @@ class ODataMetadataView(View):
 
         return bindings
 
+    @staticmethod
     def _generate_capabilities_annotations(
-        self,
         selectors: dict[str, type[ODataSelector]],
         namespace: str,
     ) -> str:
@@ -366,7 +367,8 @@ class ODataServiceDocumentView(View):
         path("odata/", ODataServiceDocumentView.as_view(), name="odata-service"),
     """
 
-    def get(self, request, *args, **kwargs):
+    @staticmethod
+    def get(request, *args, **kwargs):
         """Return OData service document."""
         base_url = request.build_absolute_uri("/odata/")
         selectors = ODataMetadataRegistry.get_selectors()

@@ -139,10 +139,10 @@ class ODataDTOSerializer(serializers.Serializer):
         """
 
         # Check if it's a nested DTO (ends with 'DTO')
-        if self._is_dto_type(field_type):
+        if ODataDTOSerializer._is_dto_type(field_type):
             # Nested DTO - serialize as dict to avoid recursion issues
             # The to_representation method will handle converting the DTO to a dict
-            is_many = self._is_many_relationship(field_type)
+            is_many = ODataDTOSerializer._is_many_relationship(field_type)
 
             field_kwargs.setdefault("allow_null", True)
             field_kwargs.setdefault("required", False)
@@ -164,7 +164,7 @@ class ODataDTOSerializer(serializers.Serializer):
         }
 
         # Get base type (unwrap Optional)
-        base_type = self._get_base_type(field_type)
+        base_type = ODataDTOSerializer._get_base_type(field_type)
 
         # Get appropriate field class
         field_class = type_map.get(base_type, serializers.CharField)
@@ -181,7 +181,8 @@ class ODataDTOSerializer(serializers.Serializer):
 
         return field_class(**field_kwargs)
 
-    def _is_dto_type(self, field_type: Any) -> bool:
+    @staticmethod
+    def _is_dto_type(field_type: Any) -> bool:
         """Check if a type annotation represents a DTO."""
         from typing import get_args, get_origin
 
@@ -204,7 +205,8 @@ class ODataDTOSerializer(serializers.Serializer):
 
         return False
 
-    def _is_many_relationship(self, field_type: Any) -> bool:
+    @staticmethod
+    def _is_many_relationship(field_type: Any) -> bool:
         """Check if a relationship is one-to-many (List[DTO])."""
         from typing import get_args, get_origin
 
@@ -222,7 +224,8 @@ class ODataDTOSerializer(serializers.Serializer):
 
         return False
 
-    def _extract_dto_class(self, field_type: Any) -> type:
+    @staticmethod
+    def _extract_dto_class(field_type: Any) -> type:
         """Extract the DTO class from a type annotation."""
         from typing import cast, get_args, get_origin
 
@@ -243,7 +246,8 @@ class ODataDTOSerializer(serializers.Serializer):
         # Direct DTO type
         return cast(type, field_type)
 
-    def _get_base_type(self, field_type: Any) -> type:
+    @staticmethod
+    def _get_base_type(field_type: Any) -> type:
         """Get base type, unwrapping Optional."""
         from typing import cast, get_args, get_origin
 
@@ -348,10 +352,10 @@ class ODataDTOSerializer(serializers.Serializer):
         try:
             dto_module_name = dto_class.__module__
             serializer_class_name = dto_class.__name__ + "Serializer"
-            possible_modules = self._get_possible_serializer_modules(dto_module_name)
+            possible_modules = ODataDTOSerializer._get_possible_serializer_modules(dto_module_name)
 
             for module_name in possible_modules:
-                excluded = self._try_import_serializer_exclusions(module_name, serializer_class_name)
+                excluded = ODataDTOSerializer._try_import_serializer_exclusions(module_name, serializer_class_name)
                 if excluded is not None:
                     return excluded
 
@@ -360,7 +364,8 @@ class ODataDTOSerializer(serializers.Serializer):
 
         return set()
 
-    def _get_possible_serializer_modules(self, dto_module_name: str) -> list[str]:
+    @staticmethod
+    def _get_possible_serializer_modules(dto_module_name: str) -> list[str]:
         """Generate possible module names where the DTO serializer might be defined."""
         base_module = (
             dto_module_name.split(".selectors.")[0]
@@ -374,7 +379,8 @@ class ODataDTOSerializer(serializers.Serializer):
             dto_module_name.replace("_selector", "_dto_serializers"),
         ]
 
-    def _try_import_serializer_exclusions(self, module_name: str, serializer_class_name: str) -> set[str] | None:
+    @staticmethod
+    def _try_import_serializer_exclusions(module_name: str, serializer_class_name: str) -> set[str] | None:
         """Try to import a serializer class and extract its Meta.exclude fields."""
         try:
             module = importlib.import_module(module_name)
@@ -411,7 +417,8 @@ class ODataDTOSerializer(serializers.Serializer):
         # Use standard DRF validation
         return super().to_internal_value(data)
 
-    def create(self, validated_data):
+    @staticmethod
+    def create(validated_data):
         """
         Not implemented - this is a read-only serializer for DTOs.
 
@@ -420,7 +427,8 @@ class ODataDTOSerializer(serializers.Serializer):
         """
         raise NotImplementedError("ODataDTOSerializer is read-only and does not support create operations")
 
-    def update(self, instance, validated_data):
+    @staticmethod
+    def update(instance, validated_data):
         """
         Not implemented - this is a read-only serializer for DTOs.
 

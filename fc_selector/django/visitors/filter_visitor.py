@@ -153,7 +153,7 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
         self._depth -= 1
 
         if self._depth == 0:
-            res = self._ensure_q(res)
+            res = AstToDjangoQVisitor._ensure_q(res)
 
         return res
 
@@ -169,27 +169,33 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
         resolved_field = self._validate_field(full_id)
         return F(resolved_field)
 
-    def visit_Null(self, node: ast.Null) -> str:
+    @staticmethod
+    def visit_Null(node: ast.Null) -> str:
         ":meta private:"
         raise NotImplementedError("Should not be reached")
 
-    def visit_Integer(self, node: ast.Integer) -> Value:
+    @staticmethod
+    def visit_Integer(node: ast.Integer) -> Value:
         ":meta private:"
         return Value(node.py_val)
 
-    def visit_Float(self, node: ast.Float) -> Value:
+    @staticmethod
+    def visit_Float(node: ast.Float) -> Value:
         ":meta private:"
         return Value(node.py_val)
 
-    def visit_Boolean(self, node: ast.Boolean) -> Value:
+    @staticmethod
+    def visit_Boolean(node: ast.Boolean) -> Value:
         ":meta private:"
         return Value(node.py_val)
 
-    def visit_String(self, node: ast.String) -> Value:
+    @staticmethod
+    def visit_String(node: ast.String) -> Value:
         ":meta private:"
         return Value(node.py_val)
 
-    def _visit_temporal_value(self, node: ast.Date | ast.DateTime | ast.Time) -> Value:
+    @staticmethod
+    def _visit_temporal_value(node: ast.Date | ast.DateTime | ast.Time) -> Value:
         """Generic visitor for temporal values (Date, DateTime, Time)."""
         try:
             return Value(node.py_val)
@@ -199,21 +205,23 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
 
     def visit_Date(self, node: ast.Date) -> Value:  # noqa: N802
         ":meta private:"
-        return self._visit_temporal_value(node)
+        return AstToDjangoQVisitor._visit_temporal_value(node)
 
     def visit_DateTime(self, node: ast.DateTime) -> Value:  # noqa: N802
         ":meta private:"
-        return self._visit_temporal_value(node)
+        return AstToDjangoQVisitor._visit_temporal_value(node)
 
     def visit_Time(self, node: ast.Time) -> Value:  # noqa: N802
         ":meta private:"
-        return self._visit_temporal_value(node)
+        return AstToDjangoQVisitor._visit_temporal_value(node)
 
-    def visit_Duration(self, node: ast.Duration) -> Value:
+    @staticmethod
+    def visit_Duration(node: ast.Duration) -> Value:
         ":meta private:"
         return Value(node.py_val)
 
-    def visit_GUID(self, node: ast.GUID) -> Value:
+    @staticmethod
+    def visit_GUID(node: ast.GUID) -> Value:
         ":meta private:"
         return Value(node.py_val)
 
@@ -221,29 +229,30 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
         ":meta private:"
         return [self.visit(n) for n in node.val]
 
-    def _visit_arithmetic_op(self, node: ast.Node) -> Callable[[Any, Any], Any]:
+    @staticmethod
+    def _visit_arithmetic_op(node: ast.Node) -> Callable[[Any, Any], Any]:
         """Generic visitor for arithmetic operators using mapping."""
         return _ARITHMETIC_OPS[type(node)]
 
     def visit_Add(self, node: ast.Add) -> Callable[[Any, Any], Any]:  # noqa: N802
         ":meta private:"
-        return self._visit_arithmetic_op(node)
+        return AstToDjangoQVisitor._visit_arithmetic_op(node)
 
     def visit_Sub(self, node: ast.Sub) -> Callable[[Any, Any], Any]:  # noqa: N802
         ":meta private:"
-        return self._visit_arithmetic_op(node)
+        return AstToDjangoQVisitor._visit_arithmetic_op(node)
 
     def visit_Mult(self, node: ast.Mult) -> Callable[[Any, Any], Any]:  # noqa: N802
         ":meta private:"
-        return self._visit_arithmetic_op(node)
+        return AstToDjangoQVisitor._visit_arithmetic_op(node)
 
     def visit_Div(self, node: ast.Div) -> Callable[[Any, Any], Any]:  # noqa: N802
         ":meta private:"
-        return self._visit_arithmetic_op(node)
+        return AstToDjangoQVisitor._visit_arithmetic_op(node)
 
     def visit_Mod(self, node: ast.Mod) -> Callable[[Any, Any], Any]:  # noqa: N802
         ":meta private:"
-        return self._visit_arithmetic_op(node)
+        return AstToDjangoQVisitor._visit_arithmetic_op(node)
 
     def visit_BinOp(self, node: ast.BinOp) -> Any:
         ":meta private:"
@@ -255,37 +264,38 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
 
         return op(left, right)
 
-    def _visit_comparison_op(self, node: ast.Node) -> type[lookups.Lookup]:
+    @staticmethod
+    def _visit_comparison_op(node: ast.Node) -> type[lookups.Lookup]:
         """Generic visitor for comparison operators using mapping."""
         return cast(type[lookups.Lookup], _COMPARISON_LOOKUPS[type(node)])
 
     def visit_Eq(self, node: ast.Eq) -> type[lookups.Lookup]:  # noqa: N802
         ":meta private:"
-        return self._visit_comparison_op(node)
+        return AstToDjangoQVisitor._visit_comparison_op(node)
 
     def visit_NotEq(self, node: ast.NotEq) -> type[lookups.Lookup]:  # noqa: N802
         ":meta private:"
-        return self._visit_comparison_op(node)
+        return AstToDjangoQVisitor._visit_comparison_op(node)
 
     def visit_Lt(self, node: ast.Lt) -> type[lookups.Lookup]:  # noqa: N802
         ":meta private:"
-        return self._visit_comparison_op(node)
+        return AstToDjangoQVisitor._visit_comparison_op(node)
 
     def visit_LtE(self, node: ast.LtE) -> type[lookups.Lookup]:  # noqa: N802
         ":meta private:"
-        return self._visit_comparison_op(node)
+        return AstToDjangoQVisitor._visit_comparison_op(node)
 
     def visit_Gt(self, node: ast.Gt) -> type[lookups.Lookup]:  # noqa: N802
         ":meta private:"
-        return self._visit_comparison_op(node)
+        return AstToDjangoQVisitor._visit_comparison_op(node)
 
     def visit_GtE(self, node: ast.GtE) -> type[lookups.Lookup]:  # noqa: N802
         ":meta private:"
-        return self._visit_comparison_op(node)
+        return AstToDjangoQVisitor._visit_comparison_op(node)
 
     def visit_In(self, node: ast.In) -> type[lookups.Lookup]:  # noqa: N802
         ":meta private:"
-        return self._visit_comparison_op(node)
+        return AstToDjangoQVisitor._visit_comparison_op(node)
 
     def visit_Compare(self, node: ast.Compare) -> lookups.Lookup:
         ":meta private:"
@@ -309,11 +319,13 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
 
         return django_cls(lhs, rhs)
 
-    def visit_And(self, node: ast.And) -> Callable[[Q, Q], Q]:
+    @staticmethod
+    def visit_And(node: ast.And) -> Callable[[Q, Q], Q]:
         ":meta private:"
         return operator.and_
 
-    def visit_Or(self, node: ast.Or) -> Callable[[Q, Q], Q]:
+    @staticmethod
+    def visit_Or(node: ast.Or) -> Callable[[Q, Q], Q]:
         ":meta private:"
         return operator.or_
 
@@ -331,7 +343,8 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
 
         return op(left, right)
 
-    def visit_Not(self, node: ast.Not) -> Callable[[Q], Q]:
+    @staticmethod
+    def visit_Not(node: ast.Not) -> Callable[[Q], Q]:
         ":meta private:"
         return operator.invert
 
@@ -341,7 +354,7 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
         val = self.visit(node.operand)
 
         # Can only apply `~` to Q objects:
-        val = self._ensure_q(val)
+        val = AstToDjangoQVisitor._ensure_q(val)
 
         try:
             return mod(val)
@@ -504,7 +517,8 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
         ":meta private:"
         return functions.ExtractMonth(self.visit(field))
 
-    def djangofunc_now(self) -> functions.Now:
+    @staticmethod
+    def djangofunc_now() -> functions.Now:
         ":meta private:"
         return functions.Now()
 
@@ -534,12 +548,13 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
 
     def _substr_function(self, field: ast.Node, substr: ast.Node, django_func: type[Expression]) -> Expression:
         ":meta private:"
-        self._check_type(field, (ast.Identifier, ast.String, ast.Call), "field")
-        self._check_type(substr, ast.String, "substring")
+        AstToDjangoQVisitor._check_type(field, (ast.Identifier, ast.String, ast.Call), "field")
+        AstToDjangoQVisitor._check_type(substr, ast.String, "substring")
 
         return django_func(self.visit(field), self.visit(substr))
 
-    def _check_type(self, value: Any, expected_type: type | tuple[type, ...], name: str) -> None:
+    @staticmethod
+    def _check_type(value: Any, expected_type: type | tuple[type, ...], name: str) -> None:
         """Helper to replace typing.typecheck without depending on odata module."""
         if not isinstance(value, expected_type):
             expected_name = (
@@ -557,7 +572,8 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
 
         return node
 
-    def _ensure_q(self, node: Any) -> Q:
+    @staticmethod
+    def _ensure_q(node: Any) -> Q:
         """
         Turn a given Django `Lookup`, `Expression` or `Function` into a `Q` object.
         In Django >= 4, expressions can be directly used in Q objects.

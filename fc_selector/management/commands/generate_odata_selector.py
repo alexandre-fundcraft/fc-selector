@@ -34,6 +34,7 @@ class Command(BaseODataGeneratorCommand):
     artifact_name = "selector"
     output_folder = "selectors"
 
+    @staticmethod
     def _generate_all_codes(
         self, all_model_info: dict, excluded_edges: set, models_in_file: set, options: dict
     ) -> dict:
@@ -83,13 +84,13 @@ class Command(BaseODataGeneratorCommand):
             primary_app = output_dir.parent.name
             combined_code = self._combine_selectors(selector_codes, primary_app)
 
-            requested_model_name = self._get_requested_model_name(requested_options)
+            requested_model_name = BaseODataGeneratorCommand._get_requested_model_name(requested_options)
             if requested_model_name:
-                file_name = self._camel_to_snake(requested_model_name) + ".py"
+                file_name = BaseODataGeneratorCommand._camel_to_snake(requested_model_name) + ".py"
             else:
                 first_model_path = next(iter(selector_codes.keys()))
                 primary_model_name = first_model_path.split(".")[-1]
-                file_name = self._camel_to_snake(primary_model_name) + ".py"
+                file_name = BaseODataGeneratorCommand._camel_to_snake(primary_model_name) + ".py"
 
             output_file = output_dir / file_name
             self._write_file_with_overwrite_check(output_file, combined_code, force)
@@ -99,7 +100,7 @@ class Command(BaseODataGeneratorCommand):
         else:
             for model_path, code in selector_codes.items():
                 model_name = model_path.split(".")[-1]
-                file_name = self._camel_to_snake(model_name) + ".py"
+                file_name = BaseODataGeneratorCommand._camel_to_snake(model_name) + ".py"
                 output_file = output_dir / file_name
                 self._write_file_with_overwrite_check(output_file, code, force)
 
@@ -121,7 +122,7 @@ class Command(BaseODataGeneratorCommand):
                 model_name = model_path.split(".")[-1]
                 selector_name = f"{model_name}Selector"
                 dto_name = f"{model_name}DTO"
-                file_name = self._camel_to_snake(model_name)
+                file_name = BaseODataGeneratorCommand._camel_to_snake(model_name)
                 imports.append(f"from .{file_name} import {selector_name}, {dto_name}")
 
         init_file = output_dir / "__init__.py"

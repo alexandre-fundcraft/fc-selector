@@ -296,7 +296,8 @@ class ODataSelectorViewSetMixin:
             raise TypeError(f"selector_class must be callable, got {type(self.selector_class)}")
         return self.selector_class()
 
-    def get_list_schema_decorator(self):
+    @staticmethod
+    def get_list_schema_decorator():
         """Get the extend_schema decorator for list action."""
         if not HAS_SPECTACULAR:
             return lambda f: f
@@ -305,7 +306,8 @@ class ODataSelectorViewSetMixin:
             description="List entities with OData query support.",
         )
 
-    def get_retrieve_schema_decorator(self):
+    @staticmethod
+    def get_retrieve_schema_decorator():
         """Get the extend_schema decorator for retrieve action."""
         if not HAS_SPECTACULAR:
             return lambda f: f

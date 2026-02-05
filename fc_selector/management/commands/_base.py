@@ -76,19 +76,19 @@ class BaseODataGeneratorCommand(BaseCommand):
         )
 
         # Get model info and relationships
-        all_model_info, relationships_map = self._get_model_info(models_to_generate)
+        all_model_info, relationships_map = BaseODataGeneratorCommand._get_model_info(models_to_generate)
 
         # Detect and handle circular dependencies
         excluded_edges = self._handle_circular_dependencies(models_to_generate, relationships_map)
 
         # Collect models in file for single mode
-        models_in_file = self._collect_models_in_file(all_model_info, options)
+        models_in_file = BaseODataGeneratorCommand._collect_models_in_file(all_model_info, options)
 
         # Generate code for each model
-        generated_codes = self._generate_all_codes(all_model_info, excluded_edges, models_in_file, options)
+        generated_codes = BaseODataGeneratorCommand._generate_all_codes(all_model_info, excluded_edges, models_in_file, options)
 
         # Write files
-        self._write_files(
+        BaseODataGeneratorCommand._write_files(
             generated_codes,
             output_dir,
             single=options.get("single", False),
@@ -127,7 +127,7 @@ class BaseODataGeneratorCommand(BaseCommand):
                     raise CommandError(f"App '{app_label}' not found")
         elif options.get("models"):
             for model_path in options["models"]:
-                model = self._load_model_from_path(model_path)
+                model = BaseODataGeneratorCommand._load_model_from_path(model_path)
                 models_to_generate.append(model)
                 if not output_dir:
                     app_label = model._meta.app_label
@@ -146,7 +146,8 @@ class BaseODataGeneratorCommand(BaseCommand):
 
         return models_to_generate, output_dir
 
-    def _load_model_from_path(self, model_path: str):
+    @staticmethod
+    def _load_model_from_path(model_path: str):
         """Load a Django model from app_label.ModelName format.
 
         Args:
@@ -165,7 +166,8 @@ class BaseODataGeneratorCommand(BaseCommand):
         except (ValueError, LookupError):
             raise CommandError(f"Model '{model_path}' not found")
 
-    def _get_model_info(self, models: list) -> tuple[dict, dict]:
+    @staticmethod
+    def _get_model_info(models: list) -> tuple[dict, dict]:
         """Get model info and relationships for all models.
 
         Args:
@@ -213,7 +215,8 @@ class BaseODataGeneratorCommand(BaseCommand):
 
         return excluded_edges
 
-    def _collect_models_in_file(self, all_model_info: dict, options: dict) -> set:
+    @staticmethod
+    def _collect_models_in_file(all_model_info: dict, options: dict) -> set:
         """Collect model paths for single mode.
 
         Args:
@@ -231,6 +234,7 @@ class BaseODataGeneratorCommand(BaseCommand):
                 models_in_file.add(full_path)
         return models_in_file
 
+    @staticmethod
     @abstractmethod
     def _generate_all_codes(
         self, all_model_info: dict, excluded_edges: set, models_in_file: set, options: dict
@@ -248,6 +252,7 @@ class BaseODataGeneratorCommand(BaseCommand):
         """
         pass
 
+    @staticmethod
     @abstractmethod
     def _write_files(
         self,
@@ -349,7 +354,8 @@ class BaseODataGeneratorCommand(BaseCommand):
 
         return list(discovered_models)
 
-    def _get_requested_model_name(self, requested_options: dict) -> str | None:
+    @staticmethod
+    def _get_requested_model_name(requested_options: dict) -> str | None:
         """Get the name of the originally requested model for filename.
 
         Args:

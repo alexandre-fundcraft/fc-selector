@@ -34,6 +34,7 @@ class Command(BaseODataGeneratorCommand):
     artifact_name = "serializer"
     output_folder = "serializers"
 
+    @staticmethod
     def _generate_all_codes(
         self, all_model_info: dict, excluded_edges: set, models_in_file: set, options: dict
     ) -> dict:
@@ -83,13 +84,13 @@ class Command(BaseODataGeneratorCommand):
             primary_app = output_dir.parent.name
             combined_code = self._combine_serializers(serializer_codes, primary_app)
 
-            requested_model_name = self._get_requested_model_name(requested_options)
+            requested_model_name = BaseODataGeneratorCommand._get_requested_model_name(requested_options)
             if requested_model_name:
-                file_name = self._camel_to_snake(requested_model_name) + ".py"
+                file_name = BaseODataGeneratorCommand._camel_to_snake(requested_model_name) + ".py"
             else:
                 first_model_path = next(iter(serializer_codes.keys()))
                 primary_model_name = first_model_path.split(".")[-1]
-                file_name = self._camel_to_snake(primary_model_name) + ".py"
+                file_name = BaseODataGeneratorCommand._camel_to_snake(primary_model_name) + ".py"
 
             output_file = output_dir / file_name
             self._write_file_with_overwrite_check(output_file, combined_code, force)
@@ -99,7 +100,7 @@ class Command(BaseODataGeneratorCommand):
         else:
             for model_path, code in serializer_codes.items():
                 model_name = model_path.split(".")[-1]
-                file_name = self._camel_to_snake(model_name) + ".py"
+                file_name = BaseODataGeneratorCommand._camel_to_snake(model_name) + ".py"
                 output_file = output_dir / file_name
                 self._write_file_with_overwrite_check(output_file, code, force)
 
@@ -119,7 +120,7 @@ class Command(BaseODataGeneratorCommand):
             for model_path in model_paths:
                 model_name = model_path.split(".")[-1]
                 serializer_name = f"{model_name}Serializer"
-                file_name = self._camel_to_snake(model_name)
+                file_name = BaseODataGeneratorCommand._camel_to_snake(model_name)
                 imports.append(f"from .{file_name} import {serializer_name}")
 
         init_file = output_dir / "__init__.py"
@@ -137,7 +138,8 @@ class Command(BaseODataGeneratorCommand):
 
         return combined
 
-    def _extract_model_info(self, serializer_codes: dict[str, str]) -> dict:
+    @staticmethod
+    def _extract_model_info(serializer_codes: dict[str, str]) -> dict:
         """Extract model information from serializer code keys."""
         model_info = {}
         for model_path in serializer_codes.keys():
@@ -157,7 +159,8 @@ class Command(BaseODataGeneratorCommand):
 
         return imports
 
-    def _get_model_import(self, model_app: str, model_name: str, primary_app: str) -> str:
+    @staticmethod
+    def _get_model_import(model_app: str, model_name: str, primary_app: str) -> str:
         """Generate the import statement for a model."""
         if model_app == primary_app:
             return f"from ..models import {model_name}"
@@ -187,7 +190,8 @@ class Command(BaseODataGeneratorCommand):
 
         return class_definitions
 
-    def _skip_docstring(self, lines: list[str]) -> int:
+    @staticmethod
+    def _skip_docstring(lines: list[str]) -> int:
         """Find the line index where code starts after skipping the module docstring."""
         in_docstring = False
         code_start = 0
@@ -208,7 +212,8 @@ class Command(BaseODataGeneratorCommand):
 
         return code_start
 
-    def _extract_class_from_lines(self, lines: list[str]) -> str:
+    @staticmethod
+    def _extract_class_from_lines(lines: list[str]) -> str:
         """Extract class definition from lines, skipping import statements."""
         current_class = []
 
@@ -223,7 +228,8 @@ class Command(BaseODataGeneratorCommand):
 
         return "\n".join(current_class) if current_class else ""
 
-    def _generate_header(self) -> str:
+    @staticmethod
+    def _generate_header() -> str:
         """Generate the file header with timestamp and usage instructions."""
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         return f'''"""

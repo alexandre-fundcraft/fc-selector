@@ -25,11 +25,12 @@ class ODataAutoSchema(AutoSchema):
 
         # Only add OData params to list/GET operations
         if method == "GET" and not path.endswith("/{id}"):
-            operation = self._add_odata_parameters(operation)
+            operation = ODataAutoSchema._add_odata_parameters(operation)
 
         return operation
 
-    def _add_odata_parameters(self, operation):
+    @staticmethod
+    def _add_odata_parameters(operation):
         """Add OData query parameters to the operation."""
         if "parameters" not in operation:
             operation["parameters"] = []

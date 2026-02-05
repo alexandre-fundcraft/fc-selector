@@ -90,7 +90,7 @@ class DjangoExecutor:
         queryset = self._apply_optimizations(queryset, intent, use_values=can_use_values)
 
         # 4. Apply Pagination
-        queryset = self._apply_pagination(queryset, intent)
+        queryset = DjangoExecutor._apply_pagination(queryset, intent)
 
         return queryset
 
@@ -129,7 +129,8 @@ class DjangoExecutor:
 
         return queryset.order_by(*order_fields)
 
-    def _apply_pagination(self, queryset: QuerySet, intent: QueryIntent) -> QuerySet:
+    @staticmethod
+    def _apply_pagination(queryset: QuerySet, intent: QueryIntent) -> QuerySet:
         """Apply limit/offset."""
         if not intent.pagination or not intent.pagination.has_pagination():
             return queryset
@@ -144,7 +145,8 @@ class DjangoExecutor:
 
         return queryset
 
-    def _model_has_properties(self, model) -> list[str]:
+    @staticmethod
+    def _model_has_properties(model) -> list[str]:
         """Detect @property methods on a Django model class that might access related fields.
 
         Args:
@@ -303,7 +305,7 @@ class DjangoExecutor:
                 skip_only_relations,
             )
 
-        self._process_nested_expands(nested_intent, django_relation, select_related)
+        DjangoExecutor._process_nested_expands(nested_intent, django_relation, select_related)
 
     def _handle_related_model_fields(
         self,
@@ -316,14 +318,14 @@ class DjangoExecutor:
         skip_only_relations: set[str],
     ) -> None:
         """Handle field collection for a related model based on expand config."""
-        properties = self._model_has_properties(related_model)
+        properties = DjangoExecutor._model_has_properties(related_model)
 
         if properties:
             self._handle_model_with_properties(
                 related_model, relation_name, django_relation, properties, select_related, skip_only_relations
             )
         elif "only_fields" in expand_config:
-            self._add_explicit_only_fields(expand_config, django_relation, related_model, select_related, only_fields)
+            DjangoExecutor._add_explicit_only_fields(expand_config, django_relation, related_model, select_related, only_fields)
         else:
             self._add_dto_introspected_fields(
                 expand_config, django_relation, related_model, select_related, only_fields
@@ -345,9 +347,10 @@ class DjangoExecutor:
             f"Consider adding explicit 'only_fields' config or select_related for nested relations."
         )
         skip_only_relations.add(django_relation)
-        self._auto_add_onetoone_relations(related_model, django_relation, select_related)
+        DjangoExecutor._auto_add_onetoone_relations(related_model, django_relation, select_related)
 
-    def _auto_add_onetoone_relations(self, related_model, django_relation: str, select_related: list[str]) -> None:
+    @staticmethod
+    def _auto_add_onetoone_relations(related_model, django_relation: str, select_related: list[str]) -> None:
         """Auto-detect and add OneToOne relations for models with properties."""
         from django.db.models import OneToOneField
 
@@ -360,6 +363,7 @@ class DjangoExecutor:
                         f"[OData] Auto-added select_related for '{nested_path}' (OneToOne on model with properties)"
                     )
 
+    @staticmethod
     def _add_explicit_only_fields(
         self,
         expand_config: dict,
@@ -393,7 +397,7 @@ class DjangoExecutor:
 
         if dto_fields:
             for dto_field in dto_fields:
-                model_field = self._resolve_dto_field_to_model(related_model, dto_field)
+                model_field = DjangoExecutor._resolve_dto_field_to_model(related_model, dto_field)
                 if model_field:
                     only_fields.add(f"{django_relation}__{model_field}")
                     if "__" in model_field:
@@ -404,8 +408,9 @@ class DjangoExecutor:
 
             only_fields.add(f"{django_relation}__{related_model._meta.pk.name}")
 
+    @staticmethod
     def _process_nested_expands(
-        self, nested_intent: QueryIntent, django_relation: str, select_related: list[str]
+        nested_intent: QueryIntent, django_relation: str, select_related: list[str]
     ) -> None:
         """Process nested expand relations for deep select_related."""
         if nested_intent.expand:
@@ -429,7 +434,8 @@ class DjangoExecutor:
         # If it's a class (DTO), wrap it
         return {"dto_class": config}
 
-    def _resolve_dto_field_to_model(self, model, dto_field: str) -> str | None:
+    @staticmethod
+    def _resolve_dto_field_to_model(model, dto_field: str) -> str | None:
         """Resolve a DTO field name to the actual model field name."""
         # Direct field match
         if get_field_safe(model, dto_field):
