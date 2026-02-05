@@ -317,7 +317,9 @@ class ODataMetadataView(View):
 
             lines.append(f'        <Annotation Target="{target}" Term="Org.OData.Capabilities.V1.FilterRestrictions">')
             lines.append("          <Record>")
-            lines.append(f'            <PropertyValue Property="Filterable" Bool="{str(selector.is_filterable()).lower()}"/>')
+            lines.append(
+                f'            <PropertyValue Property="Filterable" Bool="{str(selector.is_filterable()).lower()}"/>'
+            )
 
             non_filterable = selector.get_non_filterable_fields()
             if non_filterable:
@@ -333,7 +335,9 @@ class ODataMetadataView(View):
 
             lines.append(f'        <Annotation Target="{target}" Term="Org.OData.Capabilities.V1.SortRestrictions">')
             lines.append("          <Record>")
-            lines.append(f'            <PropertyValue Property="Sortable" Bool="{str(selector.is_sortable()).lower()}"/>')
+            lines.append(
+                f'            <PropertyValue Property="Sortable" Bool="{str(selector.is_sortable()).lower()}"/>'
+            )
 
             non_sortable = selector.get_non_sortable_fields()
             if non_sortable:

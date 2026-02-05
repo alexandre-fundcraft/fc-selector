@@ -127,76 +127,106 @@ class Command(BaseODataGeneratorCommand):
 
     def _combine_serializers(self, serializer_codes: dict[str, str], primary_app: str) -> str:
         """Combine multiple serializer codes into one file with deduplicated imports."""
-        imports = set()
-        class_definitions = []
+        model_info = self._extract_model_info(serializer_codes)
+        imports = self._collect_imports(model_info, primary_app)
+        class_definitions = self._extract_class_definitions(serializer_codes)
+        header = self._generate_header()
 
+        sorted_imports = sorted(imports)
+        combined = header + "\n".join(sorted_imports) + "\n\n\n" + "\n\n\n".join(class_definitions)
+
+        return combined
+
+    def _extract_model_info(self, serializer_codes: dict[str, str]) -> dict:
+        """Extract model information from serializer code keys."""
         model_info = {}
         for model_path in serializer_codes.keys():
             app_label, model_name = model_path.split(".")
             model_info[model_path] = {"app_label": app_label, "model_name": model_name}
+        return model_info
 
-        imports.add("from django_odata.serializers import ODataModelSerializer")
+    def _collect_imports(self, model_info: dict, primary_app: str) -> set[str]:
+        """Collect and deduplicate imports for the combined serializer file."""
+        imports = {"from django_odata.serializers import ODataModelSerializer"}
 
-        # Import ALL models that have serializers being generated
         for model_path, info in model_info.items():
             model_app = info["app_label"]
             model_name = info["model_name"]
+            import_statement = self._get_model_import(model_app, model_name, primary_app)
+            imports.add(import_statement)
 
-            if model_app == primary_app:
-                imports.add(f"from ..models import {model_name}")
-            else:
-                # Map Django built-in apps to their full module paths
-                app_module_map = {
-                    "auth": "django.contrib.auth",
-                    "contenttypes": "django.contrib.contenttypes",
-                    "sessions": "django.contrib.sessions",
-                    "messages": "django.contrib.messages",
-                    "admin": "django.contrib.admin",
-                    "sites": "django.contrib.sites",
-                }
-                full_app_path = app_module_map.get(model_app, model_app)
-                imports.add(f"from {full_app_path}.models import {model_name}")
+        return imports
 
-        # Extract class definitions from each serializer
+    def _get_model_import(self, model_app: str, model_name: str, primary_app: str) -> str:
+        """Generate the import statement for a model."""
+        if model_app == primary_app:
+            return f"from ..models import {model_name}"
+
+        app_module_map = {
+            "auth": "django.contrib.auth",
+            "contenttypes": "django.contrib.contenttypes",
+            "sessions": "django.contrib.sessions",
+            "messages": "django.contrib.messages",
+            "admin": "django.contrib.admin",
+            "sites": "django.contrib.sites",
+        }
+        full_app_path = app_module_map.get(model_app, model_app)
+        return f"from {full_app_path}.models import {model_name}"
+
+    def _extract_class_definitions(self, serializer_codes: dict[str, str]) -> list[str]:
+        """Extract class definitions from serializer code, skipping imports and docstrings."""
+        class_definitions = []
+
         for model_path, code in serializer_codes.items():
             lines = code.split("\n")
+            code_start = self._skip_docstring(lines)
+            class_code = self._extract_class_from_lines(lines[code_start:])
 
-            # Skip the docstring
-            in_docstring = False
-            code_start = 0
+            if class_code:
+                class_definitions.append(class_code)
 
-            for i, line in enumerate(lines):
-                if line.strip().startswith('"""'):
-                    if not in_docstring:
-                        in_docstring = True
-                    elif line.strip().endswith('"""') and len(line.strip()) > 3:
-                        code_start = i + 1
-                        break
-                    elif line.strip() == '"""':
-                        code_start = i + 1
-                        break
-                elif not in_docstring:
-                    code_start = i
+        return class_definitions
+
+    def _skip_docstring(self, lines: list[str]) -> int:
+        """Find the line index where code starts after skipping the module docstring."""
+        in_docstring = False
+        code_start = 0
+
+        for i, line in enumerate(lines):
+            if line.strip().startswith('"""'):
+                if not in_docstring:
+                    in_docstring = True
+                elif line.strip().endswith('"""') and len(line.strip()) > 3:
+                    code_start = i + 1
                     break
+                elif line.strip() == '"""':
+                    code_start = i + 1
+                    break
+            elif not in_docstring:
+                code_start = i
+                break
 
-            # Process the remaining lines to extract class definitions
-            current_class = []
-            for line in lines[code_start:]:
-                line = line.rstrip()
-                if line.startswith("from ") or line.startswith("import "):
-                    continue
-                elif line.startswith("class ") or current_class:
-                    current_class.append(line)
-                elif line.strip() == "" and current_class:
-                    class_definitions.append("\n".join(current_class))
-                    current_class = []
+        return code_start
 
-            if current_class:
-                class_definitions.append("\n".join(current_class))
+    def _extract_class_from_lines(self, lines: list[str]) -> str:
+        """Extract class definition from lines, skipping import statements."""
+        current_class = []
 
+        for line in lines:
+            line = line.rstrip()
+            if line.startswith("from ") or line.startswith("import "):
+                continue
+            elif line.startswith("class ") or current_class:
+                current_class.append(line)
+            elif line.strip() == "" and current_class:
+                break
+
+        return "\n".join(current_class) if current_class else ""
+
+    def _generate_header(self) -> str:
+        """Generate the file header with timestamp and usage instructions."""
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        header = f'''"""
+        return f'''"""
 Auto-generated OData serializers (combined file).
 Generated on: {now}
 
@@ -209,8 +239,3 @@ Available options:
 """
 
 '''
-
-        sorted_imports = sorted(imports)
-        combined = header + "\n".join(sorted_imports) + "\n\n\n" + "\n\n\n".join(class_definitions)
-
-        return combined

@@ -58,9 +58,7 @@ class DjangoExecutor:
         self.allowed_fields = allowed_fields
         self.expandable_fields = expandable_fields or {}
 
-    def execute(
-        self, queryset: QuerySet, intent: QueryIntent, *, use_values: bool = False
-    ) -> QuerySet:
+    def execute(self, queryset: QuerySet, intent: QueryIntent, *, use_values: bool = False) -> QuerySet:
         """
         Apply the full QueryIntent to the queryset.
 
@@ -78,9 +76,7 @@ class DjangoExecutor:
             return queryset
 
         # Check if values mode is possible (no expand relations)
-        can_use_values = use_values and (
-            not intent.expand or not intent.expand.has_relations()
-        )
+        can_use_values = use_values and (not intent.expand or not intent.expand.has_relations())
 
         # 1. Apply Filters
         queryset = self._apply_filter(queryset, intent)
@@ -168,9 +164,7 @@ class DjangoExecutor:
                 pass
         return properties
 
-    def _apply_optimizations(
-        self, queryset: QuerySet, intent: QueryIntent, *, use_values: bool = False
-    ) -> QuerySet:
+    def _apply_optimizations(self, queryset: QuerySet, intent: QueryIntent, *, use_values: bool = False) -> QuerySet:
         """Apply select_related, prefetch_related and only() or values().
 
         Args:
@@ -185,9 +179,7 @@ class DjangoExecutor:
         # 1. Expand (eager loading) - collect related fields for only()
         # Note: use_values should be False if we have expands, but check anyway
         if intent.expand and intent.expand.has_relations():
-            queryset, expand_only_fields, skip_only_for_relations = self._apply_expands(
-                queryset, intent.expand
-            )
+            queryset, expand_only_fields, skip_only_for_relations = self._apply_expands(queryset, intent.expand)
             only_fields.update(expand_only_fields)
             logger.debug(f"[OData] expand_only_fields: {expand_only_fields}")
 
@@ -227,9 +219,7 @@ class DjangoExecutor:
 
         return queryset
 
-    def _apply_expands(
-        self, queryset: QuerySet, expand_intent: ExpandIntent
-    ) -> tuple[QuerySet, set[str], set[str]]:
+    def _apply_expands(self, queryset: QuerySet, expand_intent: ExpandIntent) -> tuple[QuerySet, set[str], set[str]]:
         """Apply select_related and prefetch_related based on ExpandIntent.
 
         Returns:
@@ -246,85 +236,22 @@ class DjangoExecutor:
         model = queryset.model
 
         for relation_name, nested_intent in expand_intent.relations.items():
-            # Security: Validate against allowed expandable fields if configured
-            if self.expandable_fields and relation_name not in self.expandable_fields:
-                allowed = list(self.expandable_fields.keys())
-                raise core_ex.InvalidFieldError(
-                    relation_name,
-                    model.__name__,
-                    reason=f"field is not expandable. Allowed: {allowed}",
-                )
+            self._validate_expandable_field(relation_name, model)
 
             is_forward = is_forward_relation(model, relation_name)
             django_relation = odata_path_to_django(relation_name)
 
             if is_forward:
                 select_related.append(django_relation)
-
-                # Get configuration for this relation
-                expand_config = self._get_expand_config(relation_name)
-                field = get_field_safe(model, relation_name)
-
-                if expand_config and field and hasattr(field, "related_model"):
-                    related_model = field.related_model
-
-                    # Check if the related model has @property methods
-                    properties = self._model_has_properties(related_model)
-                    if properties:
-                        logger.warning(
-                            f"[OData] ⚠️  Model '{related_model.__name__}' has @property methods: {properties}. "
-                            f"Skipping only() optimization for '{relation_name}' to avoid N+1 queries. "
-                            f"Consider adding explicit 'only_fields' config or select_related for nested relations."
-                        )
-                        skip_only_relations.add(django_relation)
-
-                        # Auto-detect OneToOne relations that need select_related
-                        # (e.g., Author.user for accessing email/name properties)
-                        from django.db.models import OneToOneField
-
-                        for f in related_model._meta.fields:
-                            if isinstance(f, OneToOneField):
-                                nested_path = f"{django_relation}__{f.name}"
-                                if nested_path not in select_related:
-                                    select_related.append(nested_path)
-                                    logger.debug(
-                                        f"[OData] Auto-added select_related for '{nested_path}' "
-                                        f"(OneToOne on model with properties)"
-                                    )
-
-                    # If explicit only_fields are provided, use them directly
-                    elif "only_fields" in expand_config:
-                        for only_field in expand_config["only_fields"]:
-                            only_fields.add(f"{django_relation}__{only_field}")
-                            # Auto-add select_related for nested relations (e.g., user__email -> user)
-                            if "__" in only_field:
-                                nested_relation = only_field.split("__")[0]
-                                nested_path = f"{django_relation}__{nested_relation}"
-                                if nested_path not in select_related:
-                                    select_related.append(nested_path)
-                        # Always include PK
-                        only_fields.add(f"{django_relation}__{related_model._meta.pk.name}")
-                    else:
-                        # Fall back to DTO introspection
-                        dto_class = expand_config.get("dto_class")
-                        dto_fields = get_dto_fields(dto_class) if dto_class else None
-                        if dto_fields:
-                            for dto_field in dto_fields:
-                                model_field = self._resolve_dto_field_to_model(related_model, dto_field)
-                                if model_field:
-                                    only_fields.add(f"{django_relation}__{model_field}")
-                                    # Auto-add select_related for nested relations
-                                    if "__" in model_field:
-                                        nested_relation = model_field.split("__")[0]
-                                        nested_path = f"{django_relation}__{nested_relation}"
-                                        if nested_path not in select_related:
-                                            select_related.append(nested_path)
-                            only_fields.add(f"{django_relation}__{related_model._meta.pk.name}")
-
-                # Check for nested expands (deep select_related)
-                if nested_intent.expand:
-                    for nested_rel in nested_intent.expand.get_relation_names():
-                        select_related.append(f"{django_relation}__{nested_rel.replace('.', '__')}")
+                self._process_forward_relation(
+                    model,
+                    relation_name,
+                    django_relation,
+                    nested_intent,
+                    select_related,
+                    only_fields,
+                    skip_only_relations,
+                )
             else:
                 prefetch_obj = self._build_prefetch_object(queryset.model, django_relation, nested_intent)
                 if prefetch_obj:
@@ -337,6 +264,151 @@ class DjangoExecutor:
             queryset = queryset.prefetch_related(*prefetch_related)
 
         return queryset, only_fields, skip_only_relations
+
+    def _validate_expandable_field(self, relation_name: str, model) -> None:
+        """Validate that a relation is in the allowed expandable fields."""
+        if self.expandable_fields and relation_name not in self.expandable_fields:
+            allowed = list(self.expandable_fields.keys())
+            raise core_ex.InvalidFieldError(
+                relation_name,
+                model.__name__,
+                reason=f"field is not expandable. Allowed: {allowed}",
+            )
+
+    def _process_forward_relation(
+        self,
+        model,
+        relation_name: str,
+        django_relation: str,
+        nested_intent: QueryIntent,
+        select_related: list[str],
+        only_fields: set[str],
+        skip_only_relations: set[str],
+    ) -> None:
+        """Process a forward relation for expand optimization."""
+        expand_config = self._get_expand_config(relation_name)
+        field = get_field_safe(model, relation_name)
+
+        if expand_config and field and hasattr(field, "related_model"):
+            related_model = field.related_model
+            self._handle_related_model_fields(
+                related_model,
+                relation_name,
+                django_relation,
+                expand_config,
+                select_related,
+                only_fields,
+                skip_only_relations,
+            )
+
+        self._process_nested_expands(nested_intent, django_relation, select_related)
+
+    def _handle_related_model_fields(
+        self,
+        related_model,
+        relation_name: str,
+        django_relation: str,
+        expand_config: dict,
+        select_related: list[str],
+        only_fields: set[str],
+        skip_only_relations: set[str],
+    ) -> None:
+        """Handle field collection for a related model based on expand config."""
+        properties = self._model_has_properties(related_model)
+
+        if properties:
+            self._handle_model_with_properties(
+                related_model, relation_name, django_relation, properties, select_related, skip_only_relations
+            )
+        elif "only_fields" in expand_config:
+            self._add_explicit_only_fields(expand_config, django_relation, related_model, select_related, only_fields)
+        else:
+            self._add_dto_introspected_fields(
+                expand_config, django_relation, related_model, select_related, only_fields
+            )
+
+    def _handle_model_with_properties(
+        self,
+        related_model,
+        relation_name: str,
+        django_relation: str,
+        properties: list[str],
+        select_related: list[str],
+        skip_only_relations: set[str],
+    ) -> None:
+        """Handle models that have @property methods."""
+        logger.warning(
+            f"[OData] ⚠️  Model '{related_model.__name__}' has @property methods: {properties}. "
+            f"Skipping only() optimization for '{relation_name}' to avoid N+1 queries. "
+            f"Consider adding explicit 'only_fields' config or select_related for nested relations."
+        )
+        skip_only_relations.add(django_relation)
+        self._auto_add_onetoone_relations(related_model, django_relation, select_related)
+
+    def _auto_add_onetoone_relations(self, related_model, django_relation: str, select_related: list[str]) -> None:
+        """Auto-detect and add OneToOne relations for models with properties."""
+        from django.db.models import OneToOneField
+
+        for field in related_model._meta.fields:
+            if isinstance(field, OneToOneField):
+                nested_path = f"{django_relation}__{field.name}"
+                if nested_path not in select_related:
+                    select_related.append(nested_path)
+                    logger.debug(
+                        f"[OData] Auto-added select_related for '{nested_path}' (OneToOne on model with properties)"
+                    )
+
+    def _add_explicit_only_fields(
+        self,
+        expand_config: dict,
+        django_relation: str,
+        related_model,
+        select_related: list[str],
+        only_fields: set[str],
+    ) -> None:
+        """Add explicitly configured only_fields to the optimization."""
+        for only_field in expand_config["only_fields"]:
+            only_fields.add(f"{django_relation}__{only_field}")
+            if "__" in only_field:
+                nested_relation = only_field.split("__")[0]
+                nested_path = f"{django_relation}__{nested_relation}"
+                if nested_path not in select_related:
+                    select_related.append(nested_path)
+
+        only_fields.add(f"{django_relation}__{related_model._meta.pk.name}")
+
+    def _add_dto_introspected_fields(
+        self,
+        expand_config: dict,
+        django_relation: str,
+        related_model,
+        select_related: list[str],
+        only_fields: set[str],
+    ) -> None:
+        """Add fields introspected from DTO class."""
+        dto_class = expand_config.get("dto_class")
+        dto_fields = get_dto_fields(dto_class) if dto_class else None
+
+        if dto_fields:
+            for dto_field in dto_fields:
+                model_field = self._resolve_dto_field_to_model(related_model, dto_field)
+                if model_field:
+                    only_fields.add(f"{django_relation}__{model_field}")
+                    if "__" in model_field:
+                        nested_relation = model_field.split("__")[0]
+                        nested_path = f"{django_relation}__{nested_relation}"
+                        if nested_path not in select_related:
+                            select_related.append(nested_path)
+
+            only_fields.add(f"{django_relation}__{related_model._meta.pk.name}")
+
+    def _process_nested_expands(
+        self, nested_intent: QueryIntent, django_relation: str, select_related: list[str]
+    ) -> None:
+        """Process nested expand relations for deep select_related."""
+        if nested_intent.expand:
+            for nested_rel in nested_intent.expand.get_relation_names():
+                select_related.append(f"{django_relation}__{nested_rel.replace('.', '__')}")
 
     def _get_expand_config(self, relation_name: str) -> dict | None:
         """Get expand configuration for a relation.
@@ -354,7 +426,6 @@ class DjangoExecutor:
 
         # If it's a class (DTO), wrap it
         return {"dto_class": config}
-
 
     def _resolve_dto_field_to_model(self, model, dto_field: str) -> str | None:
         """Resolve a DTO field name to the actual model field name."""
@@ -436,4 +507,3 @@ class DjangoExecutor:
                     only_fields.add(field.attname)
 
         return queryset, only_fields
-

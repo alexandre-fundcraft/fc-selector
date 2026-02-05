@@ -33,12 +33,12 @@ from .selectors.blog_post import (
 
 
 @extend_schema_view(
-    list=extend_schema(tags=['posts'], parameters=ODATA_PARAMETERS),
-    retrieve=extend_schema(tags=['posts'], parameters=ODATA_RETRIEVE_PARAMETERS),
-    published=extend_schema(tags=['posts'], parameters=ODATA_PARAMETERS),
-    featured=extend_schema(tags=['posts'], parameters=ODATA_PARAMETERS),
-    by_author=extend_schema(tags=['posts'], parameters=ODATA_PARAMETERS),
-    stats=extend_schema(tags=['posts']),
+    list=extend_schema(tags=["posts"], parameters=ODATA_PARAMETERS),
+    retrieve=extend_schema(tags=["posts"], parameters=ODATA_RETRIEVE_PARAMETERS),
+    published=extend_schema(tags=["posts"], parameters=ODATA_PARAMETERS),
+    featured=extend_schema(tags=["posts"], parameters=ODATA_PARAMETERS),
+    by_author=extend_schema(tags=["posts"], parameters=ODATA_PARAMETERS),
+    stats=extend_schema(tags=["posts"]),
 )
 class BlogPostViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
     """
@@ -65,7 +65,7 @@ class BlogPostViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
     selector_class = BlogPostSelector
     odata_entity_set_name = "posts"
 
-    @action(detail=False, methods=['get'], url_path='published')
+    @action(detail=False, methods=["get"], url_path="published")
     def published(self, request):
         """
         Get only published posts.
@@ -73,22 +73,24 @@ class BlogPostViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
         Example:
             GET /api/posts/published/?$select=id,title&$orderby=published_at desc
         """
-        query_string = request.META.get('QUERY_STRING', '')
+        query_string = request.META.get("QUERY_STRING", "")
 
         selector = BlogPostSelector()
         query = QueryBuilder(query_string).and_filter("status eq 'published'")
         dtos = selector.get_many(query)
 
         serializer = self.get_serializer(dtos, many=True)
-        return Response(build_odata_response(
-            request=request,
-            serializer_data=serializer.data,
-            query_string=query_string,
-            entity_set_name=self.odata_entity_set_name,
-            selector=selector,
-        ))
+        return Response(
+            build_odata_response(
+                request=request,
+                serializer_data=serializer.data,
+                query_string=query_string,
+                entity_set_name=self.odata_entity_set_name,
+                selector=selector,
+            )
+        )
 
-    @action(detail=False, methods=['get'], url_path='featured')
+    @action(detail=False, methods=["get"], url_path="featured")
     def featured(self, request):
         """
         Get featured posts.
@@ -96,22 +98,24 @@ class BlogPostViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
         Example:
             GET /api/posts/featured/?$top=5
         """
-        query_string = request.META.get('QUERY_STRING', '')
+        query_string = request.META.get("QUERY_STRING", "")
 
         selector = BlogPostSelector()
         query = QueryBuilder(query_string).and_filter("featured eq true")
         dtos = selector.get_many(query)
 
         serializer = self.get_serializer(dtos, many=True)
-        return Response(build_odata_response(
-            request=request,
-            serializer_data=serializer.data,
-            query_string=query_string,
-            entity_set_name=self.odata_entity_set_name,
-            selector=selector,
-        ))
+        return Response(
+            build_odata_response(
+                request=request,
+                serializer_data=serializer.data,
+                query_string=query_string,
+                entity_set_name=self.odata_entity_set_name,
+                selector=selector,
+            )
+        )
 
-    @action(detail=False, methods=['get'], url_path='by-author/(?P<author_id>[^/.]+)')
+    @action(detail=False, methods=["get"], url_path="by-author/(?P<author_id>[^/.]+)")
     def by_author(self, request, author_id=None):
         """
         Get posts by specific author.
@@ -119,22 +123,24 @@ class BlogPostViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
         Example:
             GET /api/posts/by-author/1/?$select=id,title&$orderby=created_at desc
         """
-        query_string = request.META.get('QUERY_STRING', '')
+        query_string = request.META.get("QUERY_STRING", "")
 
         selector = BlogPostSelector()
         query = QueryBuilder(query_string).and_filter(f"author/id eq {author_id}")
         dtos = selector.get_many(query)
 
         serializer = self.get_serializer(dtos, many=True)
-        return Response(build_odata_response(
-            request=request,
-            serializer_data=serializer.data,
-            query_string=query_string,
-            entity_set_name=self.odata_entity_set_name,
-            selector=selector,
-        ))
+        return Response(
+            build_odata_response(
+                request=request,
+                serializer_data=serializer.data,
+                query_string=query_string,
+                entity_set_name=self.odata_entity_set_name,
+                selector=selector,
+            )
+        )
 
-    @action(detail=True, methods=['get'])
+    @action(detail=True, methods=["get"])
     def stats(self, request, pk=None):
         """
         Get post statistics.
@@ -146,33 +152,26 @@ class BlogPostViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
         # Select only fields needed for stats
         query = (
             QueryBuilder()
-            .select('id,title,view_count,word_count,status,is_published,created_at,published_at')
+            .select("id,title,view_count,word_count,status,is_published,created_at,published_at")
             .and_filter(f"id eq {pk}")
         )
 
         dto = selector.get_one(query)
 
         if dto is None:
-            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        stats = {
-            'id': dto.id,
-            'title': dto.title,
-            'view_count': dto.view_count,
-            'word_count': dto.word_count,
-            'status': dto.status,
-            'is_published': dto.is_published,
-            'created_at': dto.created_at,
-            'published_at': dto.published_at,
-        }
+        from .viewset_utils import build_stats_response
+
+        stats = build_stats_response(dto)
 
         return Response(stats)
 
 
 @extend_schema_view(
-    list=extend_schema(tags=['authors'], parameters=ODATA_PARAMETERS),
-    retrieve=extend_schema(tags=['authors'], parameters=ODATA_RETRIEVE_PARAMETERS),
-    posts=extend_schema(tags=['authors'], parameters=ODATA_PARAMETERS),
+    list=extend_schema(tags=["authors"], parameters=ODATA_PARAMETERS),
+    retrieve=extend_schema(tags=["authors"], parameters=ODATA_RETRIEVE_PARAMETERS),
+    posts=extend_schema(tags=["authors"], parameters=ODATA_PARAMETERS),
 )
 class AuthorViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
     """
@@ -194,7 +193,7 @@ class AuthorViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
     selector_class = AuthorSelector
     odata_entity_set_name = "authors"
 
-    @action(detail=True, methods=['get'])
+    @action(detail=True, methods=["get"])
     def posts(self, request, pk=None):
         """
         Get all posts by this author.
@@ -204,29 +203,23 @@ class AuthorViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
         """
         # Verify author exists
         if not AuthorSelector().exists_by(QueryBuilder().and_filter(f"id eq {pk}")):
-            return Response({'detail': 'Author not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"detail": "Author not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        query_string = request.META.get('QUERY_STRING', '')
+        from .viewset_utils import build_related_items_response
 
+        query_string = request.META.get("QUERY_STRING", "")
         selector = BlogPostSelector()
         query = QueryBuilder(query_string).and_filter(f"author/id eq {pk}")
         dtos = selector.get_many(query)
 
-        serializer = BlogPostDTOSerializer(dtos, many=True)
-        return Response(build_odata_response(
-            request=request,
-            serializer_data=serializer.data,
-            query_string=query_string,
-            entity_set_name="posts",
-            selector=selector,
-        ))
+        return build_related_items_response(request, dtos, BlogPostDTOSerializer, "posts", selector)
 
 
 @extend_schema_view(
-    list=extend_schema(tags=['users'], parameters=ODATA_PARAMETERS),
-    retrieve=extend_schema(tags=['users'], parameters=ODATA_RETRIEVE_PARAMETERS),
-    active=extend_schema(tags=['users'], parameters=ODATA_PARAMETERS),
-    me=extend_schema(tags=['users'], parameters=ODATA_RETRIEVE_PARAMETERS),
+    list=extend_schema(tags=["users"], parameters=ODATA_PARAMETERS),
+    retrieve=extend_schema(tags=["users"], parameters=ODATA_RETRIEVE_PARAMETERS),
+    active=extend_schema(tags=["users"], parameters=ODATA_PARAMETERS),
+    me=extend_schema(tags=["users"], parameters=ODATA_RETRIEVE_PARAMETERS),
 )
 class UserViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
     """
@@ -250,7 +243,7 @@ class UserViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
     selector_class = UserSelector
     odata_entity_set_name = "users"
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=["get"])
     def active(self, request):
         """
         Get only active users.
@@ -258,22 +251,16 @@ class UserViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
         Example:
             GET /api/users/active/?$select=id,username
         """
-        query_string = request.META.get('QUERY_STRING', '')
+        from .viewset_utils import build_related_items_response
 
+        query_string = request.META.get("QUERY_STRING", "")
         selector = UserSelector()
         query = QueryBuilder(query_string).and_filter("is_active eq true")
         dtos = selector.get_many(query)
 
-        serializer = self.get_serializer(dtos, many=True)
-        return Response(build_odata_response(
-            request=request,
-            serializer_data=serializer.data,
-            query_string=query_string,
-            entity_set_name=self.odata_entity_set_name,
-            selector=selector,
-        ))
+        return build_related_items_response(request, dtos, self.serializer_class, "users", selector)
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=["get"])
     def me(self, request):
         """
         Get current authenticated user.
@@ -281,23 +268,23 @@ class UserViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
         Example:
             GET /api/users/me/?$select=id,username,email
         """
-        query_string = request.META.get('QUERY_STRING', '')
+        query_string = request.META.get("QUERY_STRING", "")
 
         selector = UserSelector()
         query = QueryBuilder(query_string).and_filter(f"id eq {request.user.pk}")
         dto = selector.get_one(query)
 
         if dto is None:
-            return Response({'detail': 'Not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
         serializer = self.get_serializer(dto)
         return Response(serializer.data)
 
 
 @extend_schema_view(
-    list=extend_schema(tags=['categories'], parameters=ODATA_PARAMETERS),
-    retrieve=extend_schema(tags=['categories'], parameters=ODATA_RETRIEVE_PARAMETERS),
-    posts=extend_schema(tags=['categories'], parameters=ODATA_PARAMETERS),
+    list=extend_schema(tags=["categories"], parameters=ODATA_PARAMETERS),
+    retrieve=extend_schema(tags=["categories"], parameters=ODATA_RETRIEVE_PARAMETERS),
+    posts=extend_schema(tags=["categories"], parameters=ODATA_PARAMETERS),
 )
 class CategoryViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
     """
@@ -314,7 +301,7 @@ class CategoryViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
     selector_class = CategorySelector
     odata_entity_set_name = "categories"
 
-    @action(detail=True, methods=['get'])
+    @action(detail=True, methods=["get"])
     def posts(self, request, pk=None):
         """
         Get all posts in this category.
@@ -324,9 +311,9 @@ class CategoryViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
         """
         # Verify category exists
         if not CategorySelector().exists_by(QueryBuilder().and_filter(f"id eq {pk}")):
-            return Response({'detail': 'Category not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"detail": "Category not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        query_string = request.META.get('QUERY_STRING', '')
+        query_string = request.META.get("QUERY_STRING", "")
 
         selector = BlogPostSelector()
         # Note: For M2M relationship, we need to filter differently
@@ -335,10 +322,12 @@ class CategoryViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
         dtos = selector.get_many(query)
 
         serializer = BlogPostDTOSerializer(dtos, many=True)
-        return Response(build_odata_response(
-            request=request,
-            serializer_data=serializer.data,
-            query_string=query_string,
-            entity_set_name="posts",
-            selector=selector,
-        ))
+        return Response(
+            build_odata_response(
+                request=request,
+                serializer_data=serializer.data,
+                query_string=query_string,
+                entity_set_name="posts",
+                selector=selector,
+            )
+        )

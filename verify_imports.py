@@ -1,5 +1,3 @@
-
-import os
 import django
 from django.conf import settings
 
@@ -7,27 +5,26 @@ from django.conf import settings
 if not settings.configured:
     settings.configure(
         INSTALLED_APPS=[
-            'django.contrib.contenttypes',
-            'django.contrib.auth',
-            'rest_framework',
-            'fc_selector',
+            "django.contrib.contenttypes",
+            "django.contrib.auth",
+            "rest_framework",
+            "fc_selector",
         ],
-        DATABASES={'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': ':memory:'}},
+        DATABASES={"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}},
     )
     django.setup()
 
 try:
-    from fc_selector.django.drf.mixins import ODataMixin, ODataSerializerMixin
-    from fc_selector.django.drf.viewsets import ODataModelViewSet, ODataSelectorViewSetMixin
-    from fc_selector.django.drf.serializers import ODataModelSerializer, ODataDTOSerializer
-    
+    from fc_selector.django.drf.viewsets import ODataModelViewSet
+
     print("✓ Tots els components de DRF s'han importat correctament des de la nova estructura modular.")
-    
+
     # Verificar que ODataModelViewSet hereta del que toca (via la nova estructura)
     print(f"✓ ODataModelViewSet hereta de: {[c.__name__ for c in ODataModelViewSet.__mro__[:3]]}")
-    
+
 except Exception as e:
     print(f"✗ Error d'importació: {e}")
     import traceback
+
     traceback.print_exc()
     exit(1)

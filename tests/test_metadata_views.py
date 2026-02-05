@@ -363,6 +363,7 @@ class TestCapabilitiesAnnotations:
 
     def test_non_filterable_fields_from_positive_list(self, request_factory):
         """NonFilterableProperties generated from filterable_fields (positive list)."""
+
         class TestSelector(ODataSelector):
             class Meta:
                 model = ODataTestModel
@@ -381,6 +382,7 @@ class TestCapabilitiesAnnotations:
 
     def test_non_filterable_fields_from_negative_list(self, request_factory):
         """NonFilterableProperties used directly from non_filterable_fields."""
+
         class TestSelector(ODataSelector):
             class Meta:
                 model = ODataTestModel
@@ -399,6 +401,7 @@ class TestCapabilitiesAnnotations:
 
     def test_non_sortable_fields_from_positive_list(self, request_factory):
         """NonSortableProperties generated from sortable_fields (positive list)."""
+
         class TestSelector(ODataSelector):
             class Meta:
                 model = ODataTestModel
@@ -417,6 +420,7 @@ class TestCapabilitiesAnnotations:
 
     def test_non_sortable_fields_from_negative_list(self, request_factory):
         """NonSortableProperties used directly from non_sortable_fields."""
+
         class TestSelector(ODataSelector):
             class Meta:
                 model = ODataTestModel
@@ -434,6 +438,7 @@ class TestCapabilitiesAnnotations:
 
     def test_positive_list_takes_priority_over_negative(self, request_factory):
         """filterable_fields takes priority over non_filterable_fields."""
+
         class TestSelector(ODataSelector):
             class Meta:
                 model = ODataTestModel
@@ -450,6 +455,7 @@ class TestCapabilitiesAnnotations:
 
     def test_no_restrictions_when_nothing_defined(self, request_factory):
         """No NonFilterableProperties when neither list is defined."""
+
         class TestSelector(ODataSelector):
             class Meta:
                 model = ODataTestModel
@@ -468,6 +474,7 @@ class TestSelectorFieldIntrospection:
 
     def test_get_model_field_names(self):
         """_get_model_field_names returns concrete field names."""
+
         class TestSelector(ODataSelector):
             class Meta:
                 model = ODataTestModel
@@ -482,6 +489,7 @@ class TestSelectorFieldIntrospection:
 
     def test_is_filterable_default_true(self):
         """is_filterable returns True by default."""
+
         class TestSelector(ODataSelector):
             class Meta:
                 model = ODataTestModel
@@ -491,6 +499,7 @@ class TestSelectorFieldIntrospection:
 
     def test_is_sortable_default_true(self):
         """is_sortable returns True by default."""
+
         class TestSelector(ODataSelector):
             class Meta:
                 model = ODataTestModel

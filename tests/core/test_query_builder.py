@@ -94,9 +94,7 @@ class TestQueryBuilderFilter:
         assert query.build_query_string() == "$filter=(status eq 'active') or (status eq 'draft')"
 
     def test_chained_and_filters(self):
-        query = (
-            QueryBuilder().filter("status eq 'published'").and_filter("featured eq true").and_filter("rating gt 4")
-        )
+        query = QueryBuilder().filter("status eq 'published'").and_filter("featured eq true").and_filter("rating gt 4")
         result = query.build_query_string()
         assert "status eq 'published'" in result
         assert "featured eq true" in result

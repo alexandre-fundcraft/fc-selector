@@ -525,60 +525,91 @@ class QueryBuilder:
         """
         intent = QueryIntent()
 
-        # Build filter intent
-        if self._filter or self._filter_ast:
-            ast_to_use = self._filter_ast
-            if ast_to_use is None and self._filter:
-                ast_to_use = self._filter_parser(self._filter)
-            intent.filter = FilterIntent(expression=self._filter, ast=ast_to_use)
-
-        # Build select intent
-        if self._select:
-            intent.select = SelectIntent(fields=list(self._select))
-
-        # Build expand intent
-        if self._expand_objects:
-            # Type-safe Expand objects
-            relations = {}
-            for expand_obj in self._expand_objects:
-                relations[expand_obj.relation] = expand_obj.to_intent()
-            intent.expand = ExpandIntent(relations=relations)
-        elif self._expand:
-            # String-based expand (legacy)
-            relations = {}
-            for relation in self._expand:
-                # Handle complex expand with nested options
-                if "(" in relation:
-                    # For now, store as single relation with empty nested intent
-                    # Full parsing would require the expand parser
-                    base_relation = relation.split("(")[0].strip()
-                    relations[base_relation] = QueryIntent()
-                else:
-                    relations[relation] = QueryIntent()
-            intent.expand = ExpandIntent(relations=relations)
-
-        # Build orderby intent
-        if self._orderby_objects:
-            # Type-safe OrderBy objects
-            order_tuples: list[tuple[str, str]] = [(obj.field, obj.direction) for obj in self._orderby_objects]
-            intent.orderby = OrderIntent.from_tuples(order_tuples)
-        elif self._orderby:
-            # String-based orderby (legacy)
-            order_tuples_legacy: list[tuple[str, str]] = []
-            for field_spec in self._orderby:
-                parts = field_spec.strip().split()
-                field_name = parts[0]
-                direction = parts[1].lower() if len(parts) > 1 else "asc"
-                if direction not in ("asc", "desc"):
-                    direction = "asc"
-                order_tuples_legacy.append((field_name, direction))
-            intent.orderby = OrderIntent.from_tuples(order_tuples_legacy)
-
-        # Build pagination intent
-        if self._top is not None or self._skip is not None or self._count:
-            intent.pagination = PaginationIntent(limit=self._top, offset=self._skip, include_count=self._count or False)
+        intent.filter = self._build_filter_intent()
+        intent.select = self._build_select_intent()
+        intent.expand = self._build_expand_intent()
+        intent.orderby = self._build_orderby_intent()
+        intent.pagination = self._build_pagination_intent()
 
         return intent
+
+    def _build_filter_intent(self) -> FilterIntent | None:
+        """Build filter intent from current builder state."""
+        if not (self._filter or self._filter_ast):
+            return None
+
+        ast_to_use = self._filter_ast
+        if ast_to_use is None and self._filter:
+            ast_to_use = self._filter_parser(self._filter)
+
+        return FilterIntent(expression=self._filter, ast=ast_to_use)
+
+    def _build_select_intent(self) -> SelectIntent | None:
+        """Build select intent from current builder state."""
+        if not self._select:
+            return None
+
+        return SelectIntent(fields=list(self._select))
+
+    def _build_expand_intent(self) -> ExpandIntent | None:
+        """Build expand intent from current builder state."""
+        if self._expand_objects:
+            return self._build_expand_from_objects()
+        elif self._expand:
+            return self._build_expand_from_strings()
+
+        return None
+
+    def _build_expand_from_objects(self) -> ExpandIntent:
+        """Build expand intent from type-safe Expand objects."""
+        relations = {}
+        for expand_obj in self._expand_objects:
+            relations[expand_obj.relation] = expand_obj.to_intent()
+        return ExpandIntent(relations=relations)
+
+    def _build_expand_from_strings(self) -> ExpandIntent:
+        """Build expand intent from string-based expand (legacy)."""
+        relations = {}
+        for relation in self._expand:
+            if "(" in relation:
+                base_relation = relation.split("(")[0].strip()
+                relations[base_relation] = QueryIntent()
+            else:
+                relations[relation] = QueryIntent()
+        return ExpandIntent(relations=relations)
+
+    def _build_orderby_intent(self) -> OrderIntent | None:
+        """Build orderby intent from current builder state."""
+        if self._orderby_objects:
+            return self._build_orderby_from_objects()
+        elif self._orderby:
+            return self._build_orderby_from_strings()
+
+        return None
+
+    def _build_orderby_from_objects(self) -> OrderIntent:
+        """Build orderby intent from type-safe OrderBy objects."""
+        order_tuples: list[tuple[str, str]] = [(obj.field, obj.direction) for obj in self._orderby_objects]
+        return OrderIntent.from_tuples(order_tuples)
+
+    def _build_orderby_from_strings(self) -> OrderIntent:
+        """Build orderby intent from string-based orderby (legacy)."""
+        order_tuples: list[tuple[str, str]] = []
+        for field_spec in self._orderby:
+            parts = field_spec.strip().split()
+            field_name = parts[0]
+            direction = parts[1].lower() if len(parts) > 1 else "asc"
+            if direction not in ("asc", "desc"):
+                direction = "asc"
+            order_tuples.append((field_name, direction))
+        return OrderIntent.from_tuples(order_tuples)
+
+    def _build_pagination_intent(self) -> PaginationIntent | None:
+        """Build pagination intent from current builder state."""
+        if self._top is None and self._skip is None and not self._count:
+            return None
+
+        return PaginationIntent(limit=self._top, offset=self._skip, include_count=self._count or False)
 
     def to_odata_string(self) -> str:
         """

@@ -135,14 +135,14 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
         # So we handle allowed_fields manually here (as we did), and then check existence.
 
         if "__" not in resolved_field:
-             # Check existence if not a path (paths are assumed valid or handled by Django join logic, but visitor logic was specific)
-             # And if not explicitly allowed (annotation).
+            # Check existence if not a path (paths are assumed valid or handled by Django join logic, but visitor logic was specific)
+            # And if not explicitly allowed (annotation).
 
-             # If base_field was in allowed_fields, we skip existence check?
-             should_check_existence = not (self.allowed_fields is not None and base_field in self.allowed_fields)
+            # If base_field was in allowed_fields, we skip existence check?
+            should_check_existence = not (self.allowed_fields is not None and base_field in self.allowed_fields)
 
-             if should_check_existence:
-                 validate_field_name(self.root_model, resolved_field, raise_exception=True)
+            if should_check_existence:
+                validate_field_name(self.root_model, resolved_field, raise_exception=True)
 
         return resolved_field
 

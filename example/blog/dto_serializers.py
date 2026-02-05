@@ -23,8 +23,8 @@ class UserDTOSerializer(ODataDTOSerializer):
 
     class Meta:
         dto_class = UserDTO
-        exclude = ['password']  # Hide password field
-        read_only_fields = ['id', 'last_login', 'date_joined']
+        exclude = ["password"]  # Hide password field
+        read_only_fields = ["id", "last_login", "date_joined"]
 
 
 class AuthorDTOSerializer(ODataDTOSerializer):
@@ -32,7 +32,7 @@ class AuthorDTOSerializer(ODataDTOSerializer):
 
     class Meta:
         dto_class = AuthorDTO
-        read_only_fields = ['id', 'created_at']
+        read_only_fields = ["id", "created_at"]
 
 
 class CategoryDTOSerializer(ODataDTOSerializer):
@@ -40,7 +40,7 @@ class CategoryDTOSerializer(ODataDTOSerializer):
 
     class Meta:
         dto_class = CategoryDTO
-        read_only_fields = ['id', 'created_at']
+        read_only_fields = ["id", "created_at"]
 
 
 class BlogPostDTOSerializer(ODataDTOSerializer):
@@ -55,11 +55,11 @@ class BlogPostDTOSerializer(ODataDTOSerializer):
     class Meta:
         dto_class = BlogPostDTO
         read_only_fields = [
-            'id',
-            'created_at',
-            'updated_at',
-            'published_at',
-            'view_count',
+            "id",
+            "created_at",
+            "updated_at",
+            "published_at",
+            "view_count",
         ]
         # You can also explicitly define which fields to include
         # fields = ['id', 'title', 'content', 'author', 'categories']

@@ -361,9 +361,7 @@ class BaseODataDTO:
                 )
 
             data[field_name] = [
-                dto_class.from_model(
-                    obj, nested_selected, nested_expanded, nested_options, _depth=_depth + 1
-                )
+                dto_class.from_model(obj, nested_selected, nested_expanded, nested_options, _depth=_depth + 1)
                 for obj in related_objs
             ]
         else:

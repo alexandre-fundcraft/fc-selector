@@ -19,20 +19,22 @@ from django.apps import apps
 from fc_selector.core.dtos import UNSET, BaseODataDTO
 from fc_selector.django.selector import ODataSelector
 
-Author = apps.get_model('blog', 'Author')
-BlogPost = apps.get_model('blog', 'BlogPost')
-Category = apps.get_model('blog', 'Category')
-ContentType = apps.get_model('contenttypes', 'ContentType')
-Group = apps.get_model('auth', 'Group')
-Permission = apps.get_model('auth', 'Permission')
-User = apps.get_model('auth', 'User')
+Author = apps.get_model("blog", "Author")
+BlogPost = apps.get_model("blog", "BlogPost")
+Category = apps.get_model("blog", "Category")
+ContentType = apps.get_model("contenttypes", "ContentType")
+Group = apps.get_model("auth", "Group")
+Permission = apps.get_model("auth", "Permission")
+User = apps.get_model("auth", "User")
 
 
 # ==================== DTOs ====================
 
+
 @dataclass
 class UserDTO(BaseODataDTO):
     """DTO for User model."""
+
     id: str = UNSET
     password: str = UNSET
     last_login: str = UNSET
@@ -51,9 +53,11 @@ class UserDTO(BaseODataDTO):
     groups: list[GroupDTO] | None = UNSET
     user_permissions: list[PermissionDTO] | None = UNSET
 
+
 @dataclass
 class AuthorDTO(BaseODataDTO):
     """DTO for Author model."""
+
     id: str = UNSET
     bio: str = UNSET
     website: str = UNSET
@@ -65,9 +69,11 @@ class AuthorDTO(BaseODataDTO):
     user: UserDTO | None = UNSET
     posts: list[BlogPostDTO] | None = UNSET  # Reverse relation
 
+
 @dataclass
 class BlogPostDTO(BaseODataDTO):
     """DTO for BlogPost model."""
+
     id: str = UNSET
     title: str = UNSET
     slug: str = UNSET
@@ -88,9 +94,11 @@ class BlogPostDTO(BaseODataDTO):
     author: AuthorDTO | None = UNSET
     categories: list[CategoryDTO] | None = UNSET
 
+
 @dataclass
 class ContentTypeDTO(BaseODataDTO):
     """DTO for ContentType model."""
+
     id: str = UNSET
     app_label: str = UNSET
     model: str = UNSET
@@ -98,26 +106,32 @@ class ContentTypeDTO(BaseODataDTO):
     name: str = UNSET  # @property
     pk: str = UNSET  # @property
 
+
 @dataclass
 class GroupDTO(BaseODataDTO):
     """DTO for Group model."""
+
     id: str = UNSET
     name: str = UNSET
     # pk: str = UNSET  # @property
     permissions: list[PermissionDTO] | None = UNSET
 
+
 @dataclass
 class PermissionDTO(BaseODataDTO):
     """DTO for Permission model."""
+
     id: str = UNSET
     name: str = UNSET
     codename: str = UNSET
     # pk: str = UNSET  # @property
     content_type: ContentTypeDTO | None = UNSET
 
+
 @dataclass
 class CategoryDTO(BaseODataDTO):
     """DTO for Category model."""
+
     id: str = UNSET
     name: str = UNSET
     description: str = UNSET
@@ -126,6 +140,7 @@ class CategoryDTO(BaseODataDTO):
 
 
 # ==================== SELECTORS ====================
+
 
 class BlogPostSelector(ODataSelector):
     """Selector for BlogPost with DTO support."""
@@ -138,6 +153,7 @@ class BlogPostSelector(ODataSelector):
             "categories": CategoryDTO,
         }
 
+
 class ContentTypeSelector(ODataSelector):
     """Selector for ContentType with DTO support."""
 
@@ -145,6 +161,7 @@ class ContentTypeSelector(ODataSelector):
         model = ContentType
         dto_class = ContentTypeDTO
         expandable_fields = {}
+
 
 class GroupSelector(ODataSelector):
     """Selector for Group with DTO support."""
@@ -156,6 +173,7 @@ class GroupSelector(ODataSelector):
             "permissions": PermissionDTO,
         }
 
+
 class PermissionSelector(ODataSelector):
     """Selector for Permission with DTO support."""
 
@@ -165,6 +183,7 @@ class PermissionSelector(ODataSelector):
         expandable_fields = {
             "content_type": ContentTypeDTO,
         }
+
 
 class AuthorSelector(ODataSelector):
     """Selector for Author with DTO support."""
@@ -177,6 +196,7 @@ class AuthorSelector(ODataSelector):
             "posts": BlogPostDTO,  # Reverse relation from BlogPost.author
         }
 
+
 class UserSelector(ODataSelector):
     """Selector for User with DTO support."""
 
@@ -188,6 +208,7 @@ class UserSelector(ODataSelector):
             "groups": GroupDTO,
             "user_permissions": PermissionDTO,
         }
+
 
 class CategorySelector(ODataSelector):
     """Selector for Category with DTO support."""

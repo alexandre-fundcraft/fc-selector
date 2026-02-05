@@ -364,6 +364,7 @@ class TestFromModelWithRelationships:
 
     def test_from_model_null_relationship(self):
         """from_model handles null relationship."""
+
         @dataclass
         class TestModelDTO(BaseODataDTO):
             id: int = UNSET

@@ -72,9 +72,7 @@ class BlogPost(models.Model):
     published_at = models.DateTimeField(null=True, blank=True)
 
     tags = models.JSONField(default=list, blank=True, help_text="List of tags")
-    metadata = models.JSONField(
-        default=dict, blank=True, help_text="Additional metadata"
-    )
+    metadata = models.JSONField(default=dict, blank=True, help_text="Additional metadata")
 
     class Meta:
         ordering = ["-created_at"]
@@ -98,9 +96,7 @@ class BlogPost(models.Model):
 class Comment(models.Model):
     """Comment model for blog posts."""
 
-    post = models.ForeignKey(
-        BlogPost, on_delete=models.CASCADE, related_name="comments"
-    )
+    post = models.ForeignKey(BlogPost, on_delete=models.CASCADE, related_name="comments")
     author_name = models.CharField(max_length=100)
     author_email = models.EmailField()
     content = models.TextField()
@@ -118,9 +114,7 @@ class Tag(models.Model):
     """Tag model for categorizing posts."""
 
     name = models.CharField(max_length=50, unique=True)
-    color = models.CharField(
-        max_length=7, default="#007bff", help_text="Hex color code"
-    )
+    color = models.CharField(max_length=7, default="#007bff", help_text="Hex color code")
     posts = models.ManyToManyField(BlogPost, related_name="tag_objects", blank=True)
 
     class Meta:

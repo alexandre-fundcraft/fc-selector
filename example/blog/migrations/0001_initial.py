@@ -6,7 +6,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
@@ -83,9 +82,7 @@ class Migration(migrations.Migration):
                 ("content", models.TextField()),
                 (
                     "excerpt",
-                    models.TextField(
-                        blank=True, help_text="Short description of the post"
-                    ),
+                    models.TextField(blank=True, help_text="Short description of the post"),
                 ),
                 (
                     "status",
@@ -103,24 +100,18 @@ class Migration(migrations.Migration):
                 ("view_count", models.PositiveIntegerField(default=0)),
                 (
                     "rating",
-                    models.DecimalField(
-                        blank=True, decimal_places=2, max_digits=3, null=True
-                    ),
+                    models.DecimalField(blank=True, decimal_places=2, max_digits=3, null=True),
                 ),
                 ("created_at", models.DateTimeField(auto_now_add=True)),
                 ("updated_at", models.DateTimeField(auto_now=True)),
                 ("published_at", models.DateTimeField(blank=True, null=True)),
                 (
                     "tags",
-                    models.JSONField(
-                        blank=True, default=list, help_text="List of tags"
-                    ),
+                    models.JSONField(blank=True, default=list, help_text="List of tags"),
                 ),
                 (
                     "metadata",
-                    models.JSONField(
-                        blank=True, default=dict, help_text="Additional metadata"
-                    ),
+                    models.JSONField(blank=True, default=dict, help_text="Additional metadata"),
                 ),
                 (
                     "author",
@@ -132,9 +123,7 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "categories",
-                    models.ManyToManyField(
-                        blank=True, related_name="posts", to="blog.category"
-                    ),
+                    models.ManyToManyField(blank=True, related_name="posts", to="blog.category"),
                 ),
             ],
             options={
@@ -186,15 +175,11 @@ class Migration(migrations.Migration):
                 ("name", models.CharField(max_length=50, unique=True)),
                 (
                     "color",
-                    models.CharField(
-                        default="#007bff", help_text="Hex color code", max_length=7
-                    ),
+                    models.CharField(default="#007bff", help_text="Hex color code", max_length=7),
                 ),
                 (
                     "posts",
-                    models.ManyToManyField(
-                        blank=True, related_name="tag_objects", to="blog.blogpost"
-                    ),
+                    models.ManyToManyField(blank=True, related_name="tag_objects", to="blog.blogpost"),
                 ),
             ],
             options={
@@ -203,14 +188,10 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name="blogpost",
-            index=models.Index(
-                fields=["status", "published_at"], name="blog_blogpo_status_aa5436_idx"
-            ),
+            index=models.Index(fields=["status", "published_at"], name="blog_blogpo_status_aa5436_idx"),
         ),
         migrations.AddIndex(
             model_name="blogpost",
-            index=models.Index(
-                fields=["author", "created_at"], name="blog_blogpo_author__8af930_idx"
-            ),
+            index=models.Index(fields=["author", "created_at"], name="blog_blogpo_author__8af930_idx"),
         ),
     ]

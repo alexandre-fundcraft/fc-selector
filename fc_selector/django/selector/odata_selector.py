@@ -106,9 +106,7 @@ class ODataSelector:
             return
         for alias, internal in aliases.items():
             if not _VALID_FIELD_PATTERN.match(alias):
-                raise ValueError(
-                    f"Invalid field alias '{alias}': must be alphanumeric with underscores only"
-                )
+                raise ValueError(f"Invalid field alias '{alias}': must be alphanumeric with underscores only")
             # Internal field can have dots for nested access (e.g., "user.email")
             for part in internal.split("."):
                 if not _VALID_FIELD_PATTERN.match(part):
@@ -122,11 +120,7 @@ class ODataSelector:
         """Get all concrete field names from the model."""
         if not self.model:
             return []
-        return [
-            f.name
-            for f in self.model._meta.get_fields()
-            if hasattr(f, "name") and hasattr(f, "get_internal_type")
-        ]
+        return [f.name for f in self.model._meta.get_fields() if hasattr(f, "name") and hasattr(f, "get_internal_type")]
 
     def get_non_filterable_fields(self) -> list[str]:
         """Get list of fields that cannot be used in $filter.
@@ -225,8 +219,7 @@ class ODataSelector:
         # Security: Validate query string length to prevent DoS
         if len(query_string) > MAX_QUERY_STRING_LENGTH:
             raise core_ex.QueryError(
-                f"Query string too long ({len(query_string)} chars). "
-                f"Maximum allowed: {MAX_QUERY_STRING_LENGTH}"
+                f"Query string too long ({len(query_string)} chars). Maximum allowed: {MAX_QUERY_STRING_LENGTH}"
             )
 
         # Resolve aliases in query string (OData specific logic)
@@ -332,8 +325,7 @@ class ODataSelector:
         # Security: Validate query string length to prevent DoS
         if len(query_string) > MAX_QUERY_STRING_LENGTH:
             raise core_ex.QueryError(
-                f"Query string too long ({len(query_string)} chars). "
-                f"Maximum allowed: {MAX_QUERY_STRING_LENGTH}"
+                f"Query string too long ({len(query_string)} chars). Maximum allowed: {MAX_QUERY_STRING_LENGTH}"
             )
 
         # Resolve aliases in query string (OData specific logic)
@@ -409,8 +401,8 @@ class ODataSelector:
         t5 = time.perf_counter()
 
         logger.debug(
-            f"[get_many] build_intent={t1-t0:.3f}s, execute={t2-t1:.3f}s, "
-            f"parse_opts={t3-t2:.3f}s, fetch_db={t4-t3:.3f}s, to_dtos={t5-t4:.3f}s"
+            f"[get_many] build_intent={t1 - t0:.3f}s, execute={t2 - t1:.3f}s, "
+            f"parse_opts={t3 - t2:.3f}s, fetch_db={t4 - t3:.3f}s, to_dtos={t5 - t4:.3f}s"
         )
 
         return dtos
@@ -470,9 +462,7 @@ class ODataSelector:
         results = list(queryset)
         t3 = time.perf_counter()
 
-        logger.debug(
-            f"[get_many_dicts] build_intent={t1-t0:.3f}s, execute={t2-t1:.3f}s, fetch_db={t3-t2:.3f}s"
-        )
+        logger.debug(f"[get_many_dicts] build_intent={t1 - t0:.3f}s, execute={t2 - t1:.3f}s, fetch_db={t3 - t2:.3f}s")
 
         return results
 

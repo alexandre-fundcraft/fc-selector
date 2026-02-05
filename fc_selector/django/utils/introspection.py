@@ -67,9 +67,7 @@ def validate_field_name(
     # Block access to private/internal fields
     if is_private_field(field_name):
         if raise_exception:
-            raise InvalidFieldError(
-                field_name, model.__name__, reason="access to private fields is not allowed"
-            )
+            raise InvalidFieldError(field_name, model.__name__, reason="access to private fields is not allowed")
         return False
 
     # Extract base field name (before any __) for allowed_fields check
@@ -78,9 +76,7 @@ def validate_field_name(
     # Check against allowed fields if specified
     if allowed_fields is not None and base_field not in allowed_fields:
         if raise_exception:
-            raise InvalidFieldError(
-                field_name, model.__name__, reason="field is not in allowed fields list"
-            )
+            raise InvalidFieldError(field_name, model.__name__, reason="field is not in allowed fields list")
         return False
 
     # Check existence on model (only for direct fields, not paths or if skipped via allowed_fields logic)
@@ -101,21 +97,19 @@ def validate_field_name(
     # The original simple validate_field_name returned False for paths that are not direct fields.
 
     if not exists:
-         # If it's a path, or allowed, we might be lenient?
-         # The visitor logic was: check existence UNLESS it's in allowed_fields (implies annotation?).
+        # If it's a path, or allowed, we might be lenient?
+        # The visitor logic was: check existence UNLESS it's in allowed_fields (implies annotation?).
 
-         if "__" in field_name:
-             # It's a path. Simple validation fails for paths.
-             # We should probably return False/Raise if strict.
-             pass
-         elif allowed_fields is not None and field_name in allowed_fields:
-             # It is allowed, maybe it's an annotation?
-             return True
+        if "__" in field_name:
+            # It's a path. Simple validation fails for paths.
+            # We should probably return False/Raise if strict.
+            pass
+        elif allowed_fields is not None and field_name in allowed_fields:
+            # It is allowed, maybe it's an annotation?
+            return True
 
-         if raise_exception:
-             raise InvalidFieldError(
-                 field_name, model.__name__, reason="field does not exist on model"
-             )
-         return False
+        if raise_exception:
+            raise InvalidFieldError(field_name, model.__name__, reason="field does not exist on model")
+        return False
 
     return True

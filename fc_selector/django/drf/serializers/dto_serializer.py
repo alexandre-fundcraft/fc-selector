@@ -8,6 +8,7 @@ This serializer works with ODataSelector and DTOs to provide:
 - UNSET field handling
 """
 
+import importlib
 from dataclasses import fields as dataclass_fields
 from dataclasses import is_dataclass
 from typing import Any
@@ -316,75 +317,82 @@ class ODataDTOSerializer(serializers.Serializer):
         if not is_dataclass(dto_instance):
             return dto_instance
 
-        # Try to find exclusions for this DTO type
         dto_class = type(dto_instance)
-        dto_class_name = dto_class.__name__
-
-        # Check if the DTO class itself has _excluded_fields attribute
-        excluded_fields = set()
-        if hasattr(dto_class, "_excluded_fields"):
-            excluded_fields = set(dto_class._excluded_fields)
-        else:
-            # Try to import and use the corresponding serializer
-            # Common pattern: UserDTO -> UserDTOSerializer
-            try:
-                # Try to get the serializer from the current module's parent
-                import importlib
-
-                # Get the module where the DTO is defined
-                dto_module_name = dto_class.__module__
-
-                # Try common patterns for serializer modules
-                # Example: blog.selectors.blog_post -> blog.dto_serializers
-                base_module = (
-                    dto_module_name.split(".selectors.")[0]
-                    if ".selectors." in dto_module_name
-                    else dto_module_name.rsplit(".", 1)[0]
-                )
-
-                possible_serializer_modules = [
-                    base_module + ".dto_serializers",
-                    dto_module_name.rsplit(".", 1)[0] + ".dto_serializers",
-                    dto_module_name.replace("_selector", "_dto_serializers"),
-                ]
-
-                serializer_class_name = dto_class_name + "Serializer"
-
-                for module_name in possible_serializer_modules:
-                    try:
-                        module = importlib.import_module(module_name)
-                        if hasattr(module, serializer_class_name):
-                            serializer_class = getattr(module, serializer_class_name)
-                            if hasattr(serializer_class, "Meta") and hasattr(serializer_class.Meta, "exclude"):
-                                excluded_fields = set(serializer_class.Meta.exclude or [])
-                                break
-                    except (ImportError, AttributeError):
-                        continue
-            except (ImportError, AttributeError, TypeError, ValueError):
-                # If anything fails, just continue without exclusions
-                pass
+        excluded_fields = self._get_excluded_fields(dto_class)
 
         result = {}
         for field in dataclass_fields(dto_instance):
-            # Skip excluded fields (e.g., password)
             if field.name in excluded_fields:
                 continue
 
             value = getattr(dto_instance, field.name)
 
-            # Skip UNSET fields
             if value is UNSET:
                 continue
 
-            # Recursively handle nested DTOs
-            if is_dataclass(value):
-                result[field.name] = self._dto_to_dict(value)
-            elif isinstance(value, list) and value and is_dataclass(value[0]):
-                result[field.name] = [self._dto_to_dict(item) for item in value]
-            else:
-                result[field.name] = value
+            result[field.name] = self._convert_field_value(value)
 
         return result
+
+    def _get_excluded_fields(self, dto_class) -> set[str]:
+        """Get the set of fields to exclude when serializing a DTO."""
+        if hasattr(dto_class, "_excluded_fields"):
+            return set(dto_class._excluded_fields)
+
+        return self._get_excluded_fields_from_serializer(dto_class)
+
+    def _get_excluded_fields_from_serializer(self, dto_class) -> set[str]:
+        """Try to find excluded fields from the corresponding DTO serializer."""
+        try:
+            dto_module_name = dto_class.__module__
+            serializer_class_name = dto_class.__name__ + "Serializer"
+            possible_modules = self._get_possible_serializer_modules(dto_module_name)
+
+            for module_name in possible_modules:
+                excluded = self._try_import_serializer_exclusions(module_name, serializer_class_name)
+                if excluded is not None:
+                    return excluded
+
+        except (ImportError, AttributeError, TypeError, ValueError):
+            pass
+
+        return set()
+
+    def _get_possible_serializer_modules(self, dto_module_name: str) -> list[str]:
+        """Generate possible module names where the DTO serializer might be defined."""
+        base_module = (
+            dto_module_name.split(".selectors.")[0]
+            if ".selectors." in dto_module_name
+            else dto_module_name.rsplit(".", 1)[0]
+        )
+
+        return [
+            base_module + ".dto_serializers",
+            dto_module_name.rsplit(".", 1)[0] + ".dto_serializers",
+            dto_module_name.replace("_selector", "_dto_serializers"),
+        ]
+
+    def _try_import_serializer_exclusions(self, module_name: str, serializer_class_name: str) -> set[str] | None:
+        """Try to import a serializer class and extract its Meta.exclude fields."""
+        try:
+            module = importlib.import_module(module_name)
+            if hasattr(module, serializer_class_name):
+                serializer_class = getattr(module, serializer_class_name)
+                if hasattr(serializer_class, "Meta") and hasattr(serializer_class.Meta, "exclude"):
+                    return set(serializer_class.Meta.exclude or [])
+        except (ImportError, AttributeError):
+            pass
+
+        return None
+
+    def _convert_field_value(self, value):
+        """Convert a field value, recursively handling DTOs."""
+        if is_dataclass(value):
+            return self._dto_to_dict(value)
+        elif isinstance(value, list) and value and is_dataclass(value[0]):
+            return [self._dto_to_dict(item) for item in value]
+        else:
+            return value
 
     def to_internal_value(self, data):
         """
