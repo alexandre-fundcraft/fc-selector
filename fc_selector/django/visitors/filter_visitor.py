@@ -4,9 +4,6 @@ from collections.abc import Callable
 from typing import Any, cast
 from uuid import UUID
 
-# Security: Maximum regex pattern length to prevent ReDoS attacks
-MAX_REGEX_PATTERN_LENGTH = 256
-
 from django.db.models import (
     Case,
     Exists,
@@ -24,13 +21,44 @@ from django.db.models.expressions import Expression
 from fc_selector.core import ast
 from fc_selector.core import exceptions as core_ex
 from fc_selector.core.ast import visitor
-from fc_selector.django.utils import resolve_field_alias
+from fc_selector.core.utils import get_base_field, is_private_field, odata_path_to_django
+from fc_selector.django.utils import resolve_field_alias, validate_field_name
 
 # We still use utils from parsers to manipulate AST nodes (should be moved to core later)
 from fc_selector.protocols.odata.parsers.filter import utils
 
 from .django_q_ext import NotEqual
 from .utils import reverse_relationship
+
+# Security: Maximum regex pattern length to prevent ReDoS attacks
+MAX_REGEX_PATTERN_LENGTH = 256
+
+# Mapping of AST arithmetic operators to Python operators
+_ARITHMETIC_OPS: dict[type, Callable[[Any, Any], Any]] = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.Mod: operator.mod,
+}
+
+# Mapping of AST comparison operators to Django lookups
+_COMPARISON_LOOKUPS: dict[type, type[lookups.Lookup]] = {
+    ast.Eq: lookups.Exact,
+    ast.NotEq: NotEqual,
+    ast.Lt: lookups.LessThan,
+    ast.LtE: lookups.LessThanOrEqual,
+    ast.Gt: lookups.GreaterThan,
+    ast.GtE: lookups.GreaterThanOrEqual,
+    ast.In: lookups.In,
+}
+
+# Mapping of AST temporal types to their type names for error messages
+_TEMPORAL_TYPES: dict[type, str] = {
+    ast.Date: "Date",
+    ast.DateTime: "DateTime",
+    ast.Time: "Time",
+}
 
 
 class AstToDjangoQVisitor(visitor.NodeVisitor):
@@ -66,33 +94,55 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
 
         Returns the resolved field name (with aliases applied).
         """
-        # Block access to private/internal fields
-        if field_name.startswith("_"):
+        # Resolve alias to actual model field first
+        resolved_field = resolve_field_alias(field_name, self.field_aliases)
+
+        # Use centralized validation with exception raising
+        # Note: validate_field_name handles startswith('_') and allowed_fields checks.
+        # It needs the resolved field? Or the original?
+        # Visitor logic checked:
+        # 1. startswith('_') on original field_name? "if field_name.startswith('_')" -> Yes.
+        # 2. allowed_fields on original base_field.
+        # 3. Then resolved alias.
+        # 4. Then checked existence of resolved_field.
+
+        # So we can't just call validate_field_name(resolved_field) because it would check allowed_fields against resolved_name.
+        # But allowed_fields usually contains the API names (aliases).
+
+        # We need to replicate the exact steps if we want to be safe, or just use the logic parts.
+
+        # 1. Private check
+        if is_private_field(field_name):
             raise core_ex.InvalidFieldError(
                 field_name, self.root_model.__name__, reason="access to private fields is not allowed"
             )
 
-        # Extract base field name (before any __)
-        base_field = field_name.split("__")[0]
-
-        # Check against allowed fields if specified (use original field name for API contract)
+        # 2. Allowed check (on original name)
+        base_field = get_base_field(field_name)
         if self.allowed_fields is not None and base_field not in self.allowed_fields:
             raise core_ex.InvalidFieldError(
                 field_name, self.root_model.__name__, reason="field is not in allowed fields list"
             )
 
-        # Resolve alias to actual model field
-        resolved_field = resolve_field_alias(field_name, self.field_aliases)
+        # 3. Existence check (on resolved name)
+        # We can use validate_field_name just for the existence check part?
+        # Or we can trust validate_field_name to do it all if we pass the right things.
 
-        # Validate that resolved field exists on the model (for simple fields only)
-        # Skip validation if field is in allowed_fields (might be an annotation)
-        if "__" not in resolved_field and not (self.allowed_fields is not None and base_field in self.allowed_fields):
-            from fc_selector.django.utils.introspection import get_field_safe
+        # If we pass resolved_field to validate_field_name:
+        # - It checks startsWith('_') on resolved. (Fine, resolved shouldn't be private either)
+        # - It checks allowed_fields on resolved base. (PROBLEM: allowed_fields has aliases)
 
-            if not get_field_safe(self.root_model, resolved_field):
-                raise core_ex.InvalidFieldError(
-                    field_name, self.root_model.__name__, reason="field does not exist on model"
-                )
+        # So we handle allowed_fields manually here (as we did), and then check existence.
+
+        if "__" not in resolved_field:
+             # Check existence if not a path (paths are assumed valid or handled by Django join logic, but visitor logic was specific)
+             # And if not explicitly allowed (annotation).
+
+             # If base_field was in allowed_fields, we skip existence check?
+             should_check_existence = not (self.allowed_fields is not None and base_field in self.allowed_fields)
+
+             if should_check_existence:
+                 validate_field_name(self.root_model, resolved_field, raise_exception=True)
 
         return resolved_field
 
@@ -139,26 +189,25 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
         ":meta private:"
         return Value(node.py_val)
 
-    def visit_Date(self, node: ast.Date) -> Value:
-        ":meta private:"
+    def _visit_temporal_value(self, node: ast.Date | ast.DateTime | ast.Time) -> Value:
+        """Generic visitor for temporal values (Date, DateTime, Time)."""
         try:
             return Value(node.py_val)
         except ValueError:
-            raise core_ex.InvalidValueError(node.val, expected_type="Date")
+            type_name = _TEMPORAL_TYPES.get(type(node), type(node).__name__)
+            raise core_ex.InvalidValueError(node.val, expected_type=type_name)
 
-    def visit_DateTime(self, node: ast.DateTime) -> Value:
+    def visit_Date(self, node: ast.Date) -> Value:  # noqa: N802
         ":meta private:"
-        try:
-            return Value(node.py_val)
-        except ValueError:
-            raise core_ex.InvalidValueError(node.val, expected_type="DateTime")
+        return self._visit_temporal_value(node)
 
-    def visit_Time(self, node: ast.Time) -> Value:
+    def visit_DateTime(self, node: ast.DateTime) -> Value:  # noqa: N802
         ":meta private:"
-        try:
-            return Value(node.py_val)
-        except ValueError:
-            raise core_ex.InvalidValueError(node.val, expected_type="Time")
+        return self._visit_temporal_value(node)
+
+    def visit_Time(self, node: ast.Time) -> Value:  # noqa: N802
+        ":meta private:"
+        return self._visit_temporal_value(node)
 
     def visit_Duration(self, node: ast.Duration) -> Value:
         ":meta private:"
@@ -172,25 +221,29 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
         ":meta private:"
         return [self.visit(n) for n in node.val]
 
-    def visit_Add(self, node: ast.Add) -> Callable[[Any, Any], Any]:
-        ":meta private:"
-        return operator.add
+    def _visit_arithmetic_op(self, node: ast.Node) -> Callable[[Any, Any], Any]:
+        """Generic visitor for arithmetic operators using mapping."""
+        return _ARITHMETIC_OPS[type(node)]
 
-    def visit_Sub(self, node: ast.Sub) -> Callable[[Any, Any], Any]:
+    def visit_Add(self, node: ast.Add) -> Callable[[Any, Any], Any]:  # noqa: N802
         ":meta private:"
-        return operator.sub
+        return self._visit_arithmetic_op(node)
 
-    def visit_Mult(self, node: ast.Mult) -> Callable[[Any, Any], Any]:
+    def visit_Sub(self, node: ast.Sub) -> Callable[[Any, Any], Any]:  # noqa: N802
         ":meta private:"
-        return operator.mul
+        return self._visit_arithmetic_op(node)
 
-    def visit_Div(self, node: ast.Div) -> Callable[[Any, Any], Any]:
+    def visit_Mult(self, node: ast.Mult) -> Callable[[Any, Any], Any]:  # noqa: N802
         ":meta private:"
-        return operator.truediv
+        return self._visit_arithmetic_op(node)
 
-    def visit_Mod(self, node: ast.Mod) -> Callable[[Any, Any], Any]:
+    def visit_Div(self, node: ast.Div) -> Callable[[Any, Any], Any]:  # noqa: N802
         ":meta private:"
-        return operator.mod
+        return self._visit_arithmetic_op(node)
+
+    def visit_Mod(self, node: ast.Mod) -> Callable[[Any, Any], Any]:  # noqa: N802
+        ":meta private:"
+        return self._visit_arithmetic_op(node)
 
     def visit_BinOp(self, node: ast.BinOp) -> Any:
         ":meta private:"
@@ -202,33 +255,37 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
 
         return op(left, right)
 
-    def visit_Eq(self, node: ast.Eq) -> type[lookups.Lookup]:
-        ":meta private:"
-        return cast(type[lookups.Lookup], lookups.Exact)
+    def _visit_comparison_op(self, node: ast.Node) -> type[lookups.Lookup]:
+        """Generic visitor for comparison operators using mapping."""
+        return cast(type[lookups.Lookup], _COMPARISON_LOOKUPS[type(node)])
 
-    def visit_NotEq(self, node: ast.NotEq) -> type[lookups.Lookup]:
+    def visit_Eq(self, node: ast.Eq) -> type[lookups.Lookup]:  # noqa: N802
         ":meta private:"
-        return cast(type[lookups.Lookup], NotEqual)
+        return self._visit_comparison_op(node)
 
-    def visit_Lt(self, node: ast.Lt) -> type[lookups.Lookup]:
+    def visit_NotEq(self, node: ast.NotEq) -> type[lookups.Lookup]:  # noqa: N802
         ":meta private:"
-        return cast(type[lookups.Lookup], lookups.LessThan)
+        return self._visit_comparison_op(node)
 
-    def visit_LtE(self, node: ast.LtE) -> type[lookups.Lookup]:
+    def visit_Lt(self, node: ast.Lt) -> type[lookups.Lookup]:  # noqa: N802
         ":meta private:"
-        return cast(type[lookups.Lookup], lookups.LessThanOrEqual)
+        return self._visit_comparison_op(node)
 
-    def visit_Gt(self, node: ast.Gt) -> type[lookups.Lookup]:
+    def visit_LtE(self, node: ast.LtE) -> type[lookups.Lookup]:  # noqa: N802
         ":meta private:"
-        return cast(type[lookups.Lookup], lookups.GreaterThan)
+        return self._visit_comparison_op(node)
 
-    def visit_GtE(self, node: ast.GtE) -> type[lookups.Lookup]:
+    def visit_Gt(self, node: ast.Gt) -> type[lookups.Lookup]:  # noqa: N802
         ":meta private:"
-        return cast(type[lookups.Lookup], lookups.GreaterThanOrEqual)
+        return self._visit_comparison_op(node)
 
-    def visit_In(self, node: ast.In) -> type[lookups.Lookup]:
+    def visit_GtE(self, node: ast.GtE) -> type[lookups.Lookup]:  # noqa: N802
         ":meta private:"
-        return cast(type[lookups.Lookup], lookups.In)
+        return self._visit_comparison_op(node)
+
+    def visit_In(self, node: ast.In) -> type[lookups.Lookup]:  # noqa: N802
+        ":meta private:"
+        return self._visit_comparison_op(node)
 
     def visit_Compare(self, node: ast.Compare) -> lookups.Lookup:
         ":meta private:"
@@ -294,7 +351,7 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
     def visit_Call(self, node: ast.Call) -> Expression | Q:
         ":meta private:"
 
-        func_name = node.func.full_name().replace(".", "__")
+        func_name = odata_path_to_django(node.func.full_name())
 
         try:
             q_gen = getattr(self, "djangofunc_" + func_name.lower())

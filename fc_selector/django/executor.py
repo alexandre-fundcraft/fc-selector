@@ -10,8 +10,14 @@ from typing import Any
 from django.db.models import Prefetch, QuerySet
 
 from fc_selector.core import exceptions as core_ex
+from fc_selector.core.dtos.utils import get_dto_fields
 from fc_selector.core.intent import ExpandIntent, QueryIntent
-from fc_selector.django.utils import get_field_safe, resolve_field_alias
+from fc_selector.core.utils import is_private_field, odata_path_to_django
+from fc_selector.django.utils import (
+    get_field_safe,
+    is_forward_relation,
+    resolve_field_alias,
+)
 from fc_selector.django.visitors import AstToDjangoQVisitor
 
 logger = logging.getLogger(__name__)
@@ -117,7 +123,7 @@ class DjangoExecutor:
         order_fields = []
         for field in intent.orderby.fields:
             prefix = "-" if field.direction == "desc" else ""
-            django_field = field.field.replace(".", "__")
+            django_field = odata_path_to_django(field.field)
             # Resolve alias to actual model field
             resolved_field = resolve_field_alias(django_field, self.field_aliases)
             order_fields.append(f"{prefix}{resolved_field}")
@@ -150,7 +156,7 @@ class DjangoExecutor:
         """
         properties = []
         for name in dir(model):
-            if name.startswith("_"):
+            if is_private_field(name):
                 continue
             try:
                 # model is already a class, so get attribute directly
@@ -248,8 +254,8 @@ class DjangoExecutor:
                     reason=f"field is not expandable. Allowed: {allowed}",
                 )
 
-            is_forward = self._is_forward_relation(model, relation_name)
-            django_relation = relation_name.replace(".", "__")
+            is_forward = is_forward_relation(model, relation_name)
+            django_relation = odata_path_to_django(relation_name)
 
             if is_forward:
                 select_related.append(django_relation)
@@ -299,7 +305,7 @@ class DjangoExecutor:
                         only_fields.add(f"{django_relation}__{related_model._meta.pk.name}")
                     else:
                         # Fall back to DTO introspection
-                        dto_fields = self._get_dto_fields_from_class(expand_config.get("dto_class"))
+                        dto_fields = get_dto_fields(expand_config.get("dto_class"))
                         if dto_fields:
                             for dto_field in dto_fields:
                                 model_field = self._resolve_dto_field_to_model(related_model, dto_field)
@@ -347,18 +353,6 @@ class DjangoExecutor:
         # If it's a class (DTO), wrap it
         return {"dto_class": config}
 
-    def _get_dto_fields_from_class(self, dto_class) -> list[str] | None:
-        """Get field names from a DTO class."""
-        if not dto_class:
-            return None
-
-        import dataclasses
-
-        if dataclasses.is_dataclass(dto_class):
-            return [f.name for f in dataclasses.fields(dto_class)]
-        elif hasattr(dto_class, "__annotations__"):
-            return list(dto_class.__annotations__.keys())
-        return None
 
     def _resolve_dto_field_to_model(self, model, dto_field: str) -> str | None:
         """Resolve a DTO field name to the actual model field name."""
@@ -441,9 +435,3 @@ class DjangoExecutor:
 
         return queryset, only_fields
 
-    def _is_forward_relation(self, model, field_name: str) -> bool:
-        """Check if field is a forward relation (ForeignKey/OneToOne)."""
-        field = get_field_safe(model, field_name)
-        if not field:
-            return False
-        return hasattr(field, "related_model") and (field.many_to_one or field.one_to_one)

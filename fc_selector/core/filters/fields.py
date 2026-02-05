@@ -17,6 +17,7 @@ from typing import Any
 from uuid import UUID
 
 from fc_selector.core.ast import nodes as ast
+from fc_selector.core.utils import is_private_field
 
 from .expressions import Expression
 
@@ -146,7 +147,7 @@ class Field:
         Returns:
             New Field with appended attribute
         """
-        if name.startswith("_"):
+        if is_private_field(name):
             raise AttributeError(name)
         return Field(f"{self._name}.{name}")
 
