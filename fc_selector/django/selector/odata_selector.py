@@ -403,8 +403,13 @@ class ODataSelector:
         t5 = time.perf_counter()
 
         logger.debug(
-            f"[get_many] build_intent={t1 - t0:.3f}s, execute={t2 - t1:.3f}s, "
-            f"parse_opts={t3 - t2:.3f}s, fetch_db={t4 - t3:.3f}s, to_dtos={t5 - t4:.3f}s"
+            "[get_many] build_intent=%.3fs, execute=%.3fs, "
+            "parse_opts=%.3fs, fetch_db=%.3fs, to_dtos=%.3fs",
+            t1 - t0,
+            t2 - t1,
+            t3 - t2,
+            t4 - t3,
+            t5 - t4,
         )
 
         return dtos
@@ -464,7 +469,12 @@ class ODataSelector:
         results = list(queryset)
         t3 = time.perf_counter()
 
-        logger.debug(f"[get_many_dicts] build_intent={t1 - t0:.3f}s, execute={t2 - t1:.3f}s, fetch_db={t3 - t2:.3f}s")
+        logger.debug(
+            "[get_many_dicts] build_intent=%.3fs, execute=%.3fs, fetch_db=%.3fs",
+            t1 - t0,
+            t2 - t1,
+            t3 - t2,
+        )
 
         return results
 

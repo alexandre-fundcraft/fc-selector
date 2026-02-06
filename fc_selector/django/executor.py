@@ -219,7 +219,7 @@ class DjangoExecutor:
 
         # Debug: log the SQL query
         if logger.isEnabledFor(logging.DEBUG):
-            logger.debug(f"[OData] SQL: {queryset.query}")
+            logger.debug("[OData] SQL: %s", queryset.query)
 
         return queryset
 
@@ -342,9 +342,12 @@ class DjangoExecutor:
     ) -> None:
         """Handle models that have @property methods."""
         logger.warning(
-            f"[OData] ⚠️  Model '{related_model.__name__}' has @property methods: {properties}. "
-            f"Skipping only() optimization for '{relation_name}' to avoid N+1 queries. "
-            f"Consider adding explicit 'only_fields' config or select_related for nested relations."
+            "[OData] ⚠️  Model '%s' has @property methods: %s. "
+            "Skipping only() optimization for '%s' to avoid N+1 queries. "
+            "Consider adding explicit 'only_fields' config or select_related for nested relations.",
+            related_model.__name__,
+            properties,
+            relation_name,
         )
         skip_only_relations.add(django_relation)
         DjangoExecutor._auto_add_onetoone_relations(related_model, django_relation, select_related)
@@ -360,7 +363,8 @@ class DjangoExecutor:
                 if nested_path not in select_related:
                     select_related.append(nested_path)
                     logger.debug(
-                        f"[OData] Auto-added select_related for '{nested_path}' (OneToOne on model with properties)"
+                        "[OData] Auto-added select_related for '%s' (OneToOne on model with properties)",
+                        nested_path,
                     )
 
     @staticmethod
