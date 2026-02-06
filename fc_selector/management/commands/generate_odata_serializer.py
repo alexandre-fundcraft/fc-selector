@@ -151,7 +151,7 @@ class Command(BaseODataGeneratorCommand):
         """Collect and deduplicate imports for the combined serializer file."""
         imports = {"from django_odata.serializers import ODataModelSerializer"}
 
-        for model_path, info in model_info.items():
+        for _, info in model_info.items():
             model_app = info["app_label"]
             model_name = info["model_name"]
             import_statement = self._get_model_import(model_app, model_name, primary_app)
@@ -180,7 +180,7 @@ class Command(BaseODataGeneratorCommand):
         """Extract class definitions from serializer code, skipping imports and docstrings."""
         class_definitions = []
 
-        for model_path, code in serializer_codes.items():
+        for _, code in serializer_codes.items():
             lines = code.split("\n")
             code_start = self._skip_docstring(lines)
             class_code = self._extract_class_from_lines(lines[code_start:])

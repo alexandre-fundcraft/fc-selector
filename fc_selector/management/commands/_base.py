@@ -228,7 +228,7 @@ class BaseODataGeneratorCommand(BaseCommand):
         """
         models_in_file = set()
         if options.get("single", False):
-            for model_path, model_data in all_model_info.items():
+            for _, model_data in all_model_info.items():
                 app_config = apps.get_app_config(model_data["model"]._meta.app_label)
                 full_path = f"{app_config.name}.{model_data['model'].__name__}"
                 models_in_file.add(full_path)
