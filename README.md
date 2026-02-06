@@ -808,6 +808,56 @@ This design choice makes the library ideal for:
 
 If you need full CRUD operations, consider using the library alongside separate write endpoints or choose a different library.
 
+
+## License
+
+**fc-selector** is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
+
+### What does this mean?
+
+✅ **You CAN:**
+- Use this software for free (commercial or non-commercial)
+- Modify the source code
+- Distribute it
+- Use it in your SaaS/web services
+
+⚠️ **You MUST:**
+- **Publish your modifications** if you use this software (even if only on your server)
+- Make your source code available under AGPL-3.0
+- Include the original copyright and license notices
+- State significant changes you made
+
+❌ **You CANNOT:**
+- Integrate this code into proprietary software without publishing your code
+- Remove or modify license notices
+- Hold the authors liable
+
+### Why AGPL-3.0?
+
+The AGPL-3.0 ensures that improvements and modifications to fc-selector benefit the entire community. 
+Even if you only use it internally in a web service (like a Django API), you must share your changes.
+
+This prevents "cloud-washing" where companies use open source code in SaaS products without contributing back.
+
+### Commercial License
+
+If you need to use fc-selector in a proprietary application without the AGPL obligations, 
+please contact us for a commercial license:
+
+📧 **Contact:** alexandre.busquets@fundcraft.lu
+
+**Commercial licenses include:**
+- No copyleft requirements
+- Private modifications allowed  
+- Priority support
+- Custom features development
+- Pricing starts at €10,000
+
+### Full License Text
+
+See the [LICENSE](LICENSE) file for the complete GNU Affero General Public License v3.0 text.
+
+
 ## Changelog
 
 ### Current Version
