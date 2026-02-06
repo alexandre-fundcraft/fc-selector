@@ -5,7 +5,6 @@ This module provides utilities to run all OData expression tests
 and generate comprehensive test reports.
 """
 
-import random
 from datetime import UTC, datetime, timedelta
 
 from django.db import connection
@@ -217,17 +216,18 @@ class ODataTestDataFactory:
         base_date = datetime(2020, 1, 1, tzinfo=UTC)
 
         for i in range(count):
+            # Deterministic test data generation based on index
             record = {
                 "id": i + 1,
                 "name": f"Product {i:04d}",
-                "category": random.choice(categories),
+                "category": categories[i % len(categories)],
                 "description": f"Description for product {i} with various keywords",
-                "price": round(random.uniform(1.0, 1000.0), 2),
-                "quantity": random.randint(0, 100),
-                "is_active": random.choice([True, False]),
-                "status": random.choice(statuses),
-                "created_at": base_date + timedelta(days=random.randint(0, 1460)),
-                "rating": (round(random.uniform(1.0, 5.0), 1) if random.random() > 0.2 else None),
+                "price": round(1.0 + (i % 1000), 2),
+                "quantity": i % 101,
+                "is_active": i % 2 == 0,
+                "status": statuses[i % len(statuses)],
+                "created_at": base_date + timedelta(days=i % 1460),
+                "rating": round(1.0 + (i % 41) / 10, 1) if i % 5 != 0 else None,
             }
             test_data.append(record)
 

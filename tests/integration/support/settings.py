@@ -16,7 +16,7 @@ DATABASES = {
 }
 
 # Minimal required settings
-SECRET_KEY = "test-secret-key-for-testing-only"
+SECRET_KEY = "test-secret-key-for-testing-only"  # nosec B105 - Test environment
 DEBUG = True  # skipcq: PY-S0900 - Test environment
 ALLOWED_HOSTS = ["*"]
 
