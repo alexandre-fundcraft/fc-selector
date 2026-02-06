@@ -23,7 +23,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "django>=4.2",
+    "django>=4.2.17",  # Minimum version with security fixes (CVE-2025-64459)
     "djangorestframework>=3.12.0",
     "drf-spectacular>=0.29.0",
     "python-dateutil>=2.8.2",
@@ -111,6 +111,8 @@ ignore = [
 "fc_selector/protocols/**/*.py" = ["PLC0415"]
 # Allow inline imports in management commands
 "fc_selector/management/**/*.py" = ["PLC0415"]
+# Allow inline imports in example app
+"example/**/*.py" = ["PLC0415"]
 
 [tool.ruff.format]
 quote-style = "double"

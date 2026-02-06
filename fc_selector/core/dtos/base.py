@@ -356,8 +356,9 @@ class BaseODataDTO:
                 related_manager = getattr(instance, field_name)
                 related_objs = list(related_manager.all())
                 logger.debug(
-                    f"Potential N+1 query: '{field_name}' not prefetched for "
-                    f"{instance.__class__.__name__}. Consider using prefetch_related()."
+                    "Potential N+1 query: '%s' not prefetched for %s. Consider using prefetch_related().",
+                    field_name,
+                    instance.__class__.__name__,
                 )
 
             data[field_name] = [

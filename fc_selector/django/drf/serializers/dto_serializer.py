@@ -380,9 +380,19 @@ class ODataDTOSerializer(serializers.Serializer):
 
     @staticmethod
     def _try_import_serializer_exclusions(module_name: str, serializer_class_name: str) -> set[str] | None:
-        """Try to import a serializer class and extract its Meta.exclude fields."""
+        """
+        Try to import a serializer class and extract its Meta.exclude fields.
+
+        Security note: module_name is derived from dto_class.__module__ and transformed
+        to predictable serializer module paths (e.g., ".dto_serializers"). This is safe
+        because it's not user-controlled input but internal framework introspection.
+        """
+        # Validate module name contains only safe characters (alphanumeric, dots, underscores)
+        if not all(c.isalnum() or c in "._" for c in module_name):  # nosec B105 - Not password validation
+            return None
+
         try:
-            module = importlib.import_module(module_name)
+            module = importlib.import_module(module_name)  # Safe: validated module name from DTO class
             if hasattr(module, serializer_class_name):
                 serializer_class = getattr(module, serializer_class_name)
                 if hasattr(serializer_class, "Meta") and hasattr(serializer_class.Meta, "exclude"):
