@@ -16,6 +16,7 @@ Modifications:
 """
 
 # pylint: disable=function-redefined  # SLY parser grammar allows multiple definitions for same non-terminal
+# flake8: noqa: F821, F811  # SLY provides '_' decorator automatically, allows function redefinitions
 
 import re
 from collections.abc import Callable
