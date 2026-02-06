@@ -237,7 +237,7 @@ class BaseODataGeneratorCommand(BaseCommand):
     @staticmethod
     @abstractmethod
     def _generate_all_codes(
-        self, all_model_info: dict, excluded_edges: set, models_in_file: set, options: dict
+        all_model_info: dict, excluded_edges: set, models_in_file: set, options: dict
     ) -> dict:
         """Generate code for all models.
 
@@ -255,7 +255,6 @@ class BaseODataGeneratorCommand(BaseCommand):
     @staticmethod
     @abstractmethod
     def _write_files(
-        self,
         generated_codes: dict[str, str],
         output_dir: Path,
         single: bool,

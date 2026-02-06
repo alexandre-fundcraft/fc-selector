@@ -365,7 +365,6 @@ class DjangoExecutor:
 
     @staticmethod
     def _add_explicit_only_fields(
-        self,
         expand_config: dict,
         django_relation: str,
         related_model,
