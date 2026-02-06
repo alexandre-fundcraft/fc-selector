@@ -109,9 +109,9 @@ class DjangoExecutor:
             q_object = visitor.visit(intent.filter.ast)
             return queryset.filter(q_object)
 
-        except (core_ex.SelectorError, core_ex.QueryError, ValueError, TypeError) as e:
-            if isinstance(e, core_ex.SelectorError):
-                raise
+        except core_ex.SelectorError:
+            raise
+        except (ValueError, TypeError) as e:
             raise core_ex.QueryError(f"Error applying filter: {e}") from e
 
     def _apply_ordering(self, queryset: QuerySet, intent: QueryIntent) -> QuerySet:

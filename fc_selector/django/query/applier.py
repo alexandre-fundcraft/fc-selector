@@ -86,7 +86,7 @@ class QueryApplier:
                 original_exception=e,
             ) from e
 
-        except (core_ex.QueryError, core_ex.SelectorError) as e:
+        except core_ex.SelectorError as e:
             raise ODataFilterError(
                 message=str(e),
                 code="QueryError",
