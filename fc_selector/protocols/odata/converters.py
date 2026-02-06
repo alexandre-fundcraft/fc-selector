@@ -73,8 +73,8 @@ def odata_query_to_intent(query: ODataQuery) -> QueryIntent:
 
         try:
             top_value = int(query.top.value)
-        except (ValueError, TypeError):
-            raise InvalidValueError(query.top.value, "integer", "$top")
+        except (ValueError, TypeError) as exc:
+            raise InvalidValueError(query.top.value, "integer", "$top") from exc
 
         if top_value < 0:
             raise InvalidValueError(query.top.value, "non-negative integer", "$top")
@@ -90,8 +90,8 @@ def odata_query_to_intent(query: ODataQuery) -> QueryIntent:
 
         try:
             skip_value = int(query.skip.value)
-        except (ValueError, TypeError):
-            raise InvalidValueError(query.skip.value, "integer", "$skip")
+        except (ValueError, TypeError) as exc:
+            raise InvalidValueError(query.skip.value, "integer", "$skip") from exc
 
         if skip_value < 0:
             raise InvalidValueError(query.skip.value, "non-negative integer", "$skip")

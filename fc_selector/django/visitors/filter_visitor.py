@@ -199,9 +199,9 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
         """Generic visitor for temporal values (Date, DateTime, Time)."""
         try:
             return Value(node.py_val)
-        except ValueError:
+        except ValueError as exc:
             type_name = _TEMPORAL_TYPES.get(type(node), type(node).__name__)
-            raise core_ex.InvalidValueError(node.val, expected_type=type_name)
+            raise core_ex.InvalidValueError(node.val, expected_type=type_name) from exc
 
     def visit_Date(self, node: ast.Date) -> Value:  # noqa: N802
         ":meta private:"
