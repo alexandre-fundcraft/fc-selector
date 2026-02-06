@@ -555,7 +555,7 @@ class QueryBuilder:
         """Build expand intent from current builder state."""
         if self._expand_objects:
             return self._build_expand_from_objects()
-        elif self._expand:
+        if self._expand:
             return self._build_expand_from_strings()
 
         return None
@@ -582,7 +582,7 @@ class QueryBuilder:
         """Build orderby intent from current builder state."""
         if self._orderby_objects:
             return self._build_orderby_from_objects()
-        elif self._orderby:
+        if self._orderby:
             return self._build_orderby_from_strings()
 
         return None

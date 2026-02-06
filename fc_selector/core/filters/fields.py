@@ -34,26 +34,25 @@ def _to_literal(value: Any) -> ast._Literal:
     """
     if value is None:
         return ast.Null()
-    elif isinstance(value, bool):
+    if isinstance(value, bool):
         return ast.Boolean(val="true" if value else "false")
-    elif isinstance(value, int):
+    if isinstance(value, int):
         return ast.Integer(val=str(value))
-    elif isinstance(value, float):
+    if isinstance(value, float):
         return ast.Float(val=str(value))
-    elif isinstance(value, str):
+    if isinstance(value, str):
         # Don't add quotes - the Django visitor handles SQL quoting via Value()
         return ast.String(val=value)
-    elif isinstance(value, date) and not isinstance(value, datetime):
+    if isinstance(value, date) and not isinstance(value, datetime):
         return ast.Date(val=value.isoformat())
-    elif isinstance(value, datetime):
+    if isinstance(value, datetime):
         return ast.DateTime(val=value.isoformat())
-    elif isinstance(value, time):
+    if isinstance(value, time):
         return ast.Time(val=value.isoformat())
-    elif isinstance(value, UUID):
+    if isinstance(value, UUID):
         return ast.GUID(val=str(value))
-    else:
-        # Fallback to string - don't add quotes, Django handles SQL quoting
-        return ast.String(val=str(value))
+    # Fallback to string - don't add quotes, Django handles SQL quoting
+    return ast.String(val=str(value))
 
 
 def _to_literal_list(values: Sequence[Any]) -> ast.List:

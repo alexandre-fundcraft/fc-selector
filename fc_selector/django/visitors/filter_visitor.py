@@ -307,12 +307,11 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
         if isinstance(node.right, ast.Null):
             if isinstance(node.comparator, ast.Eq):
                 return lookups.IsNull(lhs, True)
-            elif isinstance(node.comparator, ast.NotEq):
+            if isinstance(node.comparator, ast.NotEq):
                 return lookups.IsNull(lhs, False)
-            else:
-                raise core_ex.TypeMismatchError(
-                    expected="Eq or NotEq for null comparison", actual=node.comparator.__class__.__name__
-                )
+            raise core_ex.TypeMismatchError(
+                expected="Eq or NotEq for null comparison", actual=node.comparator.__class__.__name__
+            )
 
         django_cls = self.visit(node.comparator)
         rhs = self.visit(node.right)
@@ -412,15 +411,14 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
                 subquery = subquery.filter(subquery_filter)
             return Exists(subquery)
 
-        elif isinstance(node.operator, ast.All):
+        if isinstance(node.operator, ast.All):
             # If ALL items in the collection must match, we invert the condition and use NOT EXISTS():
             if subquery_filter is not None:
                 # Negate the filter condition for ALL semantics
                 subquery = subquery.filter(~subquery_filter)
             return Exists(subquery, negated=True)
 
-        else:
-            raise NotImplementedError()
+        raise NotImplementedError()
 
     def djangofunc_contains(self, field: ast.Node, substr: ast.Node) -> lookups.Contains:
         ":meta private:"

@@ -135,10 +135,9 @@ class ODataSelector:
         if self.filterable_fields:
             all_fields = self._get_model_field_names()
             return [f for f in all_fields if f not in self.filterable_fields]
-        elif self.non_filterable_fields:
+        if self.non_filterable_fields:
             return list(self.non_filterable_fields)
-        else:
-            return []
+        return []
 
     def get_non_sortable_fields(self) -> list[str]:
         """Get list of fields that cannot be used in $orderby.
@@ -151,10 +150,9 @@ class ODataSelector:
         if self.sortable_fields:
             all_fields = self._get_model_field_names()
             return [f for f in all_fields if f not in self.sortable_fields]
-        elif self.non_sortable_fields:
+        if self.non_sortable_fields:
             return list(self.non_sortable_fields)
-        else:
-            return []
+        return []
 
     @staticmethod
     def is_filterable() -> bool:

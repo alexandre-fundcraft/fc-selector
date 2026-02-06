@@ -150,8 +150,7 @@ class ODataDTOSerializer(serializers.Serializer):
             # Use SerializerMethodField to manually serialize nested DTOs
             if is_many:
                 return serializers.ListField(child=serializers.DictField(), **field_kwargs)
-            else:
-                return serializers.DictField(**field_kwargs)
+            return serializers.DictField(**field_kwargs)
 
         # Map Python types to DRF field types
         type_map = {
@@ -397,10 +396,9 @@ class ODataDTOSerializer(serializers.Serializer):
         """Convert a field value, recursively handling DTOs."""
         if is_dataclass(value):
             return self._dto_to_dict(value)
-        elif isinstance(value, list) and value and is_dataclass(value[0]):
+        if isinstance(value, list) and value and is_dataclass(value[0]):
             return [self._dto_to_dict(item) for item in value]
-        else:
-            return value
+        return value
 
     def to_internal_value(self, data):
         """

@@ -140,7 +140,7 @@ class DjangoExecutor:
 
         if limit is not None:
             return queryset[offset : offset + limit]
-        elif offset > 0:
+        if offset > 0:
             return queryset[offset:]
 
         return queryset

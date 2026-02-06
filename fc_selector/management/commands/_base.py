@@ -367,7 +367,7 @@ class BaseODataGeneratorCommand(BaseCommand):
         if requested_options.get("models"):
             requested_model_path = requested_options["models"][0]
             return requested_model_path.split(".")[-1]
-        elif requested_options.get("apps"):
+        if requested_options.get("apps"):
             app_label = requested_options["apps"][0]
             try:
                 app_config = apps.get_app_config(app_label)

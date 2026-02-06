@@ -450,15 +450,14 @@ class ODataParser(Parser):
             # over      Attribute(Id(A), Attribute(Id(created_by), 'name'))
             naive_attr = ast.Attribute(p[0], p[1])
             return self._reverse_attributes(naive_attr)
-        elif isinstance(p[1], ast.CollectionLambda):
+        if isinstance(p[1], ast.CollectionLambda):
             # Very similar for CollectionLambdas:
             # We prefer the CollectionLambda to define its complete owner
             # instead of being a deeply nested attribute:
             owner: ast.Identifier = p[1].owner
             new_owner = ast.Attribute(p[0], owner.name)
             return ast.CollectionLambda(new_owner, p[1].operator, p[1].lambda_)
-        else:
-            return ast.Attribute(p[0], p[1].name)
+        return ast.Attribute(p[0], p[1].name)
 
     @_("ODATA_IDENTIFIER")
     def entity_navigation_property(self, p):

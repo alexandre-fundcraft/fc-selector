@@ -200,10 +200,10 @@ class Command(BaseODataGeneratorCommand):
             if line.strip().startswith('"""'):
                 if not in_docstring:
                     in_docstring = True
-                elif line.strip().endswith('"""') and len(line.strip()) > 3:
+                if line.strip().endswith('"""') and len(line.strip()) > 3:
                     code_start = i + 1
                     break
-                elif line.strip() == '"""':
+                if line.strip() == '"""':
                     code_start = i + 1
                     break
             elif not in_docstring:
@@ -221,7 +221,7 @@ class Command(BaseODataGeneratorCommand):
             line = line.rstrip()
             if line.startswith("from ") or line.startswith("import "):
                 continue
-            elif line.startswith("class ") or current_class:
+            if line.startswith("class ") or current_class:
                 current_class.append(line)
             elif line.strip() == "" and current_class:
                 break

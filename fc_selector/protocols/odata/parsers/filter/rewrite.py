@@ -63,9 +63,8 @@ class AliasRewriter(visitor.NodeTransformer):
         """:meta private:"""
         if node in self.replacements:
             return cast(ast.Node, self.replacements[node])
-        else:
-            new_owner = self.visit(node.owner)
-            return ast.Attribute(new_owner, node.attr)
+        new_owner = self.visit(node.owner)
+        return ast.Attribute(new_owner, node.attr)
 
 
 class IdentifierStripper(visitor.NodeTransformer):
@@ -84,7 +83,7 @@ class IdentifierStripper(visitor.NodeTransformer):
         """:meta private:"""
         if node.owner == self.strip:
             return ast.Identifier(node.attr)
-        elif isinstance(node.owner, ast.Attribute):
+        if isinstance(node.owner, ast.Attribute):
             return ast.Attribute(self.visit(node.owner), node.attr)
 
         return node
