@@ -294,7 +294,7 @@ class ODataSelectorViewSetMixin:
             raise NotImplementedError(f"{self.__class__.__name__} must define 'selector_class'")
         if not callable(self.selector_class):
             raise TypeError(f"selector_class must be callable, got {type(self.selector_class)}")
-        return self.selector_class()
+        return self.selector_class()  # skipcq: PYL-E1102 - Verified callable above
 
     @staticmethod
     def get_list_schema_decorator():

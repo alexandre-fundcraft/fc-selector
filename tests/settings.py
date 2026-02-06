@@ -10,7 +10,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
 
 SECRET_KEY = "test-secret-key-for-unit-tests-only"
-DEBUG = True
+DEBUG = True  # skipcq: PY-S0900 - Test environment
 ALLOWED_HOSTS = ["*"]
 
 INSTALLED_APPS = [

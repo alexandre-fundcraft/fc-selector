@@ -11,7 +11,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = "django-insecure-example-key-for-development-only"
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = True  # skipcq: PY-S0900 - Example/development environment only
 
 ALLOWED_HOSTS = ["*"]
 
