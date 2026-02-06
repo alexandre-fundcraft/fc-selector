@@ -44,7 +44,7 @@ class Command(BaseODataGeneratorCommand):
         for model_path, model_data in all_model_info.items():
             model = model_data["model"]
             info = model_data["info"]
-            app_config = apps.get_app_config(model._meta.app_label)
+            app_config = apps.get_app_config(model._meta.app_label)  # noqa: W0212 - Django's public API
             app_label = app_config.name
 
             # Filter relationships to exclude circular ones

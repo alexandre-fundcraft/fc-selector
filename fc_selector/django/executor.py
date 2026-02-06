@@ -183,13 +183,13 @@ class DjangoExecutor:
         if intent.expand and intent.expand.has_relations():
             queryset, expand_only_fields, skip_only_for_relations = self._apply_expands(queryset, intent.expand)
             only_fields.update(expand_only_fields)
-            logger.debug(f"[OData] expand_only_fields: {expand_only_fields}")
+            logger.debug("[OData] expand_only_fields: %s", expand_only_fields)
 
         # 2. Select (field limiting) - collect main model fields for only()
         if intent.select and intent.select.has_fields():
             queryset, select_only_fields = self._apply_selects(queryset, intent)
             only_fields.update(select_only_fields)
-            logger.debug(f"[OData] select_only_fields: {select_only_fields}")
+            logger.debug("[OData] select_only_fields: %s", select_only_fields)
 
         # 3. Apply optimization: .values() for dicts or .only() for model instances
         if only_fields:
@@ -204,11 +204,11 @@ class DjangoExecutor:
             if safe_only_fields:
                 if use_values:
                     # VALUES MODE: Return dicts instead of model instances (much faster)
-                    logger.debug(f"[OData] using values() with fields: {safe_only_fields}")
+                    logger.debug("[OData] using values() with fields: %s", safe_only_fields)
                     queryset = queryset.values(*list(safe_only_fields))
                 else:
                     # STANDARD MODE: Return deferred model instances
-                    logger.debug(f"[OData] final only_fields: {safe_only_fields}")
+                    logger.debug("[OData] final only_fields: %s", safe_only_fields)
                     queryset = queryset.only(*list(safe_only_fields))
         elif use_values:
             # No specific fields selected but values mode requested - get all fields

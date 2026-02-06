@@ -15,8 +15,7 @@ class QueryOption:
     value: Any
     name: str = ""
 
-    @staticmethod
-    def validate() -> bool:
+    def validate(self) -> bool:
         """Validate the query option."""
         raise NotImplementedError
 

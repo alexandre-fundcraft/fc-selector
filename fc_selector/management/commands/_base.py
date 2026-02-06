@@ -130,7 +130,7 @@ class BaseODataGeneratorCommand(BaseCommand):
                 model = BaseODataGeneratorCommand._load_model_from_path(model_path)
                 models_to_generate.append(model)
                 if not output_dir:
-                    app_label = model._meta.app_label
+                    app_label = model._meta.app_label  # noqa: W0212 - Django's public API
                     app_config = apps.get_app_config(app_label)
                     app_path = Path(app_config.module.__file__).parent
                     output_dir = app_path / self.output_folder
@@ -180,7 +180,7 @@ class BaseODataGeneratorCommand(BaseCommand):
         relationships_map = {}
 
         for model in models:
-            model_path = f"{model._meta.app_label}.{model.__name__}"
+            model_path = f"{model._meta.app_label}.{model.__name__}"  # noqa: W0212 - Django's public API
             info = get_all_model_info(model)
             all_model_info[model_path] = {
                 "model": model,
@@ -229,7 +229,7 @@ class BaseODataGeneratorCommand(BaseCommand):
         models_in_file = set()
         if options.get("single", False):
             for _, model_data in all_model_info.items():
-                app_config = apps.get_app_config(model_data["model"]._meta.app_label)
+                app_config = apps.get_app_config(model_data["model"]._meta.app_label)  # noqa: W0212 - Django's public API
                 full_path = f"{app_config.name}.{model_data['model'].__name__}"
                 models_in_file.add(full_path)
         return models_in_file

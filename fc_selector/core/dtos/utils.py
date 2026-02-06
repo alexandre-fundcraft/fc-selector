@@ -19,7 +19,7 @@ def get_dto_fields(dto_class: type) -> list[str]:
 
     # If it has the internal cached method from BaseODataDTO
     if hasattr(dto_class, "_get_dto_fields"):
-        return list(dto_class._get_dto_fields())
+        return list(dto_class._get_dto_fields())  # noqa: W0212 - BaseODataDTO internal method
 
     if dataclasses.is_dataclass(dto_class):
         return [f.name for f in dataclasses.fields(dto_class)]

@@ -97,7 +97,7 @@ class QueryApplier:
         except (ValueError, TypeError, AttributeError, KeyError) as e:
             # Catch type conversion, attribute access, and dictionary key errors
             # that may occur during query parsing or execution
-            logger.error(f"Error processing OData query parameters: {e}")
+            logger.error("Error processing OData query parameters: %s", e)
             raise ODataFilterError(
                 message=f"Error processing OData query: {str(e)}",
                 code="InvalidQuery",

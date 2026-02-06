@@ -74,7 +74,7 @@ def clear_dto_caches() -> None:
     _DTO_FIELDS_CACHE.clear()
     cls = BaseODataDTO
     if hasattr(cls, "_parse_nested_expand_options"):
-        cls._parse_nested_expand_options.cache_clear()
+        cls._parse_nested_expand_options.cache_clear()  # noqa: W0212 - BaseODataDTO internal method
 
 
 class RecursionLimitExceededError(Exception):

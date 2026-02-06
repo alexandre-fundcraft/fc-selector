@@ -42,7 +42,7 @@ def reverse_relationship(relationship_expr: str, root_model: type[Model]) -> tup
             )
 
         try:
-            related_field = related_model._meta.get_field(step)
+            related_field = related_model._meta.get_field(step)  # noqa: W0212 - Django's public API
         except FieldDoesNotExist:
             raise core_ex.FieldNotFoundError(step, related_model.__name__)
 

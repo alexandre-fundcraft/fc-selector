@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 def get_field_safe(model: type[models.Model], field_name: str) -> "Field | None":
     """Safely get a field, returning None if not found."""
     try:
-        return model._meta.get_field(field_name)
+        return model._meta.get_field(field_name)  # noqa: W0212 - Django's public API
     except FieldDoesNotExist:
         return None
 
@@ -28,7 +28,7 @@ def get_related_model(model: type[models.Model], relation_name: str) -> type[mod
         return cast(type[models.Model], field.related_model)
 
     # Try reverse relation
-    for rel in model._meta.related_objects:
+    for rel in model._meta.related_objects:  # noqa: W0212 - Django's public API
         if rel.get_accessor_name() == relation_name:
             return cast(type[models.Model], rel.related_model)
 

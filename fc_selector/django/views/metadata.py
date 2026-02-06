@@ -173,7 +173,7 @@ class ODataMetadataView(View):
         lines.append("        </Key>")
 
         # Get fields from model
-        for field in model_class._meta.get_fields():
+        for field in model_class._meta.get_fields():  # noqa: W0212 - Django's public API
             if isinstance(field, (models.ManyToOneRel, models.ManyToManyRel)):
                 # Reverse relations - only add if in expandable_fields
                 related_name = field.get_accessor_name()
@@ -274,7 +274,7 @@ class ODataMetadataView(View):
             if selector.model:
                 model_to_entity_set[selector.model] = entity_set_name
 
-        for field in model_class._meta.get_fields():
+        for field in model_class._meta.get_fields():  # noqa: W0212 - Django's public API
             if isinstance(field, models.ForeignKey):
                 if field.name not in expandable_fields:
                     continue

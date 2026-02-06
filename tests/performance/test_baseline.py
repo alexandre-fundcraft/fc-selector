@@ -256,7 +256,7 @@ class TestSerializationPerformance:
 
 
 # Baseline metrics to document
-"""
+BASELINE_METRICS_DOCUMENTATION = """
 BASELINE PERFORMANCE METRICS (with drf-flex-fields)
 ====================================================
 

@@ -151,7 +151,7 @@ if HAS_SPECTACULAR:
             if view_class and issubclass(view_class, ODataSelectorViewSetMixin):
                 # Mark this view for OData parameter injection
                 if not hasattr(callback, "_odata_params_added"):
-                    callback._odata_params_added = True
+                    callback._odata_params_added = True  # noqa: W0212 - Setting marker attribute
 
         return endpoints
 
