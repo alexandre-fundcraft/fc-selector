@@ -23,7 +23,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "django>=4.2.17",  # Minimum version with security fixes (CVE-2025-64459)
+    "django>=4.2.20",  # Minimum version with security fixes (CVE-2026-1287, CVE-2026-1312)
     "djangorestframework>=3.12.0",
     "drf-spectacular>=0.29.0",
     "python-dateutil>=2.8.2",
