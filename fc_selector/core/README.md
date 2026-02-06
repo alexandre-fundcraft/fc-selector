@@ -17,7 +17,7 @@ This package contains all the central OData logic that **does not depend on Djan
    - [Filter](#5-filter-filter-engine)
    - [DTOs](#6-dtos-data-transfer-objects)
    - [Selector](#7-selector-base-selector)
-   - [Utils](#8-utils)
+   - [Utils](#10-utils)
 3. [Architecture Diagram](#architecture-diagram)
 4. [Data Flow](#data-flow)
 5. [Usage Examples](#usage-examples)

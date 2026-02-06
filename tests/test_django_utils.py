@@ -6,6 +6,7 @@ Covers:
 - fc_selector/django/visitors/utils.py
 - fc_selector/django/query/applier.py
 """
+# pylint: disable=redefined-outer-name  # pytest fixtures
 
 import pytest
 

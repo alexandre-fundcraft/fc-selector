@@ -3,6 +3,7 @@ Tests for OData metadata views.
 
 Covers fc_selector/django/views/metadata.py
 """
+# pylint: disable=redefined-outer-name  # pytest fixtures
 
 import json
 

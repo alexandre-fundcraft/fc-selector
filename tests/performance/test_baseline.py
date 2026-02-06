@@ -6,6 +6,7 @@ a baseline for comparison after implementing native field selection/expansion.
 
 Run with: pytest tests/performance/test_baseline.py -v --benchmark-only
 """
+# pylint: disable=redefined-outer-name  # pytest fixtures
 
 from dataclasses import dataclass
 from typing import Optional

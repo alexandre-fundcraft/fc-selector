@@ -4,7 +4,7 @@ This guide shows complete examples of using ODataSelector + QueryBuilder + DTOs 
 
 ## Table of Contents
 1. [Quick Start](#quick-start)
-2. [QueryBuilder](#odataquerybuilder)
+2. [QueryBuilder](#querybuilder)
 3. [Complete ViewSet Examples](#complete-viewset-examples)
 4. [Custom Actions](#custom-actions)
 5. [Request Examples](#request-examples)

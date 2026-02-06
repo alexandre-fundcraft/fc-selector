@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD024 -->
 # The Selector Pattern
 
 ## What is a Selector?

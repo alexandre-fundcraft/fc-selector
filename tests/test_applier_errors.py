@@ -3,6 +3,7 @@ Tests for applier.py error handling paths.
 
 Covers fc_selector/django/query/applier.py error handling branches.
 """
+# pylint: disable=redefined-outer-name  # pytest fixtures
 
 from unittest.mock import patch
 

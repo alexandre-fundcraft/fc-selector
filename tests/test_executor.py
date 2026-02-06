@@ -3,6 +3,7 @@ Tests for Django executor module.
 
 Covers fc_selector/django/executor.py
 """
+# pylint: disable=redefined-outer-name  # pytest fixtures
 
 import pytest
 from django.db.models import QuerySet

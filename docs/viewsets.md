@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD024 -->
 # ViewSets Integration
 
 Expose your selectors as REST API endpoints using Django REST Framework.

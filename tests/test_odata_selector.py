@@ -3,6 +3,7 @@ Tests for ODataSelector.
 
 Covers fc_selector/django/selector/odata_selector.py
 """
+# pylint: disable=redefined-outer-name  # pytest fixtures
 
 import pytest
 from django.db.models import QuerySet

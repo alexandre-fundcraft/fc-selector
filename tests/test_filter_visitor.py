@@ -3,6 +3,7 @@ Tests for Django filter visitor (AST to Q conversion).
 
 Covers fc_selector/django/visitors/filter_visitor.py
 """
+# pylint: disable=redefined-outer-name  # pytest fixtures
 
 import pytest
 from django.db.models import F, Q, Value
