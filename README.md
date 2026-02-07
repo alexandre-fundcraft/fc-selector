@@ -214,13 +214,13 @@ The core layer is protocol-agnostic. OData is one adapter; the `QueryIntent` mod
 
 ## Documentation
 
-Full documentation is available via MkDocs:
+Full documentation: **https://alexandre-fundcraft.github.io/fc-selector/**
+
+To serve locally:
 
 ```bash
 make docs-serve  # http://localhost:9999
 ```
-
-Key docs: [Architecture](docs/architecture.md) | [Quick Start](docs/quickstart.md) | [Query Builder](docs/query-builder.md) | [Selectors](docs/selectors.md) | [DTOs](docs/dtos.md)
 
 ## License
 
