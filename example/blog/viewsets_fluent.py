@@ -25,12 +25,16 @@ from .dto_serializers import (
     AuthorDTOSerializer,
     BlogPostDTOSerializer,
     CategoryDTOSerializer,
+    CommentDTOSerializer,
+    TagDTOSerializer,
     UserDTOSerializer,
 )
 from .selectors.blog_post import (
     AuthorSelector,
     BlogPostSelector,
     CategorySelector,
+    CommentSelector,
+    TagSelector,
     UserSelector,
 )
 
@@ -255,3 +259,79 @@ class CategoryViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
                 selector=selector,
             )
         )
+
+
+@extend_schema_view(
+    list=extend_schema(tags=["comments"], parameters=ODATA_PARAMETERS),
+    retrieve=extend_schema(tags=["comments"], parameters=ODATA_RETRIEVE_PARAMETERS),
+    by_post=extend_schema(tags=["comments"], parameters=ODATA_PARAMETERS),
+    approved=extend_schema(tags=["comments"], parameters=ODATA_PARAMETERS),
+)
+class CommentViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
+    """
+    ViewSet for Comments with OData support.
+
+    Uses the type-safe fluent API for filters.
+    The 'post' expand uses BlogPostSummaryDTO (DB fields only),
+    which enables hybrid values mode for faster queries.
+    """
+
+    serializer_class = CommentDTOSerializer
+    permission_classes = [AllowAny]
+    selector_class = CommentSelector
+    odata_entity_set_name = "comments"
+
+    @action(detail=False, methods=["get"], url_path="by-post/(?P<post_id>[^/.]+)")
+    def by_post(self, request, post_id=None):
+        """Get comments for a specific post."""
+        query_string = request.META.get("QUERY_STRING", "")
+
+        selector = CommentSelector()
+        # Fluent API: nested field
+        query = QueryBuilder(query_string).and_where(Field("post.id").eq(int(post_id)))
+        dtos = selector.get_many(query)
+
+        serializer = self.get_serializer(dtos, many=True)
+        return Response(
+            build_odata_response(
+                request=request,
+                serializer_data=serializer.data,
+                query_string=query_string,
+                entity_set_name=self.odata_entity_set_name,
+                selector=selector,
+            )
+        )
+
+    @action(detail=False, methods=["get"])
+    def approved(self, request):
+        """Get only approved comments."""
+        query_string = request.META.get("QUERY_STRING", "")
+
+        selector = CommentSelector()
+        # Fluent API: boolean field
+        query = QueryBuilder(query_string).and_where(Field("is_approved").eq(True))
+        dtos = selector.get_many(query)
+
+        serializer = self.get_serializer(dtos, many=True)
+        return Response(
+            build_odata_response(
+                request=request,
+                serializer_data=serializer.data,
+                query_string=query_string,
+                entity_set_name=self.odata_entity_set_name,
+                selector=selector,
+            )
+        )
+
+
+@extend_schema_view(
+    list=extend_schema(tags=["tags"], parameters=ODATA_PARAMETERS),
+    retrieve=extend_schema(tags=["tags"], parameters=ODATA_RETRIEVE_PARAMETERS),
+)
+class TagViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
+    """Read-only ViewSet for Tags with OData support."""
+
+    serializer_class = TagDTOSerializer
+    permission_classes = [AllowAny]
+    selector_class = TagSelector
+    odata_entity_set_name = "tags"

@@ -22,9 +22,11 @@ from fc_selector.django.selector import ODataSelector
 Author = apps.get_model("blog", "Author")
 BlogPost = apps.get_model("blog", "BlogPost")
 Category = apps.get_model("blog", "Category")
+Comment = apps.get_model("blog", "Comment")
 ContentType = apps.get_model("contenttypes", "ContentType")
 Group = apps.get_model("auth", "Group")
 Permission = apps.get_model("auth", "Permission")
+Tag = apps.get_model("blog", "Tag")
 User = apps.get_model("auth", "User")
 
 
@@ -139,15 +141,58 @@ class CategoryDTO(BaseODataDTO):
     # pk: str = UNSET  # @property
 
 
+@dataclass
+class TagDTO(BaseODataDTO):
+    """DTO for Tag model."""
+
+    id: int = UNSET
+    name: str = UNSET
+    color: str = UNSET
+
+
+@dataclass
+class BlogPostSummaryDTO(BaseODataDTO):
+    """Slim DTO for BlogPost with only DB fields (no @property).
+
+    Used in $expand contexts to enable hybrid values mode,
+    which is 2-5x faster than standard mode.
+    """
+
+    id: int = UNSET
+    title: str = UNSET
+    slug: str = UNSET
+    status: str = UNSET
+    featured: bool = UNSET
+    created_at: str = UNSET
+
+
+@dataclass
+class CommentDTO(BaseODataDTO):
+    """DTO for Comment model."""
+
+    id: int = UNSET
+    author_name: str = UNSET
+    author_email: str = UNSET
+    content: str = UNSET
+    is_approved: bool = UNSET
+    created_at: str = UNSET
+    post: BlogPostSummaryDTO | None = UNSET
+
+
 # ==================== SELECTORS ====================
 
 
 class BlogPostSelector(ODataSelector):
-    """Selector for BlogPost with DTO support."""
+    """Selector for BlogPost with DTO support.
+
+    values_mode=False because AuthorDTO includes @property fields
+    (name, email) that require model instantiation.
+    """
 
     class Meta:
         model = BlogPost
         dto_class = BlogPostDTO
+        values_mode = False
         expandable_fields = {
             "author": AuthorDTO,
             "categories": CategoryDTO,
@@ -216,4 +261,28 @@ class CategorySelector(ODataSelector):
     class Meta:
         model = Category
         dto_class = CategoryDTO
+        expandable_fields = {}
+
+
+class CommentSelector(ODataSelector):
+    """Selector for Comment with DTO support.
+
+    Uses BlogPostSummaryDTO (DB fields only) for the 'post' expand,
+    which enables hybrid values mode for faster queries.
+    """
+
+    class Meta:
+        model = Comment
+        dto_class = CommentDTO
+        expandable_fields = {
+            "post": BlogPostSummaryDTO,
+        }
+
+
+class TagSelector(ODataSelector):
+    """Selector for Tag with DTO support."""
+
+    class Meta:
+        model = Tag
+        dto_class = TagDTO
         expandable_fields = {}

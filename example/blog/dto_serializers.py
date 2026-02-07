@@ -10,6 +10,8 @@ from .selectors.blog_post import (
     AuthorDTO,
     BlogPostDTO,
     CategoryDTO,
+    CommentDTO,
+    TagDTO,
     UserDTO,
 )
 
@@ -63,3 +65,23 @@ class BlogPostDTOSerializer(ODataDTOSerializer):
         ]
         # You can also explicitly define which fields to include
         # fields = ['id', 'title', 'content', 'author', 'categories']
+
+
+class CommentDTOSerializer(ODataDTOSerializer):
+    """Serializer for CommentDTO.
+
+    The 'post' expand uses BlogPostSummaryDTO (DB fields only),
+    which enables hybrid values mode for faster queries.
+    """
+
+    class Meta:
+        dto_class = CommentDTO
+        read_only_fields = ["id", "created_at"]
+
+
+class TagDTOSerializer(ODataDTOSerializer):
+    """Serializer for TagDTO."""
+
+    class Meta:
+        dto_class = TagDTO
+        read_only_fields = ["id"]
