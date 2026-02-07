@@ -89,7 +89,7 @@ class Expression:
     def __eq__(self, other: object) -> bool:
         """Check equality based on AST node."""
         if isinstance(other, Expression):
-            return self._node == other._node
+            return bool(self._node == other._node)
         return False
 
     def __hash__(self) -> int:

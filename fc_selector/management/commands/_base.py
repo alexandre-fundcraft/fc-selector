@@ -88,7 +88,7 @@ class BaseODataGeneratorCommand(BaseCommand):
         generated_codes = BaseODataGeneratorCommand._generate_all_codes(all_model_info, excluded_edges, models_in_file, options)
 
         # Write files
-        BaseODataGeneratorCommand._write_files(
+        self._write_files(
             generated_codes,
             output_dir,
             single=options.get("single", False),
@@ -100,7 +100,7 @@ class BaseODataGeneratorCommand(BaseCommand):
             self.style.SUCCESS(f"Successfully generated {len(generated_codes)} {self.artifact_name}(s) in {output_dir}")
         )
 
-    def _discover_models(self, options) -> tuple[list, Path]:
+    def _discover_models(self, options) -> tuple[list, Path | None]:
         """Discover models to generate code for.
 
         Args:
@@ -113,7 +113,7 @@ class BaseODataGeneratorCommand(BaseCommand):
             CommandError: If no models or apps specified
         """
         models_to_generate = []
-        output_dir = None
+        output_dir: Path | None = None
 
         if options.get("apps"):
             for app_label in options["apps"]:
@@ -123,8 +123,8 @@ class BaseODataGeneratorCommand(BaseCommand):
                     if not output_dir:
                         app_path = Path(app_config.module.__file__).parent
                         output_dir = app_path / self.output_folder
-                except LookupError:
-                    raise CommandError(f"App '{app_label}' not found")
+                except LookupError as exc:
+                    raise CommandError(f"App '{app_label}' not found") from exc
         elif options.get("models"):
             for model_path in options["models"]:
                 model = BaseODataGeneratorCommand._load_model_from_path(model_path)
@@ -163,8 +163,8 @@ class BaseODataGeneratorCommand(BaseCommand):
             app_label, model_name = model_path.split(".")
             model = apps.get_model(app_label, model_name)
             return model
-        except (ValueError, LookupError):
-            raise CommandError(f"Model '{model_path}' not found")
+        except (ValueError, LookupError) as exc:
+            raise CommandError(f"Model '{model_path}' not found") from exc
 
     @staticmethod
     def _get_model_info(models: list) -> tuple[dict, dict]:
@@ -202,7 +202,7 @@ class BaseODataGeneratorCommand(BaseCommand):
         """
         graph = build_relationship_graph(models, relationships_map)
         cycles = detect_cycles(graph)
-        excluded_edges = resolve_circular_dependencies(cycles)
+        excluded_edges: set = resolve_circular_dependencies(cycles)
 
         if cycles:
             self.stdout.write(
@@ -252,9 +252,9 @@ class BaseODataGeneratorCommand(BaseCommand):
         """
         pass
 
-    @staticmethod
     @abstractmethod
     def _write_files(
+        self,
         generated_codes: dict[str, str],
         output_dir: Path,
         single: bool,
@@ -364,14 +364,14 @@ class BaseODataGeneratorCommand(BaseCommand):
             Model name or None
         """
         if requested_options.get("models"):
-            requested_model_path = requested_options["models"][0]
+            requested_model_path: str = requested_options["models"][0]
             return requested_model_path.split(".")[-1]
         if requested_options.get("apps"):
-            app_label = requested_options["apps"][0]
+            app_label: str = requested_options["apps"][0]
             try:
                 app_config = apps.get_app_config(app_label)
                 first_model = app_config.get_models()[0]
-                return first_model.__name__
+                return str(first_model.__name__)
             except (LookupError, IndexError):
                 return None
         return None

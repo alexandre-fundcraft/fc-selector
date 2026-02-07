@@ -8,7 +8,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-example-key-for-development-only"  # nosec B105, noqa: dodgy - Example/development only
+SECRET_KEY = "django-insecure-example-key-for-development-only"  # noqa: S105 - Example/development only
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True  # skipcq: PY-S0900 - Example/development environment only

@@ -311,7 +311,7 @@ class ODataSelector:
         if self.values_mode:
             hybrid = self._executor.try_hybrid(base_queryset, intent, self.dto_class)
             if hybrid is not None:
-                return hybrid
+                return list(hybrid)
 
         # Standard path: convert model instances to DTOs
         queryset = self._executor.execute(base_queryset, intent)
@@ -370,7 +370,7 @@ class ODataSelector:
         if self.values_mode:
             hybrid = self._executor.try_hybrid(base_queryset, intent, self.dto_class)
             if hybrid is not None:
-                return hybrid
+                return list(hybrid)
 
         return list(self._executor.execute(base_queryset, intent, use_values=True))
 

@@ -24,7 +24,7 @@ try:
     # Verificar que ODataModelViewSet hereta del que toca (via la nova estructura)
     print(f"✓ ODataModelViewSet hereta de: {[c.__name__ for c in ODataModelViewSet.__mro__[:3]]}")
 
-except Exception as e:
+except ImportError as e:
     print(f"✗ Error d'importació: {e}")
     import traceback
 

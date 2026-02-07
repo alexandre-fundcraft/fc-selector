@@ -17,7 +17,7 @@ from typing import Any
 
 from django.db.models import QuerySet
 
-from fc_selector.core.dtos.base import UNSET, MAX_DTO_RECURSION_DEPTH, BaseODataDTO
+from fc_selector.core.dtos.base import MAX_DTO_RECURSION_DEPTH, UNSET, BaseODataDTO
 from fc_selector.core.dtos.utils import get_dto_fields
 from fc_selector.core.intent import QueryIntent
 from fc_selector.core.utils import odata_path_to_django
@@ -688,7 +688,8 @@ class HybridValuesBuilder:
         """Get the expandable_fields config for a child relation's own expands."""
         config = self.expandable_fields.get(relation_name)
         if isinstance(config, dict):
-            return config.get("expandable_fields", {})
+            nested = config.get("expandable_fields", {})
+            return dict(nested) if nested else {}
         return {}
 
     @staticmethod

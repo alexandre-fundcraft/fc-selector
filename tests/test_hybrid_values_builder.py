@@ -611,7 +611,7 @@ class TestReverseFK:
 
     def test_empty_reverse_fk(self, target_a):
         """Parent with no children -> empty list."""
-        parent = ODataModelWithRelations.objects.create(title="Lonely", value=0, target=target_a)
+        _ = ODataModelWithRelations.objects.create(title="Lonely", value=0, target=target_a)
         intent = QueryIntent(
             expand=ExpandIntent(relations={"children": QueryIntent()}),
         )

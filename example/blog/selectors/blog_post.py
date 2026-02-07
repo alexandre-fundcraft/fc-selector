@@ -205,7 +205,7 @@ class ContentTypeSelector(ODataSelector):
     class Meta:
         model = ContentType
         dto_class = ContentTypeDTO
-        expandable_fields = {}
+        expandable_fields: dict = {}
 
 
 class GroupSelector(ODataSelector):
@@ -261,7 +261,7 @@ class CategorySelector(ODataSelector):
     class Meta:
         model = Category
         dto_class = CategoryDTO
-        expandable_fields = {}
+        expandable_fields: dict = {}
 
 
 class CommentSelector(ODataSelector):
@@ -285,4 +285,4 @@ class TagSelector(ODataSelector):
     class Meta:
         model = Tag
         dto_class = TagDTO
-        expandable_fields = {}
+        expandable_fields: dict = {}

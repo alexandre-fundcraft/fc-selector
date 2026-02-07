@@ -153,3 +153,53 @@ class ODataGrandChildModel(models.Model):
 
     class Meta:
         pass
+
+
+class ODataOneToOneChild(models.Model):
+    """Child model for OneToOne testing."""
+
+    name = models.CharField(max_length=50)
+
+    class Meta:
+        pass
+
+
+class ODataOneToOneParent(models.Model):
+    """Parent model with OneToOne and property for testing executor optimization."""
+
+    child = models.OneToOneField(ODataOneToOneChild, on_delete=models.CASCADE)
+    description = models.CharField(max_length=50)
+
+    @property
+    def full_desc(self):
+        """Property accessing related field."""
+        return f"{self.child.name}: {self.description}"
+
+    class Meta:
+        pass
+
+
+class ODataRootModel(models.Model):
+    """Root model pointing to a parent with OneToOne."""
+
+    parent = models.ForeignKey(ODataOneToOneParent, on_delete=models.CASCADE, related_name="roots")
+
+    class Meta:
+        pass
+
+
+class ODataSimpleParent(models.Model):
+    """Parent model with OneToOne but NO properties."""
+    child = models.OneToOneField(ODataOneToOneChild, on_delete=models.CASCADE)
+    description = models.CharField(max_length=50)
+
+    class Meta:
+        pass
+
+
+class ODataSimpleRoot(models.Model):
+    """Root model pointing to simple parent."""
+    parent = models.ForeignKey(ODataSimpleParent, on_delete=models.CASCADE)
+
+    class Meta:
+        pass

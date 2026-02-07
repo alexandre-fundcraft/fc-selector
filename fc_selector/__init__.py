@@ -61,4 +61,4 @@ __version__ = "2.0.0"
 #   from django_odata.django.query import apply_odata_query_params
 #   etc.
 
-__all__ = []
+__all__: list[str] = []

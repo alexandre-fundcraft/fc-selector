@@ -183,7 +183,7 @@ if HAS_SPECTACULAR:
                 existing_param_names = {p.get("name") for p in operation["parameters"]}
 
                 # Determine which parameters to add based on operation type
-                is_list = "_list" in operation_id or not path.endswith("}")
+                is_list = "_list" in operation_id or not path.rstrip("/").endswith("}")
                 params_to_add = ODATA_PARAMETERS if is_list else ODATA_RETRIEVE_PARAMETERS
 
                 for param in params_to_add:

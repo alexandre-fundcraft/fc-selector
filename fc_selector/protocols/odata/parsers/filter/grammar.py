@@ -564,8 +564,8 @@ class ODataParser(Parser):
         if func.namespace in ((), ("geo",)):
             try:
                 n_args_exp = ODATA_FUNCTIONS[func_name]
-            except KeyError:
-                raise exceptions.UnknownFunctionException(func_name)
+            except KeyError as exc:
+                raise exceptions.UnknownFunctionException(func_name) from exc
 
             n_args_given = len(args)
             if isinstance(n_args_exp, int) and n_args_given != n_args_exp:

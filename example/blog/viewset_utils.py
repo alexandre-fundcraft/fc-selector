@@ -5,8 +5,9 @@ This module contains common patterns used across different viewset implementatio
 to reduce code duplication while keeping the examples readable.
 """
 
-from fc_selector.django.drf.utils import build_odata_response
 from rest_framework.response import Response
+
+from fc_selector.django.drf.viewsets.selector_mixin import build_odata_response
 
 
 def build_stats_response(dto):

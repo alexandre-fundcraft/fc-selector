@@ -562,6 +562,7 @@ class QueryBuilder:
 
     def _build_expand_from_objects(self) -> ExpandIntent:
         """Build expand intent from type-safe Expand objects."""
+        assert self._expand_objects is not None
         relations = {}
         for expand_obj in self._expand_objects:
             relations[expand_obj.relation] = expand_obj.to_intent()
@@ -569,6 +570,7 @@ class QueryBuilder:
 
     def _build_expand_from_strings(self) -> ExpandIntent:
         """Build expand intent from string-based expand (legacy)."""
+        assert self._expand is not None
         relations = {}
         for relation in self._expand:
             if "(" in relation:
@@ -589,11 +591,13 @@ class QueryBuilder:
 
     def _build_orderby_from_objects(self) -> OrderIntent:
         """Build orderby intent from type-safe OrderBy objects."""
+        assert self._orderby_objects is not None
         order_tuples: list[tuple[str, str]] = [(obj.field, obj.direction) for obj in self._orderby_objects]
         return OrderIntent.from_tuples(order_tuples)
 
     def _build_orderby_from_strings(self) -> OrderIntent:
         """Build orderby intent from string-based orderby (legacy)."""
+        assert self._orderby is not None
         order_tuples: list[tuple[str, str]] = []
         for field_spec in self._orderby:
             parts = field_spec.strip().split()

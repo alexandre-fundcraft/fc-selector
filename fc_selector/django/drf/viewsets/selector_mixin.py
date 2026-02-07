@@ -341,18 +341,18 @@ class ODataSelectorViewSetMixin:
                 field_name=e.field_name,
                 model_name=e.model_name,
                 original_exception=e,
-            )
+            ) from e
         except core_ex.InvalidValueError as e:
             raise ODataInvalidPaginationError(
                 parameter=e.context or "$top",
                 value=str(e.value),
                 original_exception=e,
-            )
+            ) from e
         except core_ex.QueryError as e:
             raise ODataFilterError(
                 message=str(e),
                 original_exception=e,
-            )
+            ) from e
 
         # Serialize DTOs to JSON
         serializer = self.get_serializer(dtos, many=True)
@@ -368,7 +368,7 @@ class ODataSelectorViewSetMixin:
 
         return Response(response_data)
 
-    def retrieve(self, request, pk=None, *args, **kwargs):
+    def retrieve(self, request, *args, pk=None, **kwargs):
         """
         Retrieve a single entity with OData support.
 
@@ -392,18 +392,18 @@ class ODataSelectorViewSetMixin:
                 field_name=e.field_name,
                 model_name=e.model_name,
                 original_exception=e,
-            )
+            ) from e
         except core_ex.InvalidValueError as e:
             raise ODataInvalidPaginationError(
                 parameter=e.context or "$top",
                 value=str(e.value),
                 original_exception=e,
-            )
+            ) from e
         except core_ex.QueryError as e:
             raise ODataFilterError(
                 message=str(e),
                 original_exception=e,
-            )
+            ) from e
 
         if not dto:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)

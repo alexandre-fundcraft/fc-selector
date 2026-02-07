@@ -144,7 +144,7 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
             if should_check_existence:
                 validate_field_name(self.root_model, resolved_field, raise_exception=True)
 
-        return resolved_field
+        return str(resolved_field)
 
     def visit(self, node: ast.Node) -> Any:
         """:meta private:"""
@@ -357,8 +357,8 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
 
         try:
             return mod(val)
-        except TypeError:
-            raise core_ex.TypeMismatchError(expected="Q object", actual=str(val), context=node.op.__class__.__name__)
+        except TypeError as exc:
+            raise core_ex.TypeMismatchError(expected="Q object", actual=str(val), context=node.op.__class__.__name__) from exc
 
     def visit_Call(self, node: ast.Call) -> Expression | Q:
         ":meta private:"
@@ -367,8 +367,8 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
 
         try:
             q_gen = getattr(self, "djangofunc_" + func_name.lower())
-        except AttributeError:
-            raise core_ex.UnsupportedFunctionError(func_name)
+        except AttributeError as exc:
+            raise core_ex.UnsupportedFunctionError(func_name) from exc
 
         args = []
         kwargs = {}
@@ -607,7 +607,7 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
         # An `F` expression is a field or expression known to Django, and can
         # be used as a keyword.
         if isinstance(res, F):
-            return res.name
+            return str(res.name)
 
         # Field lookups are also easily expressed as keywords.
         if (
@@ -618,7 +618,7 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
             # as function calls:
             and not getattr(res, "rhs", False)
         ):
-            return res.lhs.name + "__" + res.lookup_name
+            return str(res.lhs.name) + "__" + str(res.lookup_name)
 
         # Lookups with parameters need to be wrapped in a `CASE WHEN` expression
         if isinstance(res, lookups.Lookup):

@@ -35,6 +35,7 @@ class DjangoExecutor:
         field_aliases: dict[str, str] | None = None,
         allowed_fields: list[str] | None = None,
         expandable_fields: dict[str, Any] | None = None,
+        non_sortable_fields: list[str] | None = None,
     ):
         """Initialize executor with optional field aliases and allowed fields.
 
@@ -55,10 +56,13 @@ class DjangoExecutor:
                                         "only_fields": ["uuid", "user__email"],  # Explicit
                                     }
                                 }
+            non_sortable_fields: List of fields that cannot be used in $orderby.
+                               Used to enforce sortable_fields/non_sortable_fields from the selector.
         """
         self.field_aliases = field_aliases or {}
         self.allowed_fields = allowed_fields
         self.expandable_fields = expandable_fields or {}
+        self.non_sortable_fields = set(non_sortable_fields) if non_sortable_fields else None
 
     def try_hybrid(
         self,
@@ -199,7 +203,7 @@ class DjangoExecutor:
         """
         properties = []
         for name in dir(model):
-            if is_private_field(name):
+            if is_private_field(name) or name == "pk":
                 continue
             try:
                 # model is already a class, so get attribute directly

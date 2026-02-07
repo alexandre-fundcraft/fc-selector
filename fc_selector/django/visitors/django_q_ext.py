@@ -26,3 +26,6 @@ class NotEqual(Lookup):
         rhs, rhs_params = self.process_rhs(compiler, connection)
         params = lhs_params + rhs_params
         return f"{lhs} <> {rhs}", params
+
+    def __rand__(self, other):  # type: ignore
+        return type(other)(other, self)

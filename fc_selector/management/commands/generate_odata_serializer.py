@@ -215,7 +215,7 @@ class Command(BaseODataGeneratorCommand):
     @staticmethod
     def _extract_class_from_lines(lines: list[str]) -> str:
         """Extract class definition from lines, skipping import statements."""
-        current_class = []
+        current_class: list[str] = []
 
         for line in lines:
             line = line.rstrip()

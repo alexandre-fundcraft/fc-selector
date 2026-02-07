@@ -102,3 +102,8 @@ site/
 .history
 archive
 .DS_Store
+
+verify_imports.py
+
+# Secrets / Private Configs
+.claude/commands/codacy.md
