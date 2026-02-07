@@ -26,7 +26,14 @@ from fc_selector.django.executor import DjangoExecutor
 from fc_selector.django.hybrid_values_builder import HybridValuesBuilder
 from fc_selector.django.selector import ODataSelector
 from fc_selector.protocols.odata.parsers.filter import parse_filter as parse
-from tests.integration.support.models import ODataFKTarget, ODataModelWithFK
+from tests.integration.support.models import (
+    ODataChildModel,
+    ODataFKTarget,
+    ODataGrandChildModel,
+    ODataM2MTarget,
+    ODataModelWithFK,
+    ODataModelWithRelations,
+)
 
 # --- DTOs ---
 
@@ -45,6 +52,37 @@ class ModelWithFKDTO(BaseODataDTO):
     value: int = UNSET
     target: Optional[FKTargetDTO] = UNSET
     second_target: Optional[FKTargetDTO] = UNSET
+
+
+@dataclass
+class M2MTargetDTO(BaseODataDTO):
+    id: int = UNSET
+    name: str = UNSET
+
+
+@dataclass
+class GrandChildDTO(BaseODataDTO):
+    id: int = UNSET
+    note: str = UNSET
+
+
+@dataclass
+class ChildDTO(BaseODataDTO):
+    id: int = UNSET
+    label: str = UNSET
+    score: int = UNSET
+    category: Optional[M2MTargetDTO] = UNSET
+    grandchildren: list[GrandChildDTO] = UNSET
+
+
+@dataclass
+class ParentWithRelationsDTO(BaseODataDTO):
+    id: int = UNSET
+    title: str = UNSET
+    value: int = UNSET
+    target: Optional[FKTargetDTO] = UNSET
+    children: list[ChildDTO] = UNSET
+    tags: list[M2MTargetDTO] = UNSET
 
 
 # --- Selectors ---
@@ -105,6 +143,40 @@ def selector():
     return FKSelector()
 
 
+@pytest.fixture
+def m2m_tag_x():
+    return ODataM2MTarget.objects.create(name="TagX")
+
+
+@pytest.fixture
+def m2m_tag_y():
+    return ODataM2MTarget.objects.create(name="TagY")
+
+
+@pytest.fixture
+def parent_with_children(target_a, m2m_tag_x, m2m_tag_y):
+    parent = ODataModelWithRelations.objects.create(title="Parent1", value=100, target=target_a)
+    child1 = ODataChildModel.objects.create(parent=parent, label="Child-A", score=10, category=m2m_tag_x)
+    child2 = ODataChildModel.objects.create(parent=parent, label="Child-B", score=20)
+    parent.tags.add(m2m_tag_x, m2m_tag_y)
+    return parent, child1, child2
+
+
+EXPANDABLE_FIELDS_FULL = {
+    "target": FKTargetDTO,
+    "children": {
+        "dto_class": ChildDTO,
+        "expandable_fields": {
+            "category": M2MTargetDTO,
+            "grandchildren": {
+                "dto_class": GrandChildDTO,
+            },
+        },
+    },
+    "tags": M2MTargetDTO,
+}
+
+
 # --- Tests: classify_relations ---
 
 
@@ -112,35 +184,62 @@ def selector():
 class TestClassifyRelations:
     def test_forward_fk_classified(self):
         expand = ExpandIntent(relations={"target": QueryIntent()})
-        forward, reverse = HybridValuesBuilder.classify_relations(
+        forward, reverse_fk, m2m = HybridValuesBuilder.classify_relations(
             ODataModelWithFK, expand, {}
         )
         assert "target" in forward
-        assert reverse == []
+        assert reverse_fk == {}
+        assert m2m == {}
 
     def test_reverse_relation_classified(self):
         expand = ExpandIntent(relations={"odatamodelwithfk_set": QueryIntent()})
-        forward, reverse = HybridValuesBuilder.classify_relations(
+        forward, reverse_fk, m2m = HybridValuesBuilder.classify_relations(
             ODataFKTarget, expand, {}
         )
         assert forward == {}
-        assert "odatamodelwithfk_set" in reverse
+        assert "odatamodelwithfk_set" in reverse_fk
+        assert m2m == {}
 
     def test_mixed_classification(self):
         """One forward + one reverse -> both classified."""
         expand = ExpandIntent(
             relations={
                 "target": QueryIntent(),
-                # related_items doesn't exist on this model, but we're testing classification
             }
         )
-        forward, reverse = HybridValuesBuilder.classify_relations(
+        forward, reverse_fk, m2m = HybridValuesBuilder.classify_relations(
             ODataModelWithFK, expand, {}
         )
         assert "target" in forward
 
+    def test_m2m_classified(self):
+        """M2M relation classified correctly."""
+        expand = ExpandIntent(relations={"tags": QueryIntent()})
+        forward, reverse_fk, m2m = HybridValuesBuilder.classify_relations(
+            ODataModelWithRelations, expand, {}
+        )
+        assert forward == {}
+        assert reverse_fk == {}
+        assert "tags" in m2m
 
-# --- Tests: HybridValuesBuilder.execute ---
+    def test_all_three_classified(self):
+        """Forward + reverse FK + M2M all classified correctly."""
+        expand = ExpandIntent(
+            relations={
+                "target": QueryIntent(),
+                "children": QueryIntent(),
+                "tags": QueryIntent(),
+            }
+        )
+        forward, reverse_fk, m2m = HybridValuesBuilder.classify_relations(
+            ODataModelWithRelations, expand, {}
+        )
+        assert "target" in forward
+        assert "children" in reverse_fk
+        assert "tags" in m2m
+
+
+# --- Tests: HybridValuesBuilder.execute (forward FK, unchanged) ---
 
 
 @pytest.mark.django_db
@@ -280,41 +379,33 @@ class TestExecutorHybridRouting:
 
         assert result is None
 
-    def test_reverse_relation_returns_none(self, target_a, obj_with_fk, executor):
-        """Reverse FK -> try_hybrid returns None."""
+    def test_reverse_fk_uses_hybrid(self, parent_with_children):
+        """Reverse FK expand returns DTOs via try_hybrid."""
+        parent, child1, child2 = parent_with_children
         intent = QueryIntent(
-            expand=ExpandIntent(
-                relations={"odatamodelwithfk_set": QueryIntent()}
-            ),
+            expand=ExpandIntent(relations={"children": QueryIntent()}),
         )
-        qs = ODataFKTarget.objects.all()
-        executor_for_target = DjangoExecutor(
-            expandable_fields={"odatamodelwithfk_set": ModelWithFKDTO},
-        )
-        result = executor_for_target.try_hybrid(qs, intent, FKTargetDTO)
+        executor = DjangoExecutor(expandable_fields=EXPANDABLE_FIELDS_FULL)
+        qs = ODataModelWithRelations.objects.all()
+        result = executor.try_hybrid(qs, intent, ParentWithRelationsDTO)
 
-        assert result is None
+        assert result is not None
+        assert len(result) == 1
+        assert len(result[0].children) == 2
 
-    def test_mixed_forward_reverse_returns_none(self, target_a, obj_with_fk):
-        """One forward + one reverse -> try_hybrid returns None."""
+    def test_m2m_uses_hybrid(self, parent_with_children):
+        """M2M expand returns DTOs via try_hybrid."""
+        parent, _, _ = parent_with_children
         intent = QueryIntent(
-            expand=ExpandIntent(
-                relations={
-                    "target": QueryIntent(),
-                    "nonexistent_reverse": QueryIntent(),
-                }
-            ),
+            expand=ExpandIntent(relations={"tags": QueryIntent()}),
         )
-        executor = DjangoExecutor(
-            expandable_fields={
-                "target": FKTargetDTO,
-                "nonexistent_reverse": ModelWithFKDTO,
-            },
-        )
-        qs = ODataModelWithFK.objects.all()
-        result = executor.try_hybrid(qs, intent, ModelWithFKDTO)
+        executor = DjangoExecutor(expandable_fields=EXPANDABLE_FIELDS_FULL)
+        qs = ODataModelWithRelations.objects.all()
+        result = executor.try_hybrid(qs, intent, ParentWithRelationsDTO)
 
-        assert result is None
+        assert result is not None
+        assert len(result) == 1
+        assert len(result[0].tags) == 2
 
     def test_no_dto_class_returns_none(self, obj_with_fk, executor):
         """No dto_class -> try_hybrid returns None."""
@@ -492,3 +583,445 @@ class TestSelectorIntegration:
         assert len(result) >= 1
         assert isinstance(result[0], dict)
         assert "title" in result[0]
+
+
+# ═══════════════════════════════════════════════════════════════
+# Reverse FK tests
+# ═══════════════════════════════════════════════════════════════
+
+
+@pytest.mark.django_db
+class TestReverseFK:
+    def test_basic_reverse_fk(self, parent_with_children):
+        """Reverse FK expand returns child DTOs."""
+        parent, child1, child2 = parent_with_children
+        intent = QueryIntent(
+            expand=ExpandIntent(relations={"children": QueryIntent()}),
+        )
+        builder = HybridValuesBuilder(expandable_fields=EXPANDABLE_FIELDS_FULL)
+        qs = ODataModelWithRelations.objects.all()
+        result = builder.execute(qs, intent, ParentWithRelationsDTO)
+
+        assert len(result) == 1
+        dto = result[0]
+        assert dto.title == "Parent1"
+        assert len(dto.children) == 2
+        labels = {c.label for c in dto.children}
+        assert labels == {"Child-A", "Child-B"}
+
+    def test_empty_reverse_fk(self, target_a):
+        """Parent with no children -> empty list."""
+        parent = ODataModelWithRelations.objects.create(title="Lonely", value=0, target=target_a)
+        intent = QueryIntent(
+            expand=ExpandIntent(relations={"children": QueryIntent()}),
+        )
+        builder = HybridValuesBuilder(expandable_fields=EXPANDABLE_FIELDS_FULL)
+        qs = ODataModelWithRelations.objects.all()
+        result = builder.execute(qs, intent, ParentWithRelationsDTO)
+
+        assert len(result) == 1
+        assert result[0].children == []
+
+    def test_nested_select_in_reverse_fk(self, parent_with_children):
+        """$expand=children($select=label) -> only label populated."""
+        intent = QueryIntent(
+            expand=ExpandIntent(
+                relations={
+                    "children": QueryIntent(
+                        select=SelectIntent(fields=["label"]),
+                    )
+                }
+            ),
+        )
+        builder = HybridValuesBuilder(expandable_fields=EXPANDABLE_FIELDS_FULL)
+        qs = ODataModelWithRelations.objects.all()
+        result = builder.execute(qs, intent, ParentWithRelationsDTO)
+
+        assert len(result) == 1
+        child = result[0].children[0]
+        assert child.label in {"Child-A", "Child-B"}
+        assert child.score is UNSET
+
+    def test_nested_filter_in_reverse_fk(self, parent_with_children):
+        """$expand=children($filter=score gt 15) -> only Child-B."""
+        filter_ast = parse("score gt 15")
+        intent = QueryIntent(
+            expand=ExpandIntent(
+                relations={
+                    "children": QueryIntent(
+                        filter=FilterIntent(expression="score gt 15", ast=filter_ast),
+                    )
+                }
+            ),
+        )
+        builder = HybridValuesBuilder(expandable_fields=EXPANDABLE_FIELDS_FULL)
+        qs = ODataModelWithRelations.objects.all()
+        result = builder.execute(qs, intent, ParentWithRelationsDTO)
+
+        assert len(result) == 1
+        assert len(result[0].children) == 1
+        assert result[0].children[0].label == "Child-B"
+
+    def test_nested_orderby_in_reverse_fk(self, parent_with_children):
+        """$expand=children($orderby=label desc) -> Child-B first."""
+        intent = QueryIntent(
+            expand=ExpandIntent(
+                relations={
+                    "children": QueryIntent(
+                        orderby=OrderIntent(
+                            fields=[OrderField(field="label", direction="desc")]
+                        ),
+                    )
+                }
+            ),
+        )
+        builder = HybridValuesBuilder(expandable_fields=EXPANDABLE_FIELDS_FULL)
+        qs = ODataModelWithRelations.objects.all()
+        result = builder.execute(qs, intent, ParentWithRelationsDTO)
+
+        assert len(result) == 1
+        assert result[0].children[0].label == "Child-B"
+        assert result[0].children[1].label == "Child-A"
+
+    def test_nested_forward_expand_in_reverse_fk(self, parent_with_children):
+        """$expand=children($expand=category) -> child has nested FK DTO."""
+        intent = QueryIntent(
+            expand=ExpandIntent(
+                relations={
+                    "children": QueryIntent(
+                        expand=ExpandIntent(relations={"category": QueryIntent()}),
+                    )
+                }
+            ),
+        )
+        builder = HybridValuesBuilder(expandable_fields=EXPANDABLE_FIELDS_FULL)
+        qs = ODataModelWithRelations.objects.all()
+        result = builder.execute(qs, intent, ParentWithRelationsDTO)
+
+        assert len(result) == 1
+        children = result[0].children
+        # Child-A has category=TagX
+        child_a = next(c for c in children if c.label == "Child-A")
+        assert isinstance(child_a.category, M2MTargetDTO)
+        assert child_a.category.name == "TagX"
+        # Child-B has no category
+        child_b = next(c for c in children if c.label == "Child-B")
+        assert child_b.category is None
+
+    def test_nested_pagination_global(self, parent_with_children):
+        """$expand=children($top=1) -> only 1 child globally (limitation)."""
+        intent = QueryIntent(
+            expand=ExpandIntent(
+                relations={
+                    "children": QueryIntent(
+                        pagination=PaginationIntent(limit=1),
+                        orderby=OrderIntent(
+                            fields=[OrderField(field="label", direction="asc")]
+                        ),
+                    )
+                }
+            ),
+        )
+        builder = HybridValuesBuilder(expandable_fields=EXPANDABLE_FIELDS_FULL)
+        qs = ODataModelWithRelations.objects.all()
+        result = builder.execute(qs, intent, ParentWithRelationsDTO)
+
+        assert len(result) == 1
+        # Should only have 1 child total across all parents because pagination applies to the single child query
+        assert len(result[0].children) == 1
+        assert result[0].children[0].label == "Child-A"
+
+    def test_multiple_parents(self, target_a, m2m_tag_x):
+        """Multiple parents each get their own children."""
+        p1 = ODataModelWithRelations.objects.create(title="P1", value=1, target=target_a)
+        p2 = ODataModelWithRelations.objects.create(title="P2", value=2, target=target_a)
+        ODataChildModel.objects.create(parent=p1, label="C1-A", score=1)
+        ODataChildModel.objects.create(parent=p1, label="C1-B", score=2)
+        ODataChildModel.objects.create(parent=p2, label="C2-A", score=3)
+
+        intent = QueryIntent(
+            expand=ExpandIntent(relations={"children": QueryIntent()}),
+            orderby=OrderIntent(fields=[OrderField(field="title", direction="asc")]),
+        )
+        executor = DjangoExecutor(expandable_fields=EXPANDABLE_FIELDS_FULL)
+        qs = ODataModelWithRelations.objects.all()
+        result = executor.try_hybrid(qs, intent, ParentWithRelationsDTO)
+
+        assert result is not None
+        assert len(result) == 2
+        assert result[0].title == "P1"
+        assert len(result[0].children) == 2
+        assert result[1].title == "P2"
+        assert len(result[1].children) == 1
+
+
+# ═══════════════════════════════════════════════════════════════
+# M2M tests
+# ═══════════════════════════════════════════════════════════════
+
+
+@pytest.mark.django_db
+class TestM2M:
+    def test_basic_m2m(self, parent_with_children):
+        """M2M expand returns target DTOs."""
+        parent, _, _ = parent_with_children
+        intent = QueryIntent(
+            expand=ExpandIntent(relations={"tags": QueryIntent()}),
+        )
+        builder = HybridValuesBuilder(expandable_fields=EXPANDABLE_FIELDS_FULL)
+        qs = ODataModelWithRelations.objects.all()
+        result = builder.execute(qs, intent, ParentWithRelationsDTO)
+
+        assert len(result) == 1
+        dto = result[0]
+        assert len(dto.tags) == 2
+        tag_names = {t.name for t in dto.tags}
+        assert tag_names == {"TagX", "TagY"}
+
+    def test_empty_m2m(self, target_a):
+        """Parent with no tags -> empty list."""
+        ODataModelWithRelations.objects.create(title="NoTags", value=0, target=target_a)
+        intent = QueryIntent(
+            expand=ExpandIntent(relations={"tags": QueryIntent()}),
+        )
+        builder = HybridValuesBuilder(expandable_fields=EXPANDABLE_FIELDS_FULL)
+        qs = ODataModelWithRelations.objects.all()
+        result = builder.execute(qs, intent, ParentWithRelationsDTO)
+
+        assert len(result) == 1
+        assert result[0].tags == []
+
+    def test_shared_m2m_targets(self, target_a, m2m_tag_x, m2m_tag_y):
+        """Two parents share the same M2M target."""
+        p1 = ODataModelWithRelations.objects.create(title="P1", value=1, target=target_a)
+        p2 = ODataModelWithRelations.objects.create(title="P2", value=2, target=target_a)
+        p1.tags.add(m2m_tag_x)
+        p2.tags.add(m2m_tag_x, m2m_tag_y)
+
+        intent = QueryIntent(
+            expand=ExpandIntent(relations={"tags": QueryIntent()}),
+            orderby=OrderIntent(fields=[OrderField(field="title", direction="asc")]),
+        )
+        executor = DjangoExecutor(expandable_fields=EXPANDABLE_FIELDS_FULL)
+        qs = ODataModelWithRelations.objects.all()
+        result = executor.try_hybrid(qs, intent, ParentWithRelationsDTO)
+
+        assert result is not None
+        assert len(result) == 2
+        assert len(result[0].tags) == 1
+        assert result[0].tags[0].name == "TagX"
+        assert len(result[1].tags) == 2
+
+    def test_nested_select_in_m2m(self, parent_with_children):
+        """$expand=tags($select=name) -> only name populated."""
+        intent = QueryIntent(
+            expand=ExpandIntent(
+                relations={
+                    "tags": QueryIntent(
+                        select=SelectIntent(fields=["name"]),
+                    )
+                }
+            ),
+        )
+        builder = HybridValuesBuilder(expandable_fields=EXPANDABLE_FIELDS_FULL)
+        qs = ODataModelWithRelations.objects.all()
+        result = builder.execute(qs, intent, ParentWithRelationsDTO)
+
+        assert len(result) == 1
+        for tag in result[0].tags:
+            assert tag.name in {"TagX", "TagY"}
+            # id should not be populated if not selected
+            assert tag.id is UNSET
+
+    def test_nested_filter_in_m2m(self, parent_with_children):
+        """$expand=tags($filter=name eq 'TagX') -> only TagX."""
+        filter_ast = parse("name eq 'TagX'")
+        intent = QueryIntent(
+            expand=ExpandIntent(
+                relations={
+                    "tags": QueryIntent(
+                        filter=FilterIntent(expression="name eq 'TagX'", ast=filter_ast),
+                    )
+                }
+            ),
+        )
+        builder = HybridValuesBuilder(expandable_fields=EXPANDABLE_FIELDS_FULL)
+        qs = ODataModelWithRelations.objects.all()
+        result = builder.execute(qs, intent, ParentWithRelationsDTO)
+
+        assert len(result) == 1
+        assert len(result[0].tags) == 1
+        assert result[0].tags[0].name == "TagX"
+
+
+# ═══════════════════════════════════════════════════════════════
+# Mixed relations tests
+# ═══════════════════════════════════════════════════════════════
+
+
+@pytest.mark.django_db
+class TestMixedRelations:
+    def test_forward_and_reverse(self, parent_with_children):
+        """Forward FK + reverse FK in same expand."""
+        intent = QueryIntent(
+            expand=ExpandIntent(
+                relations={
+                    "target": QueryIntent(),
+                    "children": QueryIntent(),
+                }
+            ),
+        )
+        builder = HybridValuesBuilder(expandable_fields=EXPANDABLE_FIELDS_FULL)
+        qs = ODataModelWithRelations.objects.all()
+        result = builder.execute(qs, intent, ParentWithRelationsDTO)
+
+        assert len(result) == 1
+        dto = result[0]
+        assert isinstance(dto.target, FKTargetDTO)
+        assert dto.target.name == "Alpha"
+        assert len(dto.children) == 2
+
+    def test_forward_and_m2m(self, parent_with_children):
+        """Forward FK + M2M in same expand."""
+        intent = QueryIntent(
+            expand=ExpandIntent(
+                relations={
+                    "target": QueryIntent(),
+                    "tags": QueryIntent(),
+                }
+            ),
+        )
+        builder = HybridValuesBuilder(expandable_fields=EXPANDABLE_FIELDS_FULL)
+        qs = ODataModelWithRelations.objects.all()
+        result = builder.execute(qs, intent, ParentWithRelationsDTO)
+
+        assert len(result) == 1
+        dto = result[0]
+        assert isinstance(dto.target, FKTargetDTO)
+        assert len(dto.tags) == 2
+
+    def test_all_three_relation_types(self, parent_with_children):
+        """Forward FK + reverse FK + M2M all expanded."""
+        intent = QueryIntent(
+            expand=ExpandIntent(
+                relations={
+                    "target": QueryIntent(),
+                    "children": QueryIntent(),
+                    "tags": QueryIntent(),
+                }
+            ),
+        )
+        builder = HybridValuesBuilder(expandable_fields=EXPANDABLE_FIELDS_FULL)
+        qs = ODataModelWithRelations.objects.all()
+        result = builder.execute(qs, intent, ParentWithRelationsDTO)
+
+        assert len(result) == 1
+        dto = result[0]
+        assert isinstance(dto.target, FKTargetDTO)
+        assert dto.target.name == "Alpha"
+        assert len(dto.children) == 2
+        assert len(dto.tags) == 2
+
+    def test_with_filter_and_pagination(self, target_a, m2m_tag_x, m2m_tag_y):
+        """Filter + pagination + mixed expand."""
+        for i in range(5):
+            p = ODataModelWithRelations.objects.create(
+                title=f"Item{i:02d}", value=i, target=target_a
+            )
+            ODataChildModel.objects.create(parent=p, label=f"Child-{i}", score=i * 10)
+            p.tags.add(m2m_tag_x)
+
+        intent = QueryIntent(
+            expand=ExpandIntent(
+                relations={
+                    "children": QueryIntent(),
+                    "tags": QueryIntent(),
+                }
+            ),
+            orderby=OrderIntent(fields=[OrderField(field="title", direction="asc")]),
+            pagination=PaginationIntent(limit=2, offset=1),
+        )
+        executor = DjangoExecutor(expandable_fields=EXPANDABLE_FIELDS_FULL)
+        qs = ODataModelWithRelations.objects.all()
+        result = executor.try_hybrid(qs, intent, ParentWithRelationsDTO)
+
+        assert result is not None
+        assert len(result) == 2
+        assert result[0].title == "Item01"
+        assert result[1].title == "Item02"
+        # Each should have 1 child and 1 tag
+        for dto in result:
+            assert len(dto.children) == 1
+            assert len(dto.tags) == 1
+
+
+# ═══════════════════════════════════════════════════════════════
+# Recursive nesting tests
+# ═══════════════════════════════════════════════════════════════
+
+
+@pytest.mark.django_db
+class TestRecursiveNesting:
+    def test_reverse_in_reverse(self, parent_with_children):
+        """$expand=children($expand=grandchildren) — reverse FK within reverse FK."""
+        parent, child1, child2 = parent_with_children
+        ODataGrandChildModel.objects.create(child=child1, note="GC1")
+        ODataGrandChildModel.objects.create(child=child1, note="GC2")
+        ODataGrandChildModel.objects.create(child=child2, note="GC3")
+
+        intent = QueryIntent(
+            expand=ExpandIntent(
+                relations={
+                    "children": QueryIntent(
+                        expand=ExpandIntent(
+                            relations={"grandchildren": QueryIntent()}
+                        ),
+                    )
+                }
+            ),
+        )
+        builder = HybridValuesBuilder(expandable_fields=EXPANDABLE_FIELDS_FULL)
+        qs = ODataModelWithRelations.objects.all()
+        result = builder.execute(qs, intent, ParentWithRelationsDTO)
+
+        assert len(result) == 1
+        children = result[0].children
+        assert len(children) == 2
+
+        child_a = next(c for c in children if c.label == "Child-A")
+        child_b = next(c for c in children if c.label == "Child-B")
+        assert len(child_a.grandchildren) == 2
+        gc_notes = {gc.note for gc in child_a.grandchildren}
+        assert gc_notes == {"GC1", "GC2"}
+        assert len(child_b.grandchildren) == 1
+        assert child_b.grandchildren[0].note == "GC3"
+
+    def test_forward_and_reverse_in_reverse(self, parent_with_children):
+        """$expand=children($expand=category,grandchildren) — FK + reverse FK within reverse FK."""
+        parent, child1, child2 = parent_with_children
+        ODataGrandChildModel.objects.create(child=child1, note="GC1")
+
+        intent = QueryIntent(
+            expand=ExpandIntent(
+                relations={
+                    "children": QueryIntent(
+                        expand=ExpandIntent(
+                            relations={
+                                "category": QueryIntent(),
+                                "grandchildren": QueryIntent(),
+                            }
+                        ),
+                    )
+                }
+            ),
+        )
+        builder = HybridValuesBuilder(expandable_fields=EXPANDABLE_FIELDS_FULL)
+        qs = ODataModelWithRelations.objects.all()
+        result = builder.execute(qs, intent, ParentWithRelationsDTO)
+
+        assert len(result) == 1
+        child_a = next(c for c in result[0].children if c.label == "Child-A")
+        assert isinstance(child_a.category, M2MTargetDTO)
+        assert child_a.category.name == "TagX"
+        assert len(child_a.grandchildren) == 1
+        assert child_a.grandchildren[0].note == "GC1"

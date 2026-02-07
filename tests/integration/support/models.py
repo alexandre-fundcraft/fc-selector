@@ -104,3 +104,52 @@ class ODataModelWithFK(models.Model):
 
     class Meta:
         pass
+
+
+class ODataM2MTarget(models.Model):
+    """Target model for M2M testing in hybrid values mode."""
+
+    name = models.CharField(max_length=100)
+
+    class Meta:
+        pass
+
+
+class ODataModelWithRelations(models.Model):
+    """Model with forward FK, reverse FK, and M2M for hybrid values testing."""
+
+    title = models.CharField(max_length=100)
+    value = models.IntegerField(default=0)
+    target = models.ForeignKey(
+        ODataFKTarget, on_delete=models.CASCADE, null=True, blank=True, related_name="parent_items"
+    )
+    tags = models.ManyToManyField(ODataM2MTarget, related_name="tagged_items", blank=True)
+
+    class Meta:
+        pass
+
+
+class ODataChildModel(models.Model):
+    """Child model for reverse FK testing in hybrid values mode."""
+
+    parent = models.ForeignKey(
+        ODataModelWithRelations, on_delete=models.CASCADE, related_name="children"
+    )
+    label = models.CharField(max_length=100)
+    score = models.IntegerField(default=0)
+    category = models.ForeignKey(ODataM2MTarget, on_delete=models.SET_NULL, null=True, blank=True)
+
+    class Meta:
+        pass
+
+
+class ODataGrandChildModel(models.Model):
+    """Grandchild model for recursive nested reverse FK expand testing."""
+
+    child = models.ForeignKey(
+        ODataChildModel, on_delete=models.CASCADE, related_name="grandchildren"
+    )
+    note = models.CharField(max_length=100)
+
+    class Meta:
+        pass

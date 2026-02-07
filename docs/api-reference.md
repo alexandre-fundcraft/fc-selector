@@ -107,7 +107,7 @@ queryset = selector.query("$filter=status eq 'published'")
 
 #### query_as_dtos(query_string, model_class=None, base_queryset=None) -> List[DTO]
 
-Execute raw query string, return DTOs. Uses hybrid values mode when available.
+Execute raw query string, return DTOs. Uses hybrid values mode when available (faster).
 
 ```python
 dtos = selector.query_as_dtos("$filter=status eq 'published'&$select=id,title")
@@ -115,7 +115,7 @@ dtos = selector.query_as_dtos("$filter=status eq 'published'&$select=id,title")
 
 #### query_as_dicts(query_string, model_class=None, base_queryset=None) -> list
 
-Execute raw query string using `.values()`. Returns raw dicts (no expand) or DTOs (hybrid expand).
+Execute raw query string using `.values()`. Returns raw dicts (no expand) or DTOs (hybrid expand for any relation).
 
 ```python
 dicts = selector.query_as_dicts("$filter=status eq 'published'&$select=id,title")

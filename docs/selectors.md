@@ -205,17 +205,18 @@ FC Selector automatically optimizes queries using two execution paths:
 
 ### Hybrid Values Mode (Default)
 
-When `values_mode = True` (the default), the selector uses `.values()` for maximum performance. For queries with `$expand` on forward relations (FK, OneToOne), it uses hybrid values mode — fetching related fields via `__` notation and reconstructing nested DTOs:
+When `values_mode = True` (the default), the selector uses `.values()` for maximum performance. It supports `$expand` on **all relation types** (Forward FK, Reverse FK, ManyToMany) by using a specialized `HybridValuesBuilder` that fetches related data efficiently without model instantiation:
 
 ```python
 # This query with values_mode=True:
 selector.get_many(
-    QueryBuilder().expand("author").select("id", "title")
+    QueryBuilder().expand("author", "comments").select("id", "title")
 )
 
 # Internally uses:
-BlogPost.objects.select_related('author').values('id', 'title', 'author__id', 'author__name')
-# Then reconstructs: BlogPostDTO(id=1, title='...', author=AuthorDTO(id=5, name='...'))
+# 1. Root query: BlogPost.objects.select_related('author').values(...)
+# 2. Child query: Comment.objects.filter(post_id__in=[...]).values(...)
+# Then reconstructs nested DTOs
 ```
 
 This is 2-5x faster than standard mode because it skips model instantiation entirely.
@@ -225,7 +226,7 @@ This is 2-5x faster than standard mode because it skips model instantiation enti
 
 ### Standard Mode
 
-When `values_mode = False` or when hybrid can't be used (reverse relations, M2M), the standard path applies:
+When `values_mode = False`, the standard path applies (instantiating full Django models):
 
 ### select_related()
 

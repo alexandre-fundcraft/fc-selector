@@ -66,10 +66,11 @@ class DjangoExecutor:
         intent: QueryIntent,
         dto_class: type | None = None,
     ) -> list | None:
-        """Try hybrid values mode for forward-only expands.
+        """Try hybrid values mode for $expand (forward FK, reverse FK, M2M).
 
-        Uses .values() with __ notation to fetch related fields, then
-        unflattens into nested DTOs.  Property-based fields are left
+        Uses .values() with __ notation for forward relations, plus extra
+        queries for reverse FK (1 per relation) and M2M (2 per relation).
+        Unflattens results into nested DTOs. Property-based fields are left
         as UNSET — they are simply skipped by the builder.
 
         Returns:
@@ -80,10 +81,10 @@ class DjangoExecutor:
 
         from fc_selector.django.hybrid_values_builder import HybridValuesBuilder
 
-        forward, reverse = HybridValuesBuilder.classify_relations(
+        forward, reverse_fk, m2m = HybridValuesBuilder.classify_relations(
             queryset.model, intent.expand, self.expandable_fields
         )
-        if not forward or reverse:
+        if not forward and not reverse_fk and not m2m:
             return None
 
         builder = HybridValuesBuilder(
