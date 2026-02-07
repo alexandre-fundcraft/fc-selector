@@ -80,6 +80,10 @@ class BlogPostSelector(ODataSelector):
             'authorName': 'author__name',
             'createdAt': 'created_at',
         }
+
+        # Optional: Performance mode (default: True)
+        # Set to False when DTOs include @property fields
+        values_mode = True
 ```
 
 ### Custom Base QuerySet
@@ -197,7 +201,31 @@ def my_view(request):
 
 ## Query Optimization
 
-FC Selector automatically optimizes queries:
+FC Selector automatically optimizes queries using two execution paths:
+
+### Hybrid Values Mode (Default)
+
+When `values_mode = True` (the default), the selector uses `.values()` for maximum performance. For queries with `$expand` on forward relations (FK, OneToOne), it uses hybrid values mode — fetching related fields via `__` notation and reconstructing nested DTOs:
+
+```python
+# This query with values_mode=True:
+selector.get_many(
+    QueryBuilder().expand("author").select("id", "title")
+)
+
+# Internally uses:
+BlogPost.objects.select_related('author').values('id', 'title', 'author__id', 'author__name')
+# Then reconstructs: BlogPostDTO(id=1, title='...', author=AuthorDTO(id=5, name='...'))
+```
+
+This is 2-5x faster than standard mode because it skips model instantiation entirely.
+
+!!! note
+    `@property` fields are left as `UNSET` in hybrid mode. Set `values_mode = False` if your DTOs require them. See [Hybrid Values Mode](HYBRID_VALUES_EXPAND.md) for details.
+
+### Standard Mode
+
+When `values_mode = False` or when hybrid can't be used (reverse relations, M2M), the standard path applies:
 
 ### select_related()
 
@@ -360,8 +388,9 @@ from fc_selector.django.selector import ODataSelector, QueryBuilder
 @dataclass
 class AuthorDTO(BaseODataDTO):
     id: int = UNSET
-    name: str = UNSET
-    email: str = UNSET
+    name: str = UNSET    # @property on model
+    email: str = UNSET    # @property on model
+    bio: str = UNSET
 
 @dataclass
 class CategoryDTO(BaseODataDTO):
@@ -378,11 +407,12 @@ class BlogPostDTO(BaseODataDTO):
     author: Optional[AuthorDTO] = UNSET
     categories: Optional[List[CategoryDTO]] = UNSET
 
-# Selector
+# Selector — values_mode=False because AuthorDTO has @property fields
 class BlogPostSelector(ODataSelector):
     class Meta:
         model = BlogPost
         dto_class = BlogPostDTO
+        values_mode = False
         expandable_fields = {
             'author': AuthorDTO,
             'categories': CategoryDTO,

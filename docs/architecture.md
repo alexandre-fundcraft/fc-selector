@@ -46,9 +46,12 @@ Acts as an output adapter (backend).
     *   Handles `filter()` using Visitors.
     *   Handles `select_related` and `prefetch_related` automatically to avoid N+1 problems.
     *   Handles `only()` to optimize field loading.
+    *   `try_hybrid()` — attempts hybrid values mode for forward-only `$expand`, returning DTOs directly.
+    *   `execute()` — standard path, always returns a `QuerySet`.
+*   **HybridValuesBuilder (`django.hybrid_values_builder`):** Executes queries using `.values()` with `$expand` support for forward relations (FK, OneToOne). Collects flattened `__` fields, queries via `.values()`, then reconstructs nested DTOs.
 *   **AstToDjangoQVisitor (`django.visitors`):** Translates AST nodes (e.g., `Eq`, `Contains`) to Django `Q` objects. Includes field validation for security.
-*   **ODataSelector (`django.selector`):** The public facade that developers use. Coordinates parsing and execution.
-*   **Introspection Utilities (`django.utils.introspection`):** Safe model field access helpers like `get_field_safe()`.
+*   **ODataSelector (`django.selector`):** The public facade that developers use. Coordinates parsing and execution. Controls execution path via `values_mode` Meta option.
+*   **Introspection Utilities (`django.utils.introspection`):** Safe model field access helpers like `get_field_safe()`, `is_forward_relation()`.
 
 ## Security
 
@@ -73,6 +76,12 @@ The system implements several security measures:
 *   Automatic `select_related` for forward relations.
 *   Automatic `prefetch_related` for reverse/many relations.
 *   `only()` to fetch only requested fields.
+
+### Hybrid Values Mode
+*   Uses `.values()` with `__` notation for forward FK/OneToOne expands — 2-5x faster than standard mode.
+*   Controlled per-selector via `values_mode` Meta option (default: `True`).
+*   Falls back to standard mode for reverse relations or when `values_mode = False`.
+*   See [Hybrid Values Mode](HYBRID_VALUES_EXPAND.md) for details.
 
 ## Extensibility
 

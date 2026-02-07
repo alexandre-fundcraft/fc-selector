@@ -356,6 +356,10 @@ dev = [
     { name = "pytest-django" },
     { name = "ruff" },
 ]
+docs = [
+    { name = "mkdocs-auto-refresh-build-pages" },
+    { name = "mkdocs-material" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -386,6 +390,10 @@ dev = [
     { name = "pytest-cov", specifier = ">=2.0" },
     { name = "pytest-django", specifier = ">=4.0" },
     { name = "ruff", specifier = ">=0.5.5" },
+]
+docs = [
+    { name = "mkdocs-auto-refresh-build-pages", specifier = ">=1.0.3" },
+    { name = "mkdocs-material", specifier = ">=9.0" },
 ]
 
 [[package]]

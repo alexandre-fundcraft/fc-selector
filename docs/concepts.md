@@ -146,3 +146,12 @@ The `DjangoExecutor` automatically:
 - Uses `select_related()` for forward FK/OneToOne relations
 - Uses `prefetch_related()` for reverse/ManyToMany relations
 - Uses `only()` to limit fetched fields based on `$select`
+
+### Hybrid Values Mode
+When `values_mode = True` (the default), the selector uses a fast execution path:
+
+- **No expand**: Uses `.values()` directly for raw dict results (2-5x faster).
+- **Forward-only expand** (FK, OneToOne): Uses hybrid values mode — `.values('rel__field')` with `select_related`, then reconstructs nested DTOs. Same speed as plain `.values()`.
+- **Reverse/M2M expand**: Falls back to standard mode (model instantiation + `from_model()`).
+
+Set `values_mode = False` in your selector's Meta class when your DTO includes `@property` fields that require model instantiation. See [Hybrid Values Mode](HYBRID_VALUES_EXPAND.md) for details.

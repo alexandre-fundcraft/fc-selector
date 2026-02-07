@@ -57,5 +57,6 @@ nav:
     - Architecture: architecture.md
     - OData Syntax: odata-syntax.md
     - API Reference: api-reference.md
+    - Hybrid Values Mode: HYBRID_VALUES_EXPAND.md
   - Contributing:
     - Developer Guide: internals_guide.md

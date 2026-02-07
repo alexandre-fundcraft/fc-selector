@@ -51,6 +51,7 @@ class MySelector(ODataSelector):
 | `default_ordering` | list | No | Default sort fields (e.g., `['-created_at']`) |
 | `default_limit` | int | No | Default $top value (default: 100) |
 | `max_limit` | int | No | Maximum $top value (default: 500) |
+| `values_mode` | bool | No | Use `.values()` + hybrid mode (default: `True`). Set `False` for DTOs with `@property` fields. |
 
 ### Methods
 
@@ -106,10 +107,26 @@ queryset = selector.query("$filter=status eq 'published'")
 
 #### query_as_dtos(query_string, model_class=None, base_queryset=None) -> List[DTO]
 
-Execute raw query string, return DTOs.
+Execute raw query string, return DTOs. Uses hybrid values mode when available.
 
 ```python
 dtos = selector.query_as_dtos("$filter=status eq 'published'&$select=id,title")
+```
+
+#### query_as_dicts(query_string, model_class=None, base_queryset=None) -> list
+
+Execute raw query string using `.values()`. Returns raw dicts (no expand) or DTOs (hybrid expand).
+
+```python
+dicts = selector.query_as_dicts("$filter=status eq 'published'&$select=id,title")
+```
+
+#### get_many_dicts(query_builder=None) -> list
+
+Get results using `.values()`. Returns raw dicts (no expand) or DTOs (hybrid expand).
+
+```python
+results = selector.get_many_dicts(QueryBuilder().filter("status eq 'published'"))
 ```
 
 #### get_queryset() -> QuerySet

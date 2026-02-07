@@ -49,15 +49,40 @@ If a query fails or returns incorrect data:
     *   If you get a generic 500, the Visitor likely failed with an uncontrolled exception.
     *   Make sure the Visitor throws `core.exceptions.SelectorError` (or subclasses) so the adapter can convert it to a 400 Bad Request.
 
-## 4. Key Directory Structure
+## 4. Hybrid Values Mode
+
+When `values_mode = True` on a selector (the default), the system uses an optimized execution path for queries with `$expand` on forward relations.
+
+### How it works
+
+1. `ODataSelector` calls `DjangoExecutor.try_hybrid()` before the standard path.
+2. `try_hybrid()` uses `HybridValuesBuilder.classify_relations()` to split expand into forward vs reverse.
+3. If all relations are forward (FK/OneToOne), the builder:
+   - Collects flattened field names: `['id', 'title', 'author__id', 'author__name']`
+   - Runs `select_related('author').values(...)` — a single SQL query
+   - Reconstructs nested DTOs from the flat dict
+4. If any reverse relations exist, `try_hybrid()` returns `None` and the selector falls back to standard mode.
+
+### Key files
+
+- `fc_selector/django/hybrid_values_builder.py`: All hybrid logic (field collection, unflatten, DTO construction)
+- `fc_selector/django/executor.py`: `try_hybrid()` entry point
+- `fc_selector/django/selector/odata_selector.py`: `values_mode` gating
+
+### Property fields
+
+`@property` fields are silently skipped by the builder (`get_field_safe()` returns `None` for non-DB fields). They remain `UNSET` in the resulting DTO. Set `values_mode = False` to use standard mode with full model instantiation.
+
+## 5. Key Directory Structure
 
 *   `fc_selector/core`: **DO NOT TOUCH** (unless you're changing the global architecture). This is where the contracts live.
 *   `fc_selector/protocols`: This is where string parsing logic lives.
 *   `fc_selector/django`: This is where the ORM magic lives.
-    *   `executor.py`: The unified entry point.
+    *   `executor.py`: The unified entry point (`execute()` for standard, `try_hybrid()` for hybrid).
+    *   `hybrid_values_builder.py`: Hybrid values mode implementation.
     *   `visitors/`: AST to Django Q translation.
 
-## 5. Tests
+## 6. Tests
 
 Whenever you touch Core or Executor, run the full integration suite:
 

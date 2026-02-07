@@ -177,6 +177,19 @@ class BlogPostDTO(BaseODataDTO):
     word_count: str = UNSET  # @property
 ```
 
+!!! warning "Properties and values_mode"
+    `@property` fields cannot be fetched via `.values()`. In hybrid values mode (the default), they are left as `UNSET`. If your DTO requires `@property` fields, set `values_mode = False` in your selector's Meta class:
+
+    ```python
+    class BlogPostSelector(ODataSelector):
+        class Meta:
+            model = BlogPost
+            dto_class = BlogPostDTO
+            values_mode = False  # Needed for word_count @property
+    ```
+
+    Alternatively, create a **summary DTO** with only database fields for use in `expandable_fields`, keeping hybrid mode enabled for the parent selector. See [Hybrid Values Mode](HYBRID_VALUES_EXPAND.md) for details.
+
 ## DTO Serializers
 
 For DRF, use `ODataDTOSerializer`:

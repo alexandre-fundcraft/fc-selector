@@ -97,6 +97,7 @@ dtos = selector.query_as_dtos("$filter=featured eq true&$top=5")
 
 - **Auto-generated Selectors & DTOs** from Django models
 - **Full OData v4 support**: $filter, $select, $expand, $orderby, $top, $skip, $count
+- **Hybrid values mode**: 2-5x faster queries using `.values()` with `$expand` support for forward relations
 - **Query optimization**: Automatic `select_related()`, `prefetch_related()`, and `.only()`
 - **Type-safe DTOs** with dataclasses
 - **Field aliases** for API-friendly names

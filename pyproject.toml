@@ -54,6 +54,10 @@ dev = [
     "mkdocs-material>=9.0",
     "mkdocs-auto-refresh-build-pages>=1.0.3",
 ]
+docs = [
+    "mkdocs-material>=9.0",
+    "mkdocs-auto-refresh-build-pages>=1.0.3",
+]
 
 [tool.ruff]
 line-length = 120
