@@ -43,8 +43,6 @@ class TestODataFunctional:
 
     def test_nested_select_in_expand(self, api_client, scenario_data):
         """Test $expand=author($select=name)."""
-        # Note: URL encoding might be needed for real clients, but TestClient handles simple chars
-        # We use explicit parenthesis which parser handles
         response = api_client.get("/api/posts/?$expand=author($select=name)")
         assert response.status_code == 200
         data = response.json()["value"][0]

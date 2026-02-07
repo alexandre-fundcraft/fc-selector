@@ -59,6 +59,9 @@ class ODataSelector:
             - default_ordering: List of default ordering fields (e.g., ["-created_at"])
             - default_limit: Default limit if $top not specified (default: 100)
             - max_limit: Maximum allowed limit (default: 500)
+            - values_mode: If True (default), use .values() and hybrid mode for
+                          forward $expand.  Set to False when your DTO includes
+                          @property fields that need model instantiation.
 
         Field restriction priority (hybrid approach):
             1. If filterable_fields is defined → only those fields are filterable
@@ -83,6 +86,7 @@ class ODataSelector:
         self.default_ordering = getattr(meta, "default_ordering", [])
         self.default_limit = getattr(meta, "default_limit", DEFAULT_PAGE_SIZE)
         self.max_limit = getattr(meta, "max_limit", MAX_PAGE_SIZE)
+        self.values_mode = getattr(meta, "values_mode", True)
 
         # Security: Validate field aliases to prevent injection
         ODataSelector._validate_field_aliases(self.field_aliases)
@@ -253,7 +257,9 @@ class ODataSelector:
             intent: QueryIntent with filter, select, expand, etc.
             base_queryset: Optional base queryset to apply intent to
             use_values: If True, use .values() for faster dict-based results.
-                       Only works when there are no $expand relations.
+
+        Returns:
+            QuerySet (or ValuesQuerySet when use_values=True and no expand).
         """
         if base_queryset is None:
             base_queryset = self.get_queryset()
@@ -274,34 +280,56 @@ class ODataSelector:
         return [self.to_dto(inst, selected_fields, expanded_fields, expand_options) for inst in instances]
 
     def query_as_dtos(self, query_string: str | None = None, model_class=None, base_queryset=None) -> list[Any]:
-        queryset = self.query(query_string, model_class, base_queryset)
+        from fc_selector.protocols.odata.converters import odata_query_to_intent
+        from fc_selector.protocols.odata.parsers.query.parser import parse_odata_query
 
-        # Helper to extract options from string for DTO conversion
-        from fc_selector.protocols.odata.parsers.query import parse_odata_query
+        model = model_class or self.model
+        if not model:
+            raise ValueError("model_class required")
 
-        query_params = parse_odata_query(query_string) if query_string else None
+        if base_queryset is None:
+            base_queryset = self.get_queryset()
 
-        selected_fields = set(query_params.select.fields) if query_params and query_params.select else None
-        expand_options = dict(query_params.expand.nested_options) if query_params and query_params.expand else {}
-        expanded_fields = set(expand_options.keys())
+        if not query_string:
+            return self.to_dtos(base_queryset)
 
-        return self.to_dtos(list(queryset), selected_fields, expanded_fields, expand_options)
+        # Security: Validate query string length to prevent DoS
+        if len(query_string) > MAX_QUERY_STRING_LENGTH:
+            raise core_ex.QueryError(
+                f"Query string too long ({len(query_string)} chars). Maximum allowed: {MAX_QUERY_STRING_LENGTH}"
+            )
+
+        resolved_qs = self._resolve_aliases_in_query_string(query_string)
+        odata_query = parse_odata_query(resolved_qs)
+        intent = odata_query_to_intent(odata_query)
+
+        if intent.filter and intent.filter.expression and not intent.filter.ast:
+            from fc_selector.protocols.odata.parsers.filter import parse_filter
+
+            intent.filter.ast = parse_filter(intent.filter.expression)
+
+        if self.values_mode:
+            hybrid = self._executor.try_hybrid(base_queryset, intent, self.dto_class)
+            if hybrid is not None:
+                return hybrid
+
+        # Standard path: convert model instances to DTOs
+        queryset = self._executor.execute(base_queryset, intent)
+        selected_fields = set(odata_query.select.fields) if odata_query.select else None
+        expand_options = dict(odata_query.expand.nested_options) if odata_query.expand else {}
+
+        return self.to_dtos(queryset, selected_fields, set(expand_options.keys()), expand_options)
 
     def query_as_dicts(
         self,
         query_string: str | None = None,
         model_class: Optional["Model"] = None,
         base_queryset: QuerySet | None = None,
-    ) -> list[dict]:
-        """Execute OData query and return raw dicts using .values().
+    ) -> list:
+        """Execute OData query and return results using .values().
 
-        This is significantly faster than query_as_dtos() because:
-        1. Uses .values() which returns dicts directly from the database
-        2. Skips model instance creation (no __init__ calls)
-        3. Skips DTO conversion
-
-        Note: This method ignores $expand since .values() doesn't support
-        related object loading. Use query_as_dtos() if you need expanded relations.
+        Uses hybrid values mode when $expand contains forward-only
+        relations, returning DTOs.  Otherwise returns raw dicts.
 
         Args:
             query_string: OData query string (e.g., "$filter=name eq 'test'&$select=id,name")
@@ -309,7 +337,7 @@ class ODataSelector:
             base_queryset: Optional base queryset to apply query to
 
         Returns:
-            List of dicts with the selected fields
+            List of dicts (no expand) or list of DTOs (hybrid expand)
         """
         from fc_selector.protocols.odata.converters import odata_query_to_intent
         from fc_selector.protocols.odata.parsers.query.parser import parse_odata_query
@@ -330,25 +358,21 @@ class ODataSelector:
                 f"Query string too long ({len(query_string)} chars). Maximum allowed: {MAX_QUERY_STRING_LENGTH}"
             )
 
-        # Resolve aliases in query string (OData specific logic)
         resolved_qs = self._resolve_aliases_in_query_string(query_string)
-
-        # Parse OData query string to QueryIntent
         odata_query = parse_odata_query(resolved_qs)
         intent = odata_query_to_intent(odata_query)
 
-        # Ensure AST is populated for filters (lazy parsing handling)
         if intent.filter and intent.filter.expression and not intent.filter.ast:
             from fc_selector.protocols.odata.parsers.filter import parse_filter
 
             intent.filter.ast = parse_filter(intent.filter.expression)
 
-        # Clear expand since .values() doesn't support it
-        intent.expand = None
+        if self.values_mode:
+            hybrid = self._executor.try_hybrid(base_queryset, intent, self.dto_class)
+            if hybrid is not None:
+                return hybrid
 
-        # Execute with values mode
-        queryset = self._executor.execute(base_queryset, intent, use_values=True)
-        return list(queryset)
+        return list(self._executor.execute(base_queryset, intent, use_values=True))
 
     # --- New Query Builder Methods ---
 
@@ -381,10 +405,24 @@ class ODataSelector:
             intent.pagination.limit = self.max_limit
 
         t1 = time.perf_counter()
-        queryset = self.execute(intent)
-        t2 = time.perf_counter()
 
-        # Extract options from builder for DTO mapping
+        # Try hybrid values path first
+        base_qs = self.get_queryset()
+        if self.values_mode:
+            hybrid = self._executor.try_hybrid(base_qs, intent, self.dto_class)
+            t2 = time.perf_counter()
+
+            if hybrid is not None:
+                logger.debug(
+                    "[get_many] build_intent=%.3fs, hybrid_execute=%.3fs",
+                    t1 - t0,
+                    t2 - t1,
+                )
+                return hybrid
+        else:
+            t2 = t1
+
+        # Standard path: evaluate queryset -> model instances -> DTOs
         qs_str = query_builder.build_query_string()
         from fc_selector.protocols.odata.parsers.query import parse_odata_query
 
@@ -394,12 +432,10 @@ class ODataSelector:
         opts = dict(qp.expand.nested_options) if qp and qp.expand else {}
         t3 = time.perf_counter()
 
-        # Evaluate queryset (DB fetch)
-        instances = list(queryset)
+        queryset = self.execute(intent)
         t4 = time.perf_counter()
 
-        # Convert to DTOs
-        dtos = self.to_dtos(instances, sel, set(opts.keys()), opts)
+        dtos = self.to_dtos(queryset, sel, set(opts.keys()), opts)
         t5 = time.perf_counter()
 
         logger.debug(
@@ -414,22 +450,17 @@ class ODataSelector:
 
         return dtos
 
-    def get_many_dicts(self, query_builder: QueryBuilder | None = None) -> list[dict]:
-        """Execute query and return raw dicts using .values() - much faster than get_many().
+    def get_many_dicts(self, query_builder: QueryBuilder | None = None) -> list:
+        """Execute query and return results using .values().
 
-        This method uses Django's .values() which:
-        1. Returns dicts directly from the database (no model instantiation)
-        2. Skips DTO conversion overhead
-        3. Can be 2-5x faster for large result sets
-
-        Note: $expand is ignored since .values() doesn't support related loading.
-        Use get_many() if you need expanded relations.
+        Uses hybrid values mode when $expand contains forward-only
+        relations, returning DTOs.  Otherwise returns raw dicts.
 
         Args:
             query_builder: Optional QueryBuilder with filter, select, orderby, etc.
 
         Returns:
-            List of dicts with the selected fields
+            List of dicts (no expand) or list of DTOs (hybrid expand)
         """
         t0 = time.perf_counter()
 
@@ -457,16 +488,24 @@ class ODataSelector:
         elif intent.pagination.limit and intent.pagination.limit > self.max_limit:
             intent.pagination.limit = self.max_limit
 
-        # Clear expand since .values() doesn't support it
-        intent.expand = None
-
         t1 = time.perf_counter()
-        # Execute with values mode
-        queryset = self.execute(intent, use_values=True)
-        t2 = time.perf_counter()
 
-        # Evaluate queryset (DB fetch - already returns dicts)
-        results = list(queryset)
+        base_qs = self.get_queryset()
+        if self.values_mode:
+            hybrid = self._executor.try_hybrid(base_qs, intent, self.dto_class)
+            t2 = time.perf_counter()
+
+            if hybrid is not None:
+                logger.debug(
+                    "[get_many_dicts] build_intent=%.3fs, hybrid_execute=%.3fs",
+                    t1 - t0,
+                    t2 - t1,
+                )
+                return hybrid
+        else:
+            t2 = t1
+
+        results = list(self.execute(intent, use_values=True))
         t3 = time.perf_counter()
 
         logger.debug(

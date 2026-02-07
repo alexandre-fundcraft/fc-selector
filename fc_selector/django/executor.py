@@ -60,9 +60,52 @@ class DjangoExecutor:
         self.allowed_fields = allowed_fields
         self.expandable_fields = expandable_fields or {}
 
-    def execute(self, queryset: QuerySet, intent: QueryIntent, *, use_values: bool = False) -> QuerySet:
+    def try_hybrid(
+        self,
+        queryset: QuerySet,
+        intent: QueryIntent,
+        dto_class: type | None = None,
+    ) -> list | None:
+        """Try hybrid values mode for forward-only expands.
+
+        Uses .values() with __ notation to fetch related fields, then
+        unflattens into nested DTOs.  Property-based fields are left
+        as UNSET — they are simply skipped by the builder.
+
+        Returns:
+            List of DTOs if hybrid mode applies, None otherwise.
+        """
+        if not dto_class or not intent or not intent.expand or not intent.expand.has_relations():
+            return None
+
+        from fc_selector.django.hybrid_values_builder import HybridValuesBuilder
+
+        forward, reverse = HybridValuesBuilder.classify_relations(
+            queryset.model, intent.expand, self.expandable_fields
+        )
+        if not forward or reverse:
+            return None
+
+        builder = HybridValuesBuilder(
+            field_aliases=self.field_aliases,
+            expandable_fields=self.expandable_fields,
+        )
+        queryset = self._apply_filter(queryset, intent)
+        queryset = self._apply_ordering(queryset, intent)
+        return builder.execute(queryset, intent, dto_class)
+
+    def execute(
+        self,
+        queryset: QuerySet,
+        intent: QueryIntent,
+        *,
+        use_values: bool = False,
+    ) -> QuerySet:
         """
         Apply the full QueryIntent to the queryset.
+
+        Always returns a QuerySet.  For hybrid values mode with $expand,
+        call try_hybrid() first.
 
         Args:
             queryset: Base Django QuerySet
@@ -72,7 +115,7 @@ class DjangoExecutor:
                        relations (will be ignored if expand is present).
 
         Returns:
-            QuerySet (or ValuesQuerySet if use_values=True and no expand)
+            QuerySet (or ValuesQuerySet if use_values=True and no expand).
         """
         if not intent:
             return queryset

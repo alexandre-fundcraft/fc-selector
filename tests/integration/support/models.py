@@ -76,3 +76,31 @@ class PerformanceRelatedModel(models.Model):
 
     class Meta:
         pass
+
+
+class ODataFKTarget(models.Model):
+    """Target model for FK testing in hybrid values mode."""
+
+    name = models.CharField(max_length=100)
+    code = models.CharField(max_length=10)
+
+    class Meta:
+        pass
+
+
+class ODataModelWithFK(models.Model):
+    """Model with forward FK for hybrid values testing."""
+
+    title = models.CharField(max_length=100)
+    value = models.IntegerField(default=0)
+    target = models.ForeignKey(ODataFKTarget, on_delete=models.CASCADE, null=True, blank=True)
+    second_target = models.ForeignKey(
+        ODataFKTarget,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reverse_second",
+    )
+
+    class Meta:
+        pass
