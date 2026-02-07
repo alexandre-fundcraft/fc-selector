@@ -164,7 +164,7 @@ def my_parser(expression: str) -> Node:
 query = QueryBuilder(filter_parser=my_parser)
 ```
 
-### Methods
+### String API Methods
 
 #### filter(expression) -> self
 
@@ -241,6 +241,62 @@ Set $count.
 query.count(True)
 ```
 
+### Fluent API Methods
+
+#### where(expression) -> self
+
+Set filter using type-safe `Field` expressions.
+
+```python
+query.where(Field("status").eq("published") & Field("rating").gt(4.0))
+```
+
+#### and_where(expression) -> self
+
+Add AND condition with type-safe expression.
+
+```python
+query.and_where(Field("featured").eq(True))
+```
+
+#### or_where(expression) -> self
+
+Add OR condition with type-safe expression.
+
+```python
+query.or_where(Field("vip").eq(True))
+```
+
+#### expand(*expands) -> self
+
+Set $expand using type-safe `Expand` objects.
+
+```python
+query.expand(
+    Expand("author").select("id", "name"),
+    Expand("comments").filter(Field("approved").eq(True)).top(5)
+)
+```
+
+#### orderby(*fields) -> self
+
+Set $orderby using type-safe `OrderBy` objects.
+
+```python
+query.orderby(OrderBy("rating").desc(), OrderBy("created_at").desc())
+```
+
+### Output Methods
+
+#### build() -> QueryIntent
+
+Build and return a `QueryIntent` object (protocol-agnostic).
+
+```python
+intent = query.build()
+results = selector.execute(intent)
+```
+
 #### build_query_string() -> str
 
 Build the OData query string.
@@ -255,6 +311,113 @@ Convert to dictionary.
 
 ```python
 params = query.to_dict()
+```
+
+---
+
+## Field
+
+Type-safe filter expression builder.
+
+```python
+from fc_selector.core.filters import Field
+```
+
+### Comparison Methods
+
+| Method | OData | Example |
+|--------|-------|---------|
+| `eq(value)` | `eq` | `Field("status").eq("published")` |
+| `ne(value)` | `ne` | `Field("status").ne("deleted")` |
+| `gt(value)` | `gt` | `Field("age").gt(18)` |
+| `ge(value)` | `ge` | `Field("price").ge(100)` |
+| `lt(value)` | `lt` | `Field("count").lt(10)` |
+| `le(value)` | `le` | `Field("rating").le(5)` |
+
+### String Methods
+
+| Method | OData | Example |
+|--------|-------|---------|
+| `contains(value)` | `contains()` | `Field("name").contains("john")` |
+| `startswith(value)` | `startswith()` | `Field("email").startswith("admin")` |
+| `endswith(value)` | `endswith()` | `Field("email").endswith("@x.com")` |
+
+### Null / Collection Methods
+
+| Method | OData | Example |
+|--------|-------|---------|
+| `is_null()` | `eq null` | `Field("deleted_at").is_null()` |
+| `is_not_null()` | `ne null` | `Field("email").is_not_null()` |
+| `is_in(values)` | `in ()` | `Field("status").is_in(["active", "pending"])` |
+| `not_in(values)` | `not (in ())` | `Field("role").not_in(["guest"])` |
+| `between(low, high)` | `ge and le` | `Field("price").between(10, 100)` |
+
+### Logical Operators
+
+```python
+# AND
+Field("status").eq("active") & Field("age").gt(18)
+
+# OR
+Field("role").eq("admin") | Field("role").eq("superuser")
+
+# NOT
+~Field("deleted").eq(True)
+```
+
+### Nested Fields
+
+```python
+Field("author/name").eq("John")
+```
+
+---
+
+## Expand
+
+Type-safe relation expansion builder.
+
+```python
+from fc_selector.core.filters import Expand
+```
+
+### Methods
+
+| Method | Description | Example |
+|--------|-------------|---------|
+| `select(*fields)` | Nested $select | `Expand("author").select("id", "name")` |
+| `filter(expr)` | Nested $filter | `Expand("comments").filter(Field("approved").eq(True))` |
+| `orderby(*fields)` | Nested $orderby | `Expand("comments").orderby(OrderBy("created_at").desc())` |
+| `top(n)` | Nested $top | `Expand("comments").top(5)` |
+| `skip(n)` | Nested $skip | `Expand("comments").skip(10)` |
+| `expand(*expands)` | Deep nesting | `Expand("author").expand(Expand("profile"))` |
+
+---
+
+## OrderBy
+
+Type-safe ordering builder.
+
+```python
+from fc_selector.core.filters import OrderBy
+```
+
+### Methods
+
+```python
+OrderBy("name")             # ascending (default)
+OrderBy("name").asc()       # explicit ascending
+OrderBy("created_at").desc() # descending
+```
+
+### Usage in QueryBuilder
+
+```python
+query.orderby(
+    OrderBy("featured").desc(),
+    OrderBy("created_at").desc(),
+    OrderBy("title").asc()
+)
 ```
 
 ---

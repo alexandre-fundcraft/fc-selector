@@ -1,5 +1,8 @@
 site_name: FC Selector
+site_url: https://alexandre-fundcraft.github.io/fc-selector/
 site_description: DDD Selector/Query pattern for Django with OData query language support
+repo_url: https://github.com/alexandre-fundcraft/fc-selector
+repo_name: alexandre-fundcraft/fc-selector
 
 theme:
   name: material

@@ -88,21 +88,55 @@ The implementation of the query logic for specific backends.
 
 ## Usage Patterns
 
-### From Services/Use Cases (Direct Intent)
-```python
-from fc_selector.django.selector import ODataSelector, QueryBuilder
-from fc_selector.core.filters import Field
+### String API (OData Syntax)
 
-intent = (
+Use OData strings when handling external requests or for simple queries:
+
+```python
+selector = BlogPostSelector()
+posts = selector.get_many(
     QueryBuilder()
-    .where(Field("status").eq("published"))
+    .filter("status eq 'published' and rating gt 4.0")
     .select("id", "title")
-    .build()
+    .expand("author")
+    .orderby("created_at desc")
+    .top(10)
 )
-dtos = selector.execute(intent)
 ```
 
-### From ViewSets (OData Adapter)
+### Fluent API (Type-Safe)
+
+Use the fluent API for better IDE support, autocompletion, and compile-time safety:
+
+```python
+from fc_selector.core.filters import Field, Expand, OrderBy
+
+selector = BlogPostSelector()
+posts = selector.get_many(
+    QueryBuilder()
+    .where(
+        Field("status").eq("published") &
+        Field("rating").gt(4.0)
+    )
+    .select("id", "title")
+    .expand(
+        Expand("author").select("id", "name")
+    )
+    .orderby(OrderBy("created_at").desc())
+    .top(10)
+)
+```
+
+The fluent API provides:
+
+- **`Field`** — type-safe filter expressions: `.eq()`, `.gt()`, `.contains()`, `.is_in()`, `.between()`, etc.
+- **`Expand`** — type-safe relation expansion with nested `.select()`, `.filter()`, `.top()`, `.orderby()`
+- **`OrderBy`** — type-safe ordering with `.asc()` and `.desc()`
+- **Logical operators** — `&` (AND), `|` (OR), `~` (NOT)
+
+Both APIs can be mixed and produce the same `QueryIntent` internally. See the [Query Builder](query-builder.md) guide for the full reference.
+
+### From ViewSets (REST API)
 ```python
 from rest_framework import viewsets
 from fc_selector.django.drf.viewsets import ODataSelectorViewSetMixin

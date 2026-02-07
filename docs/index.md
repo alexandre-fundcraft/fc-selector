@@ -2,31 +2,60 @@
 
 **DDD Selector/Query pattern for Django with OData query language support.**
 
+[:material-github: GitHub](https://github.com/alexandre-fundcraft/fc-selector){ .md-button }
+
 FC Selector implements the **Selector pattern**, a recognized pattern in the Django community (see [HackSoft Django Styleguide](https://github.com/HackSoftware/Django-Styleguide), [ai-django-core](https://ai-django-core.readthedocs.io/en/latest/features/selectors.html)) that provides a clean, read-only interface for querying data. It uses **OData v4** as a dynamic, standardized query language.
 
 ## What is this?
 
 Think of it as a **dynamic read-only repository** that:
 
-- Uses **OData syntax** for flexible, expressive queries
+- Uses **OData syntax** or a **type-safe fluent API** for flexible queries
 - Returns **DTOs** (Data Transfer Objects), not Django models
 - Works from **services**, **use cases**, or **ViewSets**
 - Never exposes the ORM layer
 
-```python
-from fc_selector.django.selector import ODataSelector, QueryBuilder
+## Two Ways to Query
 
-# From a service or use case
+### String API (OData)
+
+```python
 selector = BlogPostSelector()
 posts = selector.get_many(
     QueryBuilder()
     .filter("status eq 'published'")
-    .select("id", "title", "author")
+    .select("id", "title")
     .expand("author")
     .orderby("created_at desc")
     .top(10)
 )
 ```
+
+### Fluent API (Type-Safe)
+
+```python
+from fc_selector.core.filters import Field, Expand, OrderBy
+
+selector = BlogPostSelector()
+posts = selector.get_many(
+    QueryBuilder()
+    .where(
+        Field("status").eq("published") &
+        Field("rating").gt(4.0)
+    )
+    .select("id", "title", "rating")
+    .expand(
+        Expand("author").select("id", "name"),
+        Expand("comments")
+            .filter(Field("approved").eq(True))
+            .top(5)
+    )
+    .orderby(OrderBy("rating").desc())
+    .top(10)
+)
+```
+
+Both APIs can be mixed and produce the same `QueryIntent` internally.
 
 ## Key Concepts
 
@@ -38,18 +67,6 @@ The Selector pattern separates **read operations** from write operations. Unlike
 - **Optimizable** - Can use different data sources for reads
 - **Safer** - Read-only by design
 
-### OData as Query Language
-
-Instead of creating methods for every query variation (`get_published_posts()`, `get_posts_by_author()`, etc.), OData provides a standardized syntax:
-
-```
-$filter=status eq 'published' and author/id eq 5
-$select=id,title,excerpt
-$expand=author,categories
-$orderby=created_at desc
-$top=10
-```
-
 ### DTOs Instead of Models
 
 Selectors return DTOs, not Django models. This:
@@ -58,50 +75,18 @@ Selectors return DTOs, not Django models. This:
 - **Controls** exactly what data is exposed
 - **Prevents** accidental lazy loading (N+1 queries)
 
-## Three Ways to Use FC Selector
-
-### 1. From Services / Use Cases
-
-```python
-class GetPublishedPostsUseCase:
-    def execute(self, author_id: int = None) -> List[BlogPostDTO]:
-        selector = BlogPostSelector()
-        query = QueryBuilder().filter("status eq 'published'")
-
-        if author_id:
-            query.and_filter(f"author/id eq {author_id}")
-
-        return selector.get_many(query)
-```
-
-### 2. From ViewSets (REST API)
-
-```python
-class BlogPostViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
-    selector_class = BlogPostSelector
-    serializer_class = BlogPostDTOSerializer
-
-    # Automatic OData support via mixin
-    # GET /api/posts/?$filter=status eq 'published'&$select=id,title
-```
-
-### 3. Direct Query String
-
-```python
-# Pass OData query string directly
-selector = BlogPostSelector()
-dtos = selector.query_as_dtos("$filter=featured eq true&$top=5")
-```
-
 ## Features
 
-- **Auto-generated Selectors & DTOs** from Django models
-- **Full OData v4 support**: $filter, $select, $expand, $orderby, $top, $skip, $count
+- **Full OData v4 support**: `$filter`, `$select`, `$expand`, `$orderby`, `$top`, `$skip`, `$count`
+- **Type-safe fluent API**: `Field("status").eq("published")`, `Expand("author").select("name")`, `OrderBy("created_at").desc()`
 - **Hybrid values mode**: 2-5x faster queries using `.values()` with `$expand` support for forward relations
-- **Query optimization**: Automatic `select_related()`, `prefetch_related()`, and `.only()`
-- **Type-safe DTOs** with dataclasses
+- **Automatic query optimization**: `select_related()`, `prefetch_related()`, `.only()` applied from query intent
+- **Type-safe DTOs** with dataclasses and `UNSET` sentinel
+- **Auto-generated selectors & DTOs** from Django models via management command
 - **Field aliases** for API-friendly names
-- **DRF integration** with ViewSet mixins and serializers
+- **Field restrictions** with filterable/sortable positive and negative lists
+- **DRF integration** with ViewSet mixins, serializers, and OpenAPI/Swagger parameters
+- **Security**: field validation, private field blocking, query length limits
 
 ## Quick Example
 
@@ -131,6 +116,15 @@ posts = selector.get_many(
     .top(10)
 )
 
+# Type-safe alternative
+posts = selector.get_many(
+    QueryBuilder()
+    .where(Field("rating").gt(4.0) & Field("status").eq("published"))
+    .select("id", "title", "rating")
+    .orderby(OrderBy("rating").desc())
+    .top(10)
+)
+
 # Check existence
 exists = selector.exists_by(
     QueryBuilder().filter("slug eq 'my-post'")
@@ -155,3 +149,5 @@ See [Installation](installation.md) for detailed setup instructions.
 - [Quick Start](quickstart.md) - Get up and running in 5 minutes
 - [Core Concepts](concepts.md) - Understand the architecture
 - [Selectors Guide](selectors.md) - Deep dive into selectors
+- [Query Builder](query-builder.md) - String API and fluent API reference
+- [Hybrid Values Mode](HYBRID_VALUES_EXPAND.md) - Performance optimization

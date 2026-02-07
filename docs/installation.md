@@ -58,8 +58,13 @@ REST_FRAMEWORK = {
 For contributing or development:
 
 ```bash
-git clone https://github.com/fundcraft/fc-selector.git
+git clone https://github.com/alexandre-fundcraft/fc-selector.git
 cd fc-selector
+
+# Using uv (recommended)
+uv sync --group dev
+
+# Using pip
 pip install -e ".[dev]"
 ```
 
