@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING, Any, Protocol, cast, get_args, get_origin, get
 
 from django.db.models import Manager
 
+from fc_selector.core.dtos.typed_dicts import generate_typeddict
+
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
@@ -89,6 +91,17 @@ class RecursionLimitExceededError(Exception):
         )
 
 
+class _TypedDictDescriptor:
+    """Descriptor that lazily generates a TypedDict on first ``DTO.__td__`` access."""
+
+    def __get__(self, obj: Any, cls: type) -> type:
+        if cls is BaseODataDTO:
+            raise AttributeError("__td__ is only available on BaseODataDTO subclasses")
+        td = generate_typeddict(cls)
+        cls.__td__ = td  # type: ignore[attr-defined]
+        return td
+
+
 @dataclass
 class BaseODataDTO:
     """
@@ -104,6 +117,7 @@ class BaseODataDTO:
     - Support for $select (only populate selected fields)
     - Support for $expand (automatically convert related objects to DTOs)
     - Sentinel values for unselected fields
+    - ``__td__`` attribute: auto-generated TypedDict for typed dict output
 
     Example:
         >>> @dataclass
@@ -117,6 +131,9 @@ class BaseODataDTO:
         >>> # dto.id = 1
         >>> # dto.name = "John"
         >>> # dto.user = UNSET  # Not selected
+        >>>
+        >>> # Auto-generated TypedDict
+        >>> AuthorDTO.__td__  # TypedDict('AuthorDict', {'id': int, ...}, total=False)
     """
 
     is_odata_dto = True
@@ -529,3 +546,8 @@ def _to_dict_value(value: Any) -> Any:
     if isinstance(value, list):
         return [_to_dict_value(item) for item in value]
     return value
+
+
+# Attach the TypedDict descriptor *after* BaseODataDTO is fully defined
+# to avoid @dataclass triggering __get__ during class creation.
+BaseODataDTO.__td__ = _TypedDictDescriptor()  # type: ignore[attr-defined]
