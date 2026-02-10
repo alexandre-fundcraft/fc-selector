@@ -503,3 +503,29 @@ class BaseODataDTO:
                 )
 
         return cls(**data)
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert DTO to a plain dictionary, recursively handling nested DTOs.
+
+        UNSET fields are omitted from the output. Nested DTOs and lists of DTOs
+        are converted recursively.
+
+        Returns:
+            Dictionary with populated (non-UNSET) fields.
+        """
+        result: dict[str, Any] = {}
+        for field in dataclass_fields(self):
+            value = getattr(self, field.name)
+            if value is UNSET:
+                continue
+            result[field.name] = _to_dict_value(value)
+        return result
+
+
+def _to_dict_value(value: Any) -> Any:
+    """Recursively convert a value, turning nested DTOs into dicts."""
+    if isinstance(value, BaseODataDTO):
+        return value.to_dict()
+    if isinstance(value, list):
+        return [_to_dict_value(item) for item in value]
+    return value

@@ -69,16 +69,25 @@ class DjangoExecutor:
         queryset: QuerySet,
         intent: QueryIntent,
         dto_class: type | None = None,
+        *,
+        as_dicts: bool = False,
     ) -> list | None:
         """Try hybrid values mode for $expand (forward FK, reverse FK, M2M).
 
         Uses .values() with __ notation for forward relations, plus extra
         queries for reverse FK (1 per relation) and M2M (2 per relation).
-        Unflattens results into nested DTOs. Property-based fields are left
-        as UNSET — they are simply skipped by the builder.
+        Unflattens results into nested DTOs (default) or plain dicts.
+        Property-based fields are left as UNSET in DTO mode — they are
+        simply skipped by the builder.
+
+        Args:
+            queryset: Base queryset.
+            intent: The QueryIntent.
+            dto_class: DTO class for field introspection.
+            as_dicts: If True, return plain dicts instead of DTO instances.
 
         Returns:
-            List of DTOs if hybrid mode applies, None otherwise.
+            List of DTOs/dicts if hybrid mode applies, None otherwise.
         """
         if not dto_class or not intent or not intent.expand or not intent.expand.has_relations():
             return None
@@ -97,7 +106,7 @@ class DjangoExecutor:
         )
         queryset = self._apply_filter(queryset, intent)
         queryset = self._apply_ordering(queryset, intent)
-        return builder.execute(queryset, intent, dto_class)
+        return builder.execute(queryset, intent, dto_class, as_dicts=as_dicts)
 
     def execute(
         self,

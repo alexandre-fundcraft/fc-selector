@@ -327,11 +327,8 @@ class ODataSelector:
         query_string: str | None = None,
         model_class: Optional["Model"] = None,
         base_queryset: QuerySet | None = None,
-    ) -> list:
-        """Execute OData query and return results using .values().
-
-        Uses hybrid values mode when $expand contains forward-only
-        relations, returning DTOs.  Otherwise returns raw dicts.
+    ) -> list[dict]:
+        """Execute OData query and return results as plain dictionaries.
 
         Args:
             query_string: OData query string (e.g., "$filter=name eq 'test'&$select=id,name")
@@ -339,7 +336,7 @@ class ODataSelector:
             base_queryset: Optional base queryset to apply query to
 
         Returns:
-            List of dicts (no expand) or list of DTOs (hybrid expand)
+            List of dicts.
         """
         from fc_selector.protocols.odata.converters import odata_query_to_intent
         from fc_selector.protocols.odata.parsers.query.parser import parse_odata_query
@@ -370,9 +367,9 @@ class ODataSelector:
             intent.filter.ast = parse_filter(intent.filter.expression)
 
         if self.values_mode:
-            hybrid = self._executor.try_hybrid(base_queryset, intent, self.dto_class)
+            hybrid = self._executor.try_hybrid(base_queryset, intent, self.dto_class, as_dicts=True)
             if hybrid is not None:
-                return list(hybrid)
+                return hybrid
 
         return list(self._executor.execute(base_queryset, intent, use_values=True))
 
@@ -452,17 +449,14 @@ class ODataSelector:
 
         return dtos
 
-    def get_many_dicts(self, query_builder: QueryBuilder | None = None) -> list:
-        """Execute query and return results using .values().
-
-        Uses hybrid values mode when $expand contains forward-only
-        relations, returning DTOs.  Otherwise returns raw dicts.
+    def get_many_dicts(self, query_builder: QueryBuilder | None = None) -> list[dict]:
+        """Execute query and return results as plain dictionaries.
 
         Args:
             query_builder: Optional QueryBuilder with filter, select, orderby, etc.
 
         Returns:
-            List of dicts (no expand) or list of DTOs (hybrid expand)
+            List of dicts.
         """
         t0 = time.perf_counter()
 
@@ -494,7 +488,7 @@ class ODataSelector:
 
         base_qs = self.get_queryset()
         if self.values_mode:
-            hybrid = self._executor.try_hybrid(base_qs, intent, self.dto_class)
+            hybrid = self._executor.try_hybrid(base_qs, intent, self.dto_class, as_dicts=True)
             t2 = time.perf_counter()
 
             if hybrid is not None:

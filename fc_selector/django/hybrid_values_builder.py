@@ -2,7 +2,7 @@
 Hybrid Values Builder.
 
 Executes a QueryIntent using .values() with $expand support for forward relations
-(FK, OneToOne), reverse FK, and M2M relations. Returns DTO instances with nested DTOs.
+(FK, OneToOne), reverse FK, and M2M relations. Returns DTO instances or plain dicts.
 
 Strategy:
 - Forward relations: JOIN via select_related + .values('rel__field')
@@ -34,10 +34,37 @@ from fc_selector.django.visitors import AstToDjangoQVisitor
 logger = logging.getLogger(__name__)
 
 
+def _get_pk(obj: Any, pk_name: str, as_dicts: bool) -> Any:
+    """Read the primary key from a parent object (dict or DTO)."""
+    return obj[pk_name] if as_dicts else getattr(obj, pk_name)
+
+
+def _set_field(obj: Any, name: str, value: Any, as_dicts: bool) -> None:
+    """Set a field on a parent object (dict or DTO)."""
+    if as_dicts:
+        obj[name] = value
+    else:
+        setattr(obj, name, value)
+
+
+def _collect_pks(objects: list, pk_name: str, as_dicts: bool) -> list:
+    """Collect primary keys from a list of parent objects."""
+    if as_dicts:
+        return [obj[pk_name] for obj in objects if pk_name in obj]
+    return [
+        pk for obj in objects
+        if (pk := getattr(obj, pk_name)) is not UNSET
+    ]
+
+
 class HybridValuesBuilder:
     """
     Executes a QueryIntent using .values() with $expand support for forward,
-    reverse FK, and M2M relations. Returns DTO instances, not raw dicts.
+    reverse FK, and M2M relations.
+
+    When ``as_dicts=False`` (default), returns DTO instances with nested DTOs.
+    When ``as_dicts=True``, returns plain dicts with nested dicts — no DTO
+    instantiation at all.
     """
 
     def __init__(
@@ -53,8 +80,20 @@ class HybridValuesBuilder:
         queryset: QuerySet,
         intent: QueryIntent,
         dto_class: type[BaseODataDTO],
-    ) -> list[BaseODataDTO]:
-        """Full pipeline: classify -> collect fields -> query -> unflatten -> DTO."""
+        *,
+        as_dicts: bool = False,
+    ) -> list:
+        """Full pipeline: classify -> collect fields -> query -> unflatten.
+
+        Args:
+            queryset: Base queryset (already filtered/ordered by executor).
+            intent: The QueryIntent with select/expand/pagination.
+            dto_class: DTO class for field introspection.
+            as_dicts: If True, return plain dicts instead of DTO instances.
+
+        Returns:
+            List of DTOs (default) or list of dicts (``as_dicts=True``).
+        """
         model = queryset.model
 
         forward_relations: dict[str, QueryIntent] = {}
@@ -78,22 +117,26 @@ class HybridValuesBuilder:
         queryset = _apply_pagination(queryset, intent)
 
         rows = list(queryset)
-        parent_dtos = [
-            self._unflatten_and_build(row, dto_class, intent, forward_relations)
+        parents = [
+            self._unflatten_and_build(
+                row, dto_class, intent, forward_relations, as_dicts=as_dicts,
+            )
             for row in rows
         ]
 
         # Phase 2: attach reverse FK children
-        if reverse_fk_relations and parent_dtos:
+        if reverse_fk_relations and parents:
             self._attach_reverse_fk_children(
-                model, parent_dtos, reverse_fk_relations
+                model, parents, reverse_fk_relations, as_dicts=as_dicts,
             )
 
         # Phase 3: attach M2M children
-        if m2m_relations and parent_dtos:
-            self._attach_m2m_children(model, parent_dtos, m2m_relations)
+        if m2m_relations and parents:
+            self._attach_m2m_children(
+                model, parents, m2m_relations, as_dicts=as_dicts,
+            )
 
-        return parent_dtos
+        return parents
 
     @staticmethod
     def classify_relations(
@@ -128,7 +171,7 @@ class HybridValuesBuilder:
 
         return forward, reverse_fk, m2m
 
-    # ── Forward relation helpers (unchanged) ────────────────────────
+    # ── Forward relation helpers ──────────────────────────────────
 
     def _collect_values_fields(
         self,
@@ -248,8 +291,10 @@ class HybridValuesBuilder:
         dto_class: type[BaseODataDTO],
         intent: QueryIntent,
         forward_relations: dict[str, QueryIntent],
-    ) -> BaseODataDTO:
-        """Flat dict -> nested dict -> DTO(**dict) with nested DTOs."""
+        *,
+        as_dicts: bool = False,
+    ) -> Any:
+        """Flat dict -> nested structure (DTO or dict) with nested objects."""
         data: dict[str, Any] = {}
 
         dto_fields = dto_class._get_dto_fields()
@@ -280,7 +325,7 @@ class HybridValuesBuilder:
                 if model_field_name in row:
                     data[field_name] = row[model_field_name]
 
-        # Build nested DTOs for forward relations
+        # Build nested objects for forward relations
         for relation_name, nested_intent in forward_relations.items():
             expand_config = self._get_expand_config(relation_name)
             nested_dto_class = expand_config.get("dto_class") if expand_config else None
@@ -290,10 +335,10 @@ class HybridValuesBuilder:
                 continue
 
             data[relation_name] = self._extract_nested(
-                row, relation_name, nested_dto_class, nested_intent
+                row, relation_name, nested_dto_class, nested_intent, as_dicts=as_dicts,
             )
 
-        return dto_class(**data)
+        return data if as_dicts else dto_class(**data)
 
     @staticmethod
     def _extract_nested(
@@ -301,8 +346,10 @@ class HybridValuesBuilder:
         relation_name: str,
         dto_class: type[BaseODataDTO],
         nested_intent: QueryIntent,
-    ) -> BaseODataDTO | None:
-        """Extract nested DTO from flat row using __ prefix."""
+        *,
+        as_dicts: bool = False,
+    ) -> Any:
+        """Extract nested object from flat row using __ prefix."""
         prefix = f"{relation_name}__"
 
         nested_raw: dict[str, Any] = {}
@@ -339,27 +386,25 @@ class HybridValuesBuilder:
             if field_name in nested_raw:
                 nested_data[field_name] = nested_raw[field_name]
 
-        return dto_class(**nested_data)
+        return nested_data if as_dicts else dto_class(**nested_data)
 
     # ── Reverse FK support ──────────────────────────────────────────
 
     def _attach_reverse_fk_children(
         self,
         model,
-        parent_dtos: list[BaseODataDTO],
+        parents: list,
         relations: dict[str, QueryIntent],
         *,
         _depth: int = 0,
+        as_dicts: bool = False,
     ) -> None:
         """Fetch and attach reverse FK children via 1 query per relation."""
         if _depth >= MAX_DTO_RECURSION_DEPTH:
             return
 
         pk_name = model._meta.pk.name
-        parent_pks = [
-            pk for dto in parent_dtos
-            if (pk := getattr(dto, pk_name)) is not UNSET
-        ]
+        parent_pks = _collect_pks(parents, pk_name, as_dicts)
         if not parent_pks:
             return
 
@@ -367,8 +412,8 @@ class HybridValuesBuilder:
             info = get_reverse_fk_info(model, relation_name)
             if not info:
                 # Set empty list on all parents
-                for dto in parent_dtos:
-                    setattr(dto, relation_name, [])
+                for p in parents:
+                    _set_field(p, relation_name, [], as_dicts)
                 continue
 
             child_model, fk_attname = info
@@ -376,8 +421,8 @@ class HybridValuesBuilder:
             child_dto_class = expand_config.get("dto_class") if expand_config else None
 
             if not child_dto_class:
-                for dto in parent_dtos:
-                    setattr(dto, relation_name, [])
+                for p in parents:
+                    _set_field(p, relation_name, [], as_dicts)
                 continue
 
             # Classify nested expands for the child
@@ -417,25 +462,26 @@ class HybridValuesBuilder:
             child_qs = _apply_pagination(child_qs, nested_intent)
             child_rows = list(child_qs)
 
-            # Group by parent FK and build child DTOs
-            grouped: dict[Any, list[BaseODataDTO]] = defaultdict(list)
+            # Group by parent FK and build children
+            grouped: dict[Any, list] = defaultdict(list)
             for row in child_rows:
                 parent_pk = row[fk_attname]
-                child_dto = self._build_child_dto(
-                    row, child_dto_class, nested_intent, child_forward, fk_attname
+                child = self._build_child(
+                    row, child_dto_class, nested_intent, child_forward,
+                    fk_attname, as_dicts=as_dicts,
                 )
-                grouped[parent_pk].append(child_dto)
+                grouped[parent_pk].append(child)
 
-            # Attach to parent DTOs
-            for dto in parent_dtos:
-                pk = getattr(dto, pk_name)
-                setattr(dto, relation_name, grouped.get(pk, []))
+            # Attach to parents
+            for p in parents:
+                pk = _get_pk(p, pk_name, as_dicts)
+                _set_field(p, relation_name, grouped.get(pk, []), as_dicts)
 
-            # Recursive: handle nested reverse FK / M2M on child DTOs
-            all_child_dtos = [dto for dtos in grouped.values() for dto in dtos]
+            # Recursive: handle nested reverse FK / M2M on child objects
+            all_children = [c for children in grouped.values() for c in children]
             self._recurse_into_children(
-                child_model, all_child_dtos, child_reverse_fk, child_m2m,
-                relation_name, _depth,
+                child_model, all_children, child_reverse_fk, child_m2m,
+                relation_name, _depth, as_dicts=as_dicts,
             )
 
     # ── M2M support ─────────────────────────────────────────────────
@@ -443,28 +489,26 @@ class HybridValuesBuilder:
     def _attach_m2m_children(
         self,
         model,
-        parent_dtos: list[BaseODataDTO],
+        parents: list,
         relations: dict[str, QueryIntent],
         *,
         _depth: int = 0,
+        as_dicts: bool = False,
     ) -> None:
         """Fetch and attach M2M children via 2 queries per relation."""
         if _depth >= MAX_DTO_RECURSION_DEPTH:
             return
 
         pk_name = model._meta.pk.name
-        parent_pks = [
-            pk for dto in parent_dtos
-            if (pk := getattr(dto, pk_name)) is not UNSET
-        ]
+        parent_pks = _collect_pks(parents, pk_name, as_dicts)
         if not parent_pks:
             return
 
         for relation_name, nested_intent in relations.items():
             info = get_m2m_info(model, relation_name)
             if not info:
-                for dto in parent_dtos:
-                    setattr(dto, relation_name, [])
+                for p in parents:
+                    _set_field(p, relation_name, [], as_dicts)
                 continue
 
             through_model = info["through_model"]
@@ -476,8 +520,8 @@ class HybridValuesBuilder:
             child_dto_class = expand_config.get("dto_class") if expand_config else None
 
             if not child_dto_class:
-                for dto in parent_dtos:
-                    setattr(dto, relation_name, [])
+                for p in parents:
+                    _set_field(p, relation_name, [], as_dicts)
                 continue
 
             # Query 1: through table -> parent-to-child PK mapping
@@ -497,8 +541,8 @@ class HybridValuesBuilder:
                 all_child_pks.add(child_pk)
 
             if not all_child_pks:
-                for dto in parent_dtos:
-                    setattr(dto, relation_name, [])
+                for p in parents:
+                    _set_field(p, relation_name, [], as_dicts)
                 continue
 
             # Classify nested expands for the child
@@ -535,32 +579,33 @@ class HybridValuesBuilder:
             child_qs = _apply_pagination(child_qs, nested_intent)
             child_rows = list(child_qs)
 
-            # Build child DTOs indexed by PK.
+            # Build children indexed by PK.
             # PK is always fetched by _collect_values_fields for indexing,
             # even if not in $select — it won't appear in the DTO itself.
             child_pk_name = related_model._meta.pk.name
-            child_dto_by_pk: dict[Any, BaseODataDTO] = {}
+            child_by_pk: dict[Any, Any] = {}
             for row in child_rows:
-                child_dto = self._build_child_dto(
-                    row, child_dto_class, nested_intent, child_forward
+                child = self._build_child(
+                    row, child_dto_class, nested_intent, child_forward,
+                    as_dicts=as_dicts,
                 )
-                child_dto_by_pk[row[child_pk_name]] = child_dto
+                child_by_pk[row[child_pk_name]] = child
 
             # Attach to parents using through mapping
-            for dto in parent_dtos:
-                pk = getattr(dto, pk_name)
+            for p in parents:
+                pk = _get_pk(p, pk_name, as_dicts)
                 child_pks = parent_to_child_pks.get(pk, [])
-                setattr(
-                    dto,
-                    relation_name,
-                    [child_dto_by_pk[cpk] for cpk in child_pks if cpk in child_dto_by_pk],
+                _set_field(
+                    p, relation_name,
+                    [child_by_pk[cpk] for cpk in child_pks if cpk in child_by_pk],
+                    as_dicts,
                 )
 
-            # Recursive: handle nested reverse FK / M2M on child DTOs
-            all_child_dtos = list(child_dto_by_pk.values())
+            # Recursive: handle nested reverse FK / M2M on child objects
+            all_children = list(child_by_pk.values())
             self._recurse_into_children(
-                related_model, all_child_dtos, child_reverse_fk, child_m2m,
-                relation_name, _depth,
+                related_model, all_children, child_reverse_fk, child_m2m,
+                relation_name, _depth, as_dicts=as_dicts,
             )
 
     # ── Shared helpers ──────────────────────────────────────────────
@@ -568,14 +613,16 @@ class HybridValuesBuilder:
     def _recurse_into_children(
         self,
         child_model,
-        child_dtos: list[BaseODataDTO],
+        children: list,
         child_reverse_fk: dict[str, QueryIntent],
         child_m2m: dict[str, QueryIntent],
         relation_name: str,
         depth: int,
+        *,
+        as_dicts: bool = False,
     ) -> None:
         """Recursively attach nested reverse FK / M2M children."""
-        if not child_dtos or (not child_reverse_fk and not child_m2m):
+        if not children or (not child_reverse_fk and not child_m2m):
             return
 
         child_expandable = self._get_nested_expandable_fields(relation_name)
@@ -585,22 +632,26 @@ class HybridValuesBuilder:
         )
         if child_reverse_fk:
             child_builder._attach_reverse_fk_children(
-                child_model, child_dtos, child_reverse_fk, _depth=depth + 1
+                child_model, children, child_reverse_fk,
+                _depth=depth + 1, as_dicts=as_dicts,
             )
         if child_m2m:
             child_builder._attach_m2m_children(
-                child_model, child_dtos, child_m2m, _depth=depth + 1
+                child_model, children, child_m2m,
+                _depth=depth + 1, as_dicts=as_dicts,
             )
 
-    def _build_child_dto(
+    def _build_child(
         self,
         row: dict,
         dto_class: type[BaseODataDTO],
         nested_intent: QueryIntent,
         child_forward: dict[str, QueryIntent],
         exclude_field: str | None = None,
-    ) -> BaseODataDTO:
-        """Build a child DTO from a flat values row.
+        *,
+        as_dicts: bool = False,
+    ) -> Any:
+        """Build a child object (DTO or dict) from a flat values row.
 
         Reuses _extract_nested for forward relations within the child.
         """
@@ -632,7 +683,7 @@ class HybridValuesBuilder:
                 if model_field_name in row:
                     data[field_name] = row[model_field_name]
 
-        # Build nested DTOs for forward relations within child
+        # Build nested objects for forward relations within child
         for rel_name, rel_intent in child_forward.items():
             expand_config = self._get_expand_config_nested(rel_name)
             nested_dto_class = expand_config.get("dto_class") if expand_config else None
@@ -642,10 +693,10 @@ class HybridValuesBuilder:
                 continue
 
             data[rel_name] = self._extract_nested(
-                row, rel_name, nested_dto_class, rel_intent
+                row, rel_name, nested_dto_class, rel_intent, as_dicts=as_dicts,
             )
 
-        return dto_class(**data)
+        return data if as_dicts else dto_class(**data)
 
     def _get_expand_config(self, relation_name: str) -> dict | None:
         """Get expand configuration for a relation (same logic as DjangoExecutor)."""
@@ -662,7 +713,7 @@ class HybridValuesBuilder:
         """Get expand config for a nested relation within a child.
 
         Unlike _get_expand_config, this searches nested expandable_fields
-        configs. Needed because _build_child_dto runs on the parent builder
+        configs. Needed because _build_child runs on the parent builder
         (with parent-level expandable_fields), not on a child builder.
         """
         # First try direct lookup
@@ -695,6 +746,7 @@ class HybridValuesBuilder:
     @staticmethod
     def _apply_child_filter(child_qs: QuerySet, nested_intent: QueryIntent) -> QuerySet:
         """Apply filter from nested intent to child queryset."""
+        assert nested_intent.filter is not None and nested_intent.filter.ast is not None
         visitor = AstToDjangoQVisitor(child_qs.model)
         q_object = visitor.visit(nested_intent.filter.ast)
         return child_qs.filter(q_object)
@@ -702,6 +754,7 @@ class HybridValuesBuilder:
     @staticmethod
     def _apply_child_ordering(child_qs: QuerySet, nested_intent: QueryIntent) -> QuerySet:
         """Apply ordering from nested intent to child queryset."""
+        assert nested_intent.orderby is not None
         order_fields = []
         for f in nested_intent.orderby.fields:
             prefix = "-" if f.direction == "desc" else ""

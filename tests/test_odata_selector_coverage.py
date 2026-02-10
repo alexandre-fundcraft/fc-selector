@@ -15,7 +15,6 @@ from fc_selector.django.selector import ODataSelector
 from tests.integration.support.models import (
     ODataFKTarget,
     ODataModelWithFK,
-    ODataOneToOneChild,
     ODataOneToOneParent,
     ODataTestModel,
 )
@@ -205,8 +204,9 @@ class TestODataSelectorCoverage:
         selector = HybridSelector()
         results = selector.query_as_dicts("$expand=target")
         assert len(results) == 1
-        # Hybrid returns DTOs even in as_dicts if expand is used
-        assert isinstance(results[0], ModelWithFKDTO)
+        assert isinstance(results[0], dict)
+        assert isinstance(results[0]["target"], dict)
+        assert results[0]["target"]["name"] == "T1"
 
     def test_get_many_values_mode_false(self):
         """Line 349: get_many with values_mode=False."""

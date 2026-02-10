@@ -548,22 +548,25 @@ class TestSelectorIntegration:
     def test_get_many_dicts_with_forward_expand(
         self, obj_with_fk, target_a, selector
     ):
-        """get_many_dicts() uses hybrid path for forward-only expand."""
+        """get_many_dicts() uses hybrid path and returns plain dicts."""
         qb = QueryBuilder().expand("target")
         result = selector.get_many_dicts(qb)
 
         assert len(result) >= 1
-        # Hybrid returns DTOs, not dicts
-        assert isinstance(result[0], ModelWithFKDTO)
+        assert isinstance(result[0], dict)
+        assert isinstance(result[0]["target"], dict)
+        assert result[0]["target"]["name"] == "Alpha"
 
     def test_query_as_dicts_with_forward_expand(
         self, obj_with_fk, target_a, selector
     ):
-        """query_as_dicts() uses hybrid path for forward-only expand."""
+        """query_as_dicts() uses hybrid path and returns plain dicts."""
         result = selector.query_as_dicts("$expand=target")
 
         assert len(result) >= 1
-        assert isinstance(result[0], ModelWithFKDTO)
+        assert isinstance(result[0], dict)
+        assert isinstance(result[0]["target"], dict)
+        assert result[0]["target"]["name"] == "Alpha"
 
     def test_query_as_dtos_with_forward_expand(
         self, obj_with_fk, target_a, selector
