@@ -12,6 +12,7 @@ from fc_selector.core.dtos import UNSET, BaseODataDTO
 from fc_selector.core.exceptions import QueryError
 from fc_selector.core.query_builder import QueryBuilder
 from fc_selector.django.selector import ODataSelector
+from fc_selector.protocols.odata.parsers import filter as filter_parser
 from tests.integration.support.models import (
     ODataFKTarget,
     ODataModelWithFK,
@@ -380,8 +381,6 @@ class TestODataSelectorCoverage:
         # odata_query_to_intent usually populates AST if parse_odata_query succeeded.
         # So we mock parse_filter to return None in parse_odata_query but work later.
 
-        from fc_selector.protocols.odata.parsers import filter as filter_parser
-
         original_parse = filter_parser.parse_filter
 
         call_count = 0
@@ -407,8 +406,6 @@ class TestODataSelectorCoverage:
                 model = ODataTestModel
 
         selector = BasicSelector()
-
-        from fc_selector.protocols.odata.parsers import filter as filter_parser
 
         original_parse = filter_parser.parse_filter
         call_count = 0

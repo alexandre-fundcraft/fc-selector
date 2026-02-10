@@ -1,6 +1,7 @@
 """
 Tests to improve coverage of fc_selector/django/utils/introspection.py.
 """
+
 import pytest
 
 from fc_selector.core.exceptions import InvalidFieldError
@@ -96,4 +97,6 @@ class TestIntrospectionCoverage:
 
     def test_validate_field_name_allowed_fields_success(self):
         """Test validate_field_name succeeds if in allowed_fields even if not on model (e.g. annotation)."""
-        assert validate_field_name(ODataModelWithRelations, "some_annotation", allowed_fields={"some_annotation"}) is True
+        assert (
+            validate_field_name(ODataModelWithRelations, "some_annotation", allowed_fields={"some_annotation"}) is True
+        )

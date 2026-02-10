@@ -85,7 +85,9 @@ class BaseODataGeneratorCommand(BaseCommand):
         models_in_file = BaseODataGeneratorCommand._collect_models_in_file(all_model_info, options)
 
         # Generate code for each model
-        generated_codes = BaseODataGeneratorCommand._generate_all_codes(all_model_info, excluded_edges, models_in_file, options)
+        generated_codes = BaseODataGeneratorCommand._generate_all_codes(
+            all_model_info, excluded_edges, models_in_file, options
+        )
 
         # Write files
         self._write_files(
@@ -236,9 +238,7 @@ class BaseODataGeneratorCommand(BaseCommand):
 
     @staticmethod
     @abstractmethod
-    def _generate_all_codes(
-        all_model_info: dict, excluded_edges: set, models_in_file: set, options: dict
-    ) -> dict:
+    def _generate_all_codes(all_model_info: dict, excluded_edges: set, models_in_file: set, options: dict) -> dict:
         """Generate code for all models.
 
         Args:

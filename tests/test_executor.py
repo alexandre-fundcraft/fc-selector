@@ -9,6 +9,7 @@ import pytest
 from django.db.models import QuerySet
 from django.utils import timezone
 
+from fc_selector.core.exceptions import InvalidFieldError
 from fc_selector.core.intent import (
     ExpandIntent,
     FilterIntent,
@@ -149,8 +150,6 @@ class TestApplyOrdering:
 
     def test_apply_ordering_rejects_non_sortable_field(self, test_model):
         """Ordering by a non-sortable field raises InvalidFieldError."""
-        from fc_selector.core.exceptions import InvalidFieldError
-
         executor = DjangoExecutor(non_sortable_fields=["status", "count"])
         intent = QueryIntent(orderby=OrderIntent(fields=[OrderField(field="status", direction="asc")]))
 
@@ -177,12 +176,8 @@ class TestApplyOrdering:
 
     def test_apply_ordering_rejects_nested_non_sortable_field(self, test_model):
         """Ordering by a nested path with non-sortable base field is rejected."""
-        from fc_selector.core.exceptions import InvalidFieldError
-
         executor = DjangoExecutor(non_sortable_fields=["related_items"])
-        intent = QueryIntent(
-            orderby=OrderIntent(fields=[OrderField(field="related_items.title", direction="asc")])
-        )
+        intent = QueryIntent(orderby=OrderIntent(fields=[OrderField(field="related_items.title", direction="asc")]))
 
         qs = test_model.objects.all()
         with pytest.raises(InvalidFieldError, match="not sortable"):

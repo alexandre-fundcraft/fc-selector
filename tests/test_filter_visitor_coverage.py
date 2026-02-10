@@ -1,10 +1,12 @@
 """
 Additional tests for fc_selector/django/visitors/filter_visitor.py to improve coverage.
 """
+
 from uuid import UUID
 
 import pytest
 from django.db.models import Expression, F, Value
+from django.db.models.lookups import Exact
 
 from fc_selector.core import ast
 from fc_selector.core import exceptions as core_ex
@@ -30,10 +32,7 @@ class TestFilterVisitorCoverage:
     def test_matchespattern_redos_prevention(self, visitor):
         """matchesPattern should raise InvalidValueError for too long patterns."""
         long_pattern = "a" * (MAX_REGEX_PATTERN_LENGTH + 1)
-        node = ast.Call(
-            func=ast.Identifier("matchesPattern"),
-            args=[ast.Identifier("name"), ast.String(long_pattern)]
-        )
+        node = ast.Call(func=ast.Identifier("matchesPattern"), args=[ast.Identifier("name"), ast.String(long_pattern)])
         with pytest.raises(core_ex.InvalidValueError) as exc:
             visitor.visit(node)
         assert "pattern too long" in str(exc.value)
@@ -42,8 +41,7 @@ class TestFilterVisitorCoverage:
         """matchesPattern should raise InvalidValueError for invalid regex."""
         invalid_pattern = "["  # Unclosed bracket
         node = ast.Call(
-            func=ast.Identifier("matchesPattern"),
-            args=[ast.Identifier("name"), ast.String(invalid_pattern)]
+            func=ast.Identifier("matchesPattern"), args=[ast.Identifier("name"), ast.String(invalid_pattern)]
         )
         with pytest.raises(core_ex.InvalidValueError) as exc:
             visitor.visit(node)
@@ -51,20 +49,18 @@ class TestFilterVisitorCoverage:
 
     def test_collection_lambda_unknown_operator(self, visitor):
         """visit_CollectionLambda should raise NotImplementedError for unknown operators."""
+
         # Manually construct a lambda node with a dummy operator
         class DummyOp(ast.Node):
             pass
 
-        node = ast.CollectionLambda(
-            owner=ast.Identifier("related_items"),
-            operator=DummyOp(),
-            lambda_=None
-        )
+        node = ast.CollectionLambda(owner=ast.Identifier("related_items"), operator=DummyOp(), lambda_=None)
         with pytest.raises(NotImplementedError):
             visitor.visit(node)
 
     def test_gen_annotation_name_fallback(self, visitor):
         """_gen_annotation_name should handle expressions without name/value."""
+
         class DummyExpr(Expression):
             def __init__(self):
                 pass
@@ -106,7 +102,6 @@ class TestFilterVisitorCoverage:
 
     def test_attempt_keywordify_lookup(self, visitor):
         """_attempt_keywordify handles lookups with rhs."""
-        from django.db.models.lookups import Exact
         lookup = Exact(F("name"), Value("test"))
         result = visitor._attempt_keywordify(lookup)
         assert result is not None

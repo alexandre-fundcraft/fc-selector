@@ -1,6 +1,7 @@
 """
 Additional tests for fc_selector/django/hybrid_values_builder.py to improve coverage.
 """
+
 import logging
 from dataclasses import dataclass
 
@@ -18,10 +19,12 @@ class SimpleDTO(BaseODataDTO):
     id: int = UNSET
     title: str = UNSET
 
+
 @dataclass
 class RelationDTO(BaseODataDTO):
     id: int = UNSET
     name: str = UNSET
+
 
 @pytest.mark.django_db
 class TestHybridValuesBuilderCoverage:
@@ -31,9 +34,7 @@ class TestHybridValuesBuilderCoverage:
         """Test classification of unknown relation triggers warning."""
         expand = ExpandIntent(relations={"unknown_rel": QueryIntent()})
         with caplog.at_level(logging.WARNING):
-            forward, reverse, m2m = HybridValuesBuilder.classify_relations(
-                ODataModelWithFK, expand, {}
-            )
+            forward, reverse, m2m = HybridValuesBuilder.classify_relations(ODataModelWithFK, expand, {})
         assert "not a recognized" in caplog.text
         assert "unknown_rel" in caplog.text
         assert not forward
@@ -52,12 +53,7 @@ class TestHybridValuesBuilderCoverage:
         relations = {"children": QueryIntent()}
 
         # We call the internal method directly with max depth
-        builder._attach_reverse_fk_children(
-            ODataModelWithRelations,
-            [dto],
-            relations,
-            _depth=MAX_DTO_RECURSION_DEPTH
-        )
+        builder._attach_reverse_fk_children(ODataModelWithRelations, [dto], relations, _depth=MAX_DTO_RECURSION_DEPTH)
 
         # Should return immediately, so 'children' attribute won't be set
         assert not hasattr(dto, "children")
@@ -68,12 +64,7 @@ class TestHybridValuesBuilderCoverage:
         dto = SimpleDTO(id=1)
         relations = {"tags": QueryIntent()}
 
-        builder._attach_m2m_children(
-            ODataModelWithRelations,
-            [dto],
-            relations,
-            _depth=MAX_DTO_RECURSION_DEPTH
-        )
+        builder._attach_m2m_children(ODataModelWithRelations, [dto], relations, _depth=MAX_DTO_RECURSION_DEPTH)
 
         assert not hasattr(dto, "tags")
 
@@ -83,9 +74,7 @@ class TestHybridValuesBuilderCoverage:
         intent = QueryIntent()
 
         # Use a model with mixed fields
-        fields = builder._collect_values_fields(
-            ODataModelWithFK, intent, {}
-        )
+        fields = builder._collect_values_fields(ODataModelWithFK, intent, {})
 
         assert "id" in fields
         assert "title" in fields
@@ -96,28 +85,22 @@ class TestHybridValuesBuilderCoverage:
         # Reverse relations and M2M should be excluded
         # ODataModelWithFK doesn't have them, let's check ODataModelWithRelations
 
-        fields_rel = builder._collect_values_fields(
-            ODataModelWithRelations, intent, {}
-        )
-        assert "tags" not in fields_rel # M2M
-        assert "children" not in fields_rel # Reverse FK
+        fields_rel = builder._collect_values_fields(ODataModelWithRelations, intent, {})
+        assert "tags" not in fields_rel  # M2M
+        assert "children" not in fields_rel  # Reverse FK
 
     def test_collect_related_fields_no_relation(self):
         """Test _collect_related_fields with invalid relation."""
         builder = HybridValuesBuilder()
-        fields = builder._collect_related_fields(
-            ODataModelWithFK, "nonexistent", QueryIntent()
-        )
+        fields = builder._collect_related_fields(ODataModelWithFK, "nonexistent", QueryIntent())
         assert fields == []
 
     def test_unflatten_no_nested_dto_class(self):
         """Test _unflatten_and_build with missing nested DTO class."""
         # Expand defined in intent but not in expandable_fields config
-        intent = QueryIntent(
-            expand=ExpandIntent(relations={"target": QueryIntent()})
-        )
+        intent = QueryIntent(expand=ExpandIntent(relations={"target": QueryIntent()}))
         builder = HybridValuesBuilder(
-            expandable_fields={} # Empty config
+            expandable_fields={}  # Empty config
         )
 
         row = {"id": 1, "target__id": 2, "target__name": "Test"}
@@ -137,9 +120,7 @@ class TestHybridValuesBuilderCoverage:
         builder = HybridValuesBuilder()
         row = {"rel__id": None, "rel__name": None}
 
-        result = builder._extract_nested(
-            row, "rel", RelationDTO, QueryIntent()
-        )
+        result = builder._extract_nested(row, "rel", RelationDTO, QueryIntent())
         assert result is None
 
     def test_attach_reverse_fk_no_pks(self):
@@ -148,9 +129,7 @@ class TestHybridValuesBuilderCoverage:
         dtos = [SimpleDTO(id=UNSET)]
         relations = {"children": QueryIntent()}
 
-        builder._attach_reverse_fk_children(
-            ODataModelWithRelations, dtos, relations
-        )
+        builder._attach_reverse_fk_children(ODataModelWithRelations, dtos, relations)
         # Should return early
         assert not hasattr(dtos[0], "children")
 
@@ -161,9 +140,7 @@ class TestHybridValuesBuilderCoverage:
         # "target" is a forward FK, so get_reverse_fk_info returns None
         relations = {"target": QueryIntent()}
 
-        builder._attach_reverse_fk_children(
-            ODataModelWithRelations, dtos, relations
-        )
+        builder._attach_reverse_fk_children(ODataModelWithRelations, dtos, relations)
         # Should set empty list
         assert dtos[0].target == []
 
@@ -171,11 +148,9 @@ class TestHybridValuesBuilderCoverage:
         """Test _attach_reverse_fk_children with no child DTO class configured."""
         builder = HybridValuesBuilder(expandable_fields={})
         dtos = [SimpleDTO(id=1)]
-        relations = {"children": QueryIntent()} # children is valid reverse FK
+        relations = {"children": QueryIntent()}  # children is valid reverse FK
 
-        builder._attach_reverse_fk_children(
-            ODataModelWithRelations, dtos, relations
-        )
+        builder._attach_reverse_fk_children(ODataModelWithRelations, dtos, relations)
         # Should set empty list
         assert dtos[0].children == []
 
@@ -185,20 +160,16 @@ class TestHybridValuesBuilderCoverage:
         dtos = [SimpleDTO(id=UNSET)]
         relations = {"tags": QueryIntent()}
 
-        builder._attach_m2m_children(
-            ODataModelWithRelations, dtos, relations
-        )
+        builder._attach_m2m_children(ODataModelWithRelations, dtos, relations)
         assert not hasattr(dtos[0], "tags")
 
     def test_attach_m2m_bad_info(self):
         """Test _attach_m2m_children with bad relation info."""
         builder = HybridValuesBuilder()
         dtos = [SimpleDTO(id=1)]
-        relations = {"title": QueryIntent()} # Not M2M
+        relations = {"title": QueryIntent()}  # Not M2M
 
-        builder._attach_m2m_children(
-            ODataModelWithRelations, dtos, relations
-        )
+        builder._attach_m2m_children(ODataModelWithRelations, dtos, relations)
         # Should set empty list
         assert dtos[0].title == []
 
@@ -206,24 +177,15 @@ class TestHybridValuesBuilderCoverage:
         """Test _attach_m2m_children with no child DTO class."""
         builder = HybridValuesBuilder(expandable_fields={})
         dtos = [SimpleDTO(id=1)]
-        relations = {"tags": QueryIntent()} # Valid M2M
+        relations = {"tags": QueryIntent()}  # Valid M2M
 
-        builder._attach_m2m_children(
-            ODataModelWithRelations, dtos, relations
-        )
+        builder._attach_m2m_children(ODataModelWithRelations, dtos, relations)
         assert dtos[0].tags == []
 
     def test_get_expand_config_nested_deep_search(self):
         """Test _get_expand_config_nested finding config in parent's nested config."""
         # Setup complex config
-        config = {
-            "children": {
-                "dto_class": SimpleDTO,
-                "expandable_fields": {
-                    "grandchildren": RelationDTO
-                }
-            }
-        }
+        config = {"children": {"dto_class": SimpleDTO, "expandable_fields": {"grandchildren": RelationDTO}}}
         builder = HybridValuesBuilder(expandable_fields=config)
 
         # Should find grandchildren config
@@ -233,7 +195,7 @@ class TestHybridValuesBuilderCoverage:
 
     def test_get_nested_expandable_fields_empty(self):
         """Test _get_nested_expandable_fields returns empty if no nested config."""
-        config = {"target": RelationDTO} # No nested fields
+        config = {"target": RelationDTO}  # No nested fields
         builder = HybridValuesBuilder(expandable_fields=config)
 
         nested = builder._get_nested_expandable_fields("target")
@@ -244,4 +206,3 @@ class TestHybridValuesBuilderCoverage:
         builder = HybridValuesBuilder()
         builder._recurse_into_children(None, [], {}, {}, "rel", 0)
         # Should just not crash
-

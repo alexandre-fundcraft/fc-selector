@@ -18,6 +18,7 @@ class MockDTOWithInternalMethod:
 
 class MockDTOWithAnnotations:
     """Mock DTO with __annotations__ but not dataclass."""
+
     name: str
     age: int
 
@@ -25,12 +26,14 @@ class MockDTOWithAnnotations:
 @dataclasses.dataclass
 class MockDataclassDTO:
     """Mock dataclass DTO."""
+
     id: int
     title: str
 
 
 class MockEmptyDTO:
     """Mock DTO with nothing."""
+
     pass
 
 

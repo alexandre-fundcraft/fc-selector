@@ -54,9 +54,7 @@ def is_m2m_relation(model: type[models.Model], field_name: str) -> bool:
     return False
 
 
-def get_reverse_fk_info(
-    model: type[models.Model], relation_name: str
-) -> tuple[type[models.Model], str] | None:
+def get_reverse_fk_info(model: type[models.Model], relation_name: str) -> tuple[type[models.Model], str] | None:
     """Get (child_model, fk_attname) for a reverse FK relation.
 
     Returns None if not a reverse FK.

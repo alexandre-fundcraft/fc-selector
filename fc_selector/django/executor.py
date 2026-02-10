@@ -393,7 +393,9 @@ class DjangoExecutor:
                 related_model, relation_name, django_relation, properties, select_related, skip_only_relations
             )
         elif "only_fields" in expand_config:
-            DjangoExecutor._add_explicit_only_fields(expand_config, django_relation, related_model, select_related, only_fields)
+            DjangoExecutor._add_explicit_only_fields(
+                expand_config, django_relation, related_model, select_related, only_fields
+            )
         else:
             self._add_dto_introspected_fields(
                 expand_config, django_relation, related_model, select_related, only_fields
@@ -480,9 +482,7 @@ class DjangoExecutor:
             only_fields.add(f"{django_relation}__{related_model._meta.pk.name}")
 
     @staticmethod
-    def _process_nested_expands(
-        nested_intent: QueryIntent, django_relation: str, select_related: list[str]
-    ) -> None:
+    def _process_nested_expands(nested_intent: QueryIntent, django_relation: str, select_related: list[str]) -> None:
         """Process nested expand relations for deep select_related."""
         if nested_intent.expand:
             for nested_rel in nested_intent.expand.get_relation_names():

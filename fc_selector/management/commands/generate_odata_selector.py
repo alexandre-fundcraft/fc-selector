@@ -35,9 +35,7 @@ class Command(BaseODataGeneratorCommand):
     output_folder = "selectors"
 
     @staticmethod
-    def _generate_all_codes(
-        all_model_info: dict, excluded_edges: set, models_in_file: set, options: dict
-    ) -> dict:
+    def _generate_all_codes(all_model_info: dict, excluded_edges: set, models_in_file: set, options: dict) -> dict:
         """Generate selector code for all models."""
         selector_codes = {}
 

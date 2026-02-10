@@ -35,9 +35,7 @@ class Command(BaseODataGeneratorCommand):
     output_folder = "serializers"
 
     @staticmethod
-    def _generate_all_codes(
-        all_model_info: dict, excluded_edges: set, models_in_file: set, options: dict
-    ) -> dict:
+    def _generate_all_codes(all_model_info: dict, excluded_edges: set, models_in_file: set, options: dict) -> dict:
         """Generate serializer code for all models."""
         serializer_codes = {}
 

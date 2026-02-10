@@ -140,8 +140,9 @@ class TestSelectorMixinCoverage:
         mock_selector = MagicMock()
 
         class TestViewSet(ODataSelectorViewSetMixin):
-            def selector_class(x):
+            def selector_class(self):
                 return mock_selector
+
             odata_entity_set_name = "posts"
 
             def get_serializer(self, *args, **kwargs):
@@ -173,8 +174,9 @@ class TestSelectorMixinCoverage:
         mock_selector.get_one.return_value = None
 
         class TestViewSet(ODataSelectorViewSetMixin):
-            def selector_class(x):
+            def selector_class(self):
                 return mock_selector
+
             odata_entity_set_name = "posts"
 
         viewset = TestViewSet()
@@ -189,8 +191,9 @@ class TestSelectorMixinCoverage:
         mock_selector = MagicMock()
 
         class TestViewSet(ODataSelectorViewSetMixin):
-            def selector_class(x):
+            def selector_class(self):
                 return mock_selector
+
             odata_entity_set_name = "posts"
 
         viewset = TestViewSet()

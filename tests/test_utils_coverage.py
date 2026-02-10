@@ -1,4 +1,3 @@
-
 from fc_selector.core.ast import nodes
 from fc_selector.core.ast.visitor import NodeTransformer
 from fc_selector.core.dtos.utils import get_dto_fields
@@ -11,6 +10,7 @@ def test_get_dto_fields_none_class():
 def test_get_dto_fields_plain_class_no_annotations():
     class Plain:
         pass
+
     assert get_dto_fields(Plain) == []
 
 

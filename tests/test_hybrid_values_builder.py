@@ -118,9 +118,7 @@ def obj_with_fk(target_a):
 
 @pytest.fixture
 def obj_with_two_fks(target_a, target_b):
-    return ODataModelWithFK.objects.create(
-        title="Item2", value=20, target=target_a, second_target=target_b
-    )
+    return ODataModelWithFK.objects.create(title="Item2", value=20, target=target_a, second_target=target_b)
 
 
 @pytest.fixture
@@ -184,18 +182,14 @@ EXPANDABLE_FIELDS_FULL = {
 class TestClassifyRelations:
     def test_forward_fk_classified(self):
         expand = ExpandIntent(relations={"target": QueryIntent()})
-        forward, reverse_fk, m2m = HybridValuesBuilder.classify_relations(
-            ODataModelWithFK, expand, {}
-        )
+        forward, reverse_fk, m2m = HybridValuesBuilder.classify_relations(ODataModelWithFK, expand, {})
         assert "target" in forward
         assert reverse_fk == {}
         assert m2m == {}
 
     def test_reverse_relation_classified(self):
         expand = ExpandIntent(relations={"odatamodelwithfk_set": QueryIntent()})
-        forward, reverse_fk, m2m = HybridValuesBuilder.classify_relations(
-            ODataFKTarget, expand, {}
-        )
+        forward, reverse_fk, m2m = HybridValuesBuilder.classify_relations(ODataFKTarget, expand, {})
         assert forward == {}
         assert "odatamodelwithfk_set" in reverse_fk
         assert m2m == {}
@@ -207,17 +201,13 @@ class TestClassifyRelations:
                 "target": QueryIntent(),
             }
         )
-        forward, reverse_fk, m2m = HybridValuesBuilder.classify_relations(
-            ODataModelWithFK, expand, {}
-        )
+        forward, reverse_fk, m2m = HybridValuesBuilder.classify_relations(ODataModelWithFK, expand, {})
         assert "target" in forward
 
     def test_m2m_classified(self):
         """M2M relation classified correctly."""
         expand = ExpandIntent(relations={"tags": QueryIntent()})
-        forward, reverse_fk, m2m = HybridValuesBuilder.classify_relations(
-            ODataModelWithRelations, expand, {}
-        )
+        forward, reverse_fk, m2m = HybridValuesBuilder.classify_relations(ODataModelWithRelations, expand, {})
         assert forward == {}
         assert reverse_fk == {}
         assert "tags" in m2m
@@ -231,9 +221,7 @@ class TestClassifyRelations:
                 "tags": QueryIntent(),
             }
         )
-        forward, reverse_fk, m2m = HybridValuesBuilder.classify_relations(
-            ODataModelWithRelations, expand, {}
-        )
+        forward, reverse_fk, m2m = HybridValuesBuilder.classify_relations(ODataModelWithRelations, expand, {})
         assert "target" in forward
         assert "children" in reverse_fk
         assert "tags" in m2m
@@ -451,9 +439,7 @@ class TestFilterAndOrdering:
 
         intent = QueryIntent(
             expand=ExpandIntent(relations={"target": QueryIntent()}),
-            orderby=OrderIntent(
-                fields=[OrderField(field="title", direction="asc")]
-            ),
+            orderby=OrderIntent(fields=[OrderField(field="title", direction="asc")]),
         )
 
         executor = DjangoExecutor(
@@ -476,15 +462,11 @@ class TestPagination:
     def test_pagination_works(self, target_a):
         """$top/$skip applied correctly."""
         for i in range(5):
-            ODataModelWithFK.objects.create(
-                title=f"Item{i:02d}", value=i, target=target_a
-            )
+            ODataModelWithFK.objects.create(title=f"Item{i:02d}", value=i, target=target_a)
 
         intent = QueryIntent(
             expand=ExpandIntent(relations={"target": QueryIntent()}),
-            orderby=OrderIntent(
-                fields=[OrderField(field="title", direction="asc")]
-            ),
+            orderby=OrderIntent(fields=[OrderField(field="title", direction="asc")]),
             pagination=PaginationIntent(limit=2, offset=1),
         )
 
@@ -545,9 +527,7 @@ class TestSelectorIntegration:
         assert isinstance(dto.target, FKTargetDTO)
         assert dto.target.name == "Alpha"
 
-    def test_get_many_dicts_with_forward_expand(
-        self, obj_with_fk, target_a, selector
-    ):
+    def test_get_many_dicts_with_forward_expand(self, obj_with_fk, target_a, selector):
         """get_many_dicts() uses hybrid path and returns plain dicts."""
         qb = QueryBuilder().expand("target")
         result = selector.get_many_dicts(qb)
@@ -557,9 +537,7 @@ class TestSelectorIntegration:
         assert isinstance(result[0]["target"], dict)
         assert result[0]["target"]["name"] == "Alpha"
 
-    def test_query_as_dicts_with_forward_expand(
-        self, obj_with_fk, target_a, selector
-    ):
+    def test_query_as_dicts_with_forward_expand(self, obj_with_fk, target_a, selector):
         """query_as_dicts() uses hybrid path and returns plain dicts."""
         result = selector.query_as_dicts("$expand=target")
 
@@ -568,9 +546,7 @@ class TestSelectorIntegration:
         assert isinstance(result[0]["target"], dict)
         assert result[0]["target"]["name"] == "Alpha"
 
-    def test_query_as_dtos_with_forward_expand(
-        self, obj_with_fk, target_a, selector
-    ):
+    def test_query_as_dtos_with_forward_expand(self, obj_with_fk, target_a, selector):
         """query_as_dtos() uses hybrid path for forward-only expand."""
         result = selector.query_as_dtos("$expand=target")
 
@@ -671,9 +647,7 @@ class TestReverseFK:
             expand=ExpandIntent(
                 relations={
                     "children": QueryIntent(
-                        orderby=OrderIntent(
-                            fields=[OrderField(field="label", direction="desc")]
-                        ),
+                        orderby=OrderIntent(fields=[OrderField(field="label", direction="desc")]),
                     )
                 }
             ),
@@ -718,9 +692,7 @@ class TestReverseFK:
                 relations={
                     "children": QueryIntent(
                         pagination=PaginationIntent(limit=1),
-                        orderby=OrderIntent(
-                            fields=[OrderField(field="label", direction="asc")]
-                        ),
+                        orderby=OrderIntent(fields=[OrderField(field="label", direction="asc")]),
                     )
                 }
             ),
@@ -928,9 +900,7 @@ class TestMixedRelations:
     def test_with_filter_and_pagination(self, target_a, m2m_tag_x, m2m_tag_y):
         """Filter + pagination + mixed expand."""
         for i in range(5):
-            p = ODataModelWithRelations.objects.create(
-                title=f"Item{i:02d}", value=i, target=target_a
-            )
+            p = ODataModelWithRelations.objects.create(title=f"Item{i:02d}", value=i, target=target_a)
             ODataChildModel.objects.create(parent=p, label=f"Child-{i}", score=i * 10)
             p.tags.add(m2m_tag_x)
 
@@ -976,9 +946,7 @@ class TestRecursiveNesting:
             expand=ExpandIntent(
                 relations={
                     "children": QueryIntent(
-                        expand=ExpandIntent(
-                            relations={"grandchildren": QueryIntent()}
-                        ),
+                        expand=ExpandIntent(relations={"grandchildren": QueryIntent()}),
                     )
                 }
             ),

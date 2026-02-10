@@ -51,10 +51,7 @@ def _collect_pks(objects: list, pk_name: str, as_dicts: bool) -> list:
     """Collect primary keys from a list of parent objects."""
     if as_dicts:
         return [obj[pk_name] for obj in objects if pk_name in obj]
-    return [
-        pk for obj in objects
-        if (pk := getattr(obj, pk_name)) is not UNSET
-    ]
+    return [pk for obj in objects if (pk := getattr(obj, pk_name)) is not UNSET]
 
 
 class HybridValuesBuilder:
@@ -101,10 +98,8 @@ class HybridValuesBuilder:
         m2m_relations: dict[str, QueryIntent] = {}
 
         if intent.expand and intent.expand.has_relations():
-            forward_relations, reverse_fk_relations, m2m_relations = (
-                self.classify_relations(
-                    model, intent.expand, self.expandable_fields
-                )
+            forward_relations, reverse_fk_relations, m2m_relations = self.classify_relations(
+                model, intent.expand, self.expandable_fields
             )
 
         # Phase 1: existing .values() for root + forward (unchanged)
@@ -119,7 +114,11 @@ class HybridValuesBuilder:
         rows = list(queryset)
         parents = [
             self._unflatten_and_build(
-                row, dto_class, intent, forward_relations, as_dicts=as_dicts,
+                row,
+                dto_class,
+                intent,
+                forward_relations,
+                as_dicts=as_dicts,
             )
             for row in rows
         ]
@@ -127,13 +126,19 @@ class HybridValuesBuilder:
         # Phase 2: attach reverse FK children
         if reverse_fk_relations and parents:
             self._attach_reverse_fk_children(
-                model, parents, reverse_fk_relations, as_dicts=as_dicts,
+                model,
+                parents,
+                reverse_fk_relations,
+                as_dicts=as_dicts,
             )
 
         # Phase 3: attach M2M children
         if m2m_relations and parents:
             self._attach_m2m_children(
-                model, parents, m2m_relations, as_dicts=as_dicts,
+                model,
+                parents,
+                m2m_relations,
+                as_dicts=as_dicts,
             )
 
         return parents
@@ -163,8 +168,7 @@ class HybridValuesBuilder:
                 reverse_fk[relation_name] = nested_intent
             else:
                 logger.warning(
-                    "Relation '%s' on %s is not a recognized forward, reverse FK, "
-                    "or M2M relation — ignoring.",
+                    "Relation '%s' on %s is not a recognized forward, reverse FK, or M2M relation — ignoring.",
                     relation_name,
                     model.__name__,
                 )
@@ -205,9 +209,7 @@ class HybridValuesBuilder:
         elif dto_class:
             all_dto_fields = get_dto_fields(dto_class)
             relationship_info = (
-                dto_class._get_relationship_info()
-                if hasattr(dto_class, "_get_relationship_info")
-                else {}
+                dto_class._get_relationship_info() if hasattr(dto_class, "_get_relationship_info") else {}
             )
             for f in all_dto_fields:
                 if f in relationship_info:
@@ -262,9 +264,7 @@ class HybridValuesBuilder:
         elif dto_class:
             all_dto_fields = get_dto_fields(dto_class)
             relationship_info = (
-                dto_class._get_relationship_info()
-                if hasattr(dto_class, "_get_relationship_info")
-                else {}
+                dto_class._get_relationship_info() if hasattr(dto_class, "_get_relationship_info") else {}
             )
             related_field_names = [f for f in all_dto_fields if f not in relationship_info]
         else:
@@ -304,9 +304,7 @@ class HybridValuesBuilder:
             selected = set(intent.select.fields)
             # Resolve alias API names to model/DTO field names
             mapped_selected = {self.field_aliases.get(s, s) for s in selected}
-            fields_to_populate = (dto_fields & mapped_selected) | (
-                dto_fields & set(forward_relations.keys())
-            )
+            fields_to_populate = (dto_fields & mapped_selected) | (dto_fields & set(forward_relations.keys()))
         else:
             fields_to_populate = dto_fields
 
@@ -335,7 +333,11 @@ class HybridValuesBuilder:
                 continue
 
             data[relation_name] = self._extract_nested(
-                row, relation_name, nested_dto_class, nested_intent, as_dicts=as_dicts,
+                row,
+                relation_name,
+                nested_dto_class,
+                nested_intent,
+                as_dicts=as_dicts,
             )
 
         return data if as_dicts else dto_class(**data)
@@ -355,7 +357,7 @@ class HybridValuesBuilder:
         nested_raw: dict[str, Any] = {}
         for key, value in row.items():
             if key.startswith(prefix):
-                nested_raw[key[len(prefix):]] = value
+                nested_raw[key[len(prefix) :]] = value
 
         if not nested_raw:
             return None
@@ -365,11 +367,7 @@ class HybridValuesBuilder:
             return None
 
         dto_fields = set(get_dto_fields(dto_class))
-        relationship_info = (
-            dto_class._get_relationship_info()
-            if hasattr(dto_class, "_get_relationship_info")
-            else {}
-        )
+        relationship_info = dto_class._get_relationship_info() if hasattr(dto_class, "_get_relationship_info") else {}
 
         selected_nested = None
         if nested_intent.select and nested_intent.select.has_fields():
@@ -467,8 +465,12 @@ class HybridValuesBuilder:
             for row in child_rows:
                 parent_pk = row[fk_attname]
                 child = self._build_child(
-                    row, child_dto_class, nested_intent, child_forward,
-                    fk_attname, as_dicts=as_dicts,
+                    row,
+                    child_dto_class,
+                    nested_intent,
+                    child_forward,
+                    fk_attname,
+                    as_dicts=as_dicts,
                 )
                 grouped[parent_pk].append(child)
 
@@ -480,8 +482,13 @@ class HybridValuesBuilder:
             # Recursive: handle nested reverse FK / M2M on child objects
             all_children = [c for children in grouped.values() for c in children]
             self._recurse_into_children(
-                child_model, all_children, child_reverse_fk, child_m2m,
-                relation_name, _depth, as_dicts=as_dicts,
+                child_model,
+                all_children,
+                child_reverse_fk,
+                child_m2m,
+                relation_name,
+                _depth,
+                as_dicts=as_dicts,
             )
 
     # ── M2M support ─────────────────────────────────────────────────
@@ -526,9 +533,7 @@ class HybridValuesBuilder:
 
             # Query 1: through table -> parent-to-child PK mapping
             through_rows = list(
-                through_model.objects.filter(
-                    **{f"{source_fk}__in": parent_pks}
-                ).values(source_fk, target_fk)
+                through_model.objects.filter(**{f"{source_fk}__in": parent_pks}).values(source_fk, target_fk)
             )
 
             # Build mapping: parent_pk -> [child_pk, ...]
@@ -586,7 +591,10 @@ class HybridValuesBuilder:
             child_by_pk: dict[Any, Any] = {}
             for row in child_rows:
                 child = self._build_child(
-                    row, child_dto_class, nested_intent, child_forward,
+                    row,
+                    child_dto_class,
+                    nested_intent,
+                    child_forward,
                     as_dicts=as_dicts,
                 )
                 child_by_pk[row[child_pk_name]] = child
@@ -596,7 +604,8 @@ class HybridValuesBuilder:
                 pk = _get_pk(p, pk_name, as_dicts)
                 child_pks = parent_to_child_pks.get(pk, [])
                 _set_field(
-                    p, relation_name,
+                    p,
+                    relation_name,
                     [child_by_pk[cpk] for cpk in child_pks if cpk in child_by_pk],
                     as_dicts,
                 )
@@ -604,8 +613,13 @@ class HybridValuesBuilder:
             # Recursive: handle nested reverse FK / M2M on child objects
             all_children = list(child_by_pk.values())
             self._recurse_into_children(
-                related_model, all_children, child_reverse_fk, child_m2m,
-                relation_name, _depth, as_dicts=as_dicts,
+                related_model,
+                all_children,
+                child_reverse_fk,
+                child_m2m,
+                relation_name,
+                _depth,
+                as_dicts=as_dicts,
             )
 
     # ── Shared helpers ──────────────────────────────────────────────
@@ -632,13 +646,19 @@ class HybridValuesBuilder:
         )
         if child_reverse_fk:
             child_builder._attach_reverse_fk_children(
-                child_model, children, child_reverse_fk,
-                _depth=depth + 1, as_dicts=as_dicts,
+                child_model,
+                children,
+                child_reverse_fk,
+                _depth=depth + 1,
+                as_dicts=as_dicts,
             )
         if child_m2m:
             child_builder._attach_m2m_children(
-                child_model, children, child_m2m,
-                _depth=depth + 1, as_dicts=as_dicts,
+                child_model,
+                children,
+                child_m2m,
+                _depth=depth + 1,
+                as_dicts=as_dicts,
             )
 
     def _build_child(
@@ -662,9 +682,7 @@ class HybridValuesBuilder:
         if nested_intent.select and nested_intent.select.has_fields():
             selected = set(nested_intent.select.fields)
             mapped_selected = {self.field_aliases.get(s, s) for s in selected}
-            fields_to_populate = (dto_fields & mapped_selected) | (
-                dto_fields & set(child_forward.keys())
-            )
+            fields_to_populate = (dto_fields & mapped_selected) | (dto_fields & set(child_forward.keys()))
         else:
             fields_to_populate = dto_fields
 
@@ -693,7 +711,11 @@ class HybridValuesBuilder:
                 continue
 
             data[rel_name] = self._extract_nested(
-                row, rel_name, nested_dto_class, rel_intent, as_dicts=as_dicts,
+                row,
+                rel_name,
+                nested_dto_class,
+                rel_intent,
+                as_dicts=as_dicts,
             )
 
         return data if as_dicts else dto_class(**data)
@@ -772,7 +794,7 @@ def _apply_pagination(queryset: QuerySet, intent: QueryIntent) -> QuerySet:
     limit = intent.pagination.limit
 
     if limit is not None:
-        return queryset[offset: offset + limit]
+        return queryset[offset : offset + limit]
     if offset > 0:
         return queryset[offset:]
 

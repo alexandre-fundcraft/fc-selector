@@ -121,7 +121,9 @@ class ODataMetadataView(View):
             entity_types.append(entity_type_xml)
 
             # Collect navigation bindings (only for expandable fields)
-            nav_bindings[entity_set_name] = ODataMetadataView._get_navigation_bindings(model_class, selectors, expandable_fields)
+            nav_bindings[entity_set_name] = ODataMetadataView._get_navigation_bindings(
+                model_class, selectors, expandable_fields
+            )
 
             entity_sets.append(
                 f'        <EntitySet Name="{entity_set_name}" EntityType="{namespace}.{entity_type_name}">'

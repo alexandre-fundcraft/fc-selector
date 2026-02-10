@@ -438,8 +438,7 @@ class ODataSelector:
         t5 = time.perf_counter()
 
         logger.debug(
-            "[get_many] build_intent=%.3fs, execute=%.3fs, "
-            "parse_opts=%.3fs, fetch_db=%.3fs, to_dtos=%.3fs",
+            "[get_many] build_intent=%.3fs, execute=%.3fs, parse_opts=%.3fs, fetch_db=%.3fs, to_dtos=%.3fs",
             t1 - t0,
             t2 - t1,
             t3 - t2,

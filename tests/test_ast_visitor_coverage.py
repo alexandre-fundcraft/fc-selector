@@ -6,8 +6,10 @@ def test_node_visitor_generic_visit_traverses_lists_and_nodes():
     class Counter(NodeVisitor):
         def __init__(self):
             self.ids = []
+
         def visit_Identifier(self, node: nodes.Identifier):
             self.ids.append(node.name)
+
         # rely on generic_visit for list fields
 
     ast = nodes.BoolOp(

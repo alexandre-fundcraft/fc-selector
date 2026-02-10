@@ -132,9 +132,7 @@ class ODataModelWithRelations(models.Model):
 class ODataChildModel(models.Model):
     """Child model for reverse FK testing in hybrid values mode."""
 
-    parent = models.ForeignKey(
-        ODataModelWithRelations, on_delete=models.CASCADE, related_name="children"
-    )
+    parent = models.ForeignKey(ODataModelWithRelations, on_delete=models.CASCADE, related_name="children")
     label = models.CharField(max_length=100)
     score = models.IntegerField(default=0)
     category = models.ForeignKey(ODataM2MTarget, on_delete=models.SET_NULL, null=True, blank=True)
@@ -146,9 +144,7 @@ class ODataChildModel(models.Model):
 class ODataGrandChildModel(models.Model):
     """Grandchild model for recursive nested reverse FK expand testing."""
 
-    child = models.ForeignKey(
-        ODataChildModel, on_delete=models.CASCADE, related_name="grandchildren"
-    )
+    child = models.ForeignKey(ODataChildModel, on_delete=models.CASCADE, related_name="grandchildren")
     note = models.CharField(max_length=100)
 
     class Meta:
@@ -190,6 +186,7 @@ class ODataRootModel(models.Model):
 
 class ODataSimpleParent(models.Model):
     """Parent model with OneToOne but NO properties."""
+
     child = models.OneToOneField(ODataOneToOneChild, on_delete=models.CASCADE)
     description = models.CharField(max_length=50)
 
@@ -199,6 +196,7 @@ class ODataSimpleParent(models.Model):
 
 class ODataSimpleRoot(models.Model):
     """Root model pointing to simple parent."""
+
     parent = models.ForeignKey(ODataSimpleParent, on_delete=models.CASCADE)
 
     class Meta:
@@ -207,6 +205,7 @@ class ODataSimpleRoot(models.Model):
 
 class ODataSelfM2MModel(models.Model):
     """Model with self-referential M2M for testing."""
+
     name = models.CharField(max_length=100)
     friends = models.ManyToManyField("self", symmetrical=False, related_name="friend_of")
 

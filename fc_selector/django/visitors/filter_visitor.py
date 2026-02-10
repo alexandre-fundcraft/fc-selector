@@ -358,7 +358,9 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
         try:
             return mod(val)
         except TypeError as exc:
-            raise core_ex.TypeMismatchError(expected="Q object", actual=str(val), context=node.op.__class__.__name__) from exc
+            raise core_ex.TypeMismatchError(
+                expected="Q object", actual=str(val), context=node.op.__class__.__name__
+            ) from exc
 
     def visit_Call(self, node: ast.Call) -> Expression | Q:
         ":meta private:"

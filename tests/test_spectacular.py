@@ -17,8 +17,10 @@ from fc_selector.django.drf.viewsets.selector_mixin import ODataSelectorViewSetM
 class MockODataViewSet(ODataSelectorViewSetMixin, ViewSet):
     pass
 
+
 class MockNormalViewSet(ViewSet):
     pass
+
 
 def test_preprocess_odata_parameters():
     """Test preprocess hook marks callbacks."""
@@ -26,38 +28,33 @@ def test_preprocess_odata_parameters():
     # Mock endpoints structure: (path, regex, method, callback)
     # Callback usually has .cls attribute pointing to ViewSet
 
-    def callback_odata(): pass
+    def callback_odata():
+        pass
+
     callback_odata.cls = MockODataViewSet
 
-    def callback_normal(): pass
+    def callback_normal():
+        pass
+
     callback_normal.cls = MockNormalViewSet
 
     endpoints = [
-        ('/odata', 'regex', 'GET', callback_odata),
-        ('/normal', 'regex', 'GET', callback_normal),
+        ("/odata", "regex", "GET", callback_odata),
+        ("/normal", "regex", "GET", callback_normal),
     ]
 
     preprocess_odata_parameters(endpoints)
 
-    assert hasattr(callback_odata, '_odata_params_added')
+    assert hasattr(callback_odata, "_odata_params_added")
     assert callback_odata._odata_params_added is True
 
-    assert not hasattr(callback_normal, '_odata_params_added')
+    assert not hasattr(callback_normal, "_odata_params_added")
+
 
 def test_postprocess_odata_schema_list():
     """Test postprocess hook adds parameters to list endpoint."""
 
-    result = {
-        "paths": {
-            "/odata/": {
-                "get": {
-                    "operationId": "odata_list",
-                    "tags": ["odata"],
-                    "parameters": []
-                }
-            }
-        }
-    }
+    result = {"paths": {"/odata/": {"get": {"operationId": "odata_list", "tags": ["odata"], "parameters": []}}}}
 
     # It modifies result in place
     postprocess_odata_schema(result, generator=None, request=None, public=True)
@@ -73,19 +70,12 @@ def test_postprocess_odata_schema_list():
     assert "$skip" in param_names
     assert "$count" in param_names
 
+
 def test_postprocess_odata_schema_retrieve():
     """Test postprocess hook adds parameters to retrieve endpoint."""
 
     result = {
-        "paths": {
-            "/odata/{id}/": {
-                "get": {
-                    "operationId": "odata_retrieve",
-                    "tags": ["odata"],
-                    "parameters": []
-                }
-            }
-        }
+        "paths": {"/odata/{id}/": {"get": {"operationId": "odata_retrieve", "tags": ["odata"], "parameters": []}}}
     }
 
     postprocess_odata_schema(result, generator=None, request=None, public=True)
@@ -99,6 +89,7 @@ def test_postprocess_odata_schema_retrieve():
     assert "$filter" not in param_names
     assert "$top" not in param_names
 
+
 def test_postprocess_odata_schema_existing_params():
     """Test postprocess hook respects existing parameters."""
 
@@ -107,9 +98,7 @@ def test_postprocess_odata_schema_existing_params():
             "/odata/": {
                 "get": {
                     "operationId": "odata_list",
-                    "parameters": [
-                        {"name": "$top", "in": "query", "description": "existing"}
-                    ]
+                    "parameters": [{"name": "$top", "in": "query", "description": "existing"}],
                 }
             }
         }
@@ -123,9 +112,11 @@ def test_postprocess_odata_schema_existing_params():
     assert len(top_params) == 1
     assert top_params[0]["description"] == "existing"
 
+
 def test_get_odata_schema_extension():
     """Test get_odata_schema_extension returns the callback."""
     assert get_odata_schema_extension() == preprocess_odata_parameters
+
 
 def test_get_odata_parameters():
     """Test get_odata_parameters returns the list."""
