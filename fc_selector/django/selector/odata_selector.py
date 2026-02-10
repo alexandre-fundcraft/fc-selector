@@ -91,10 +91,12 @@ class ODataSelector:
         # Security: Validate field aliases to prevent injection
         ODataSelector._validate_field_aliases(self.field_aliases)
 
+        non_sortable = self.get_non_sortable_fields()
         self._executor = DjangoExecutor(
             field_aliases=self.field_aliases,
             allowed_fields=self.allowed_fields,
             expandable_fields=self.expandable_fields,
+            non_sortable_fields=non_sortable or None,
         )
         self._reverse_aliases: dict[str, str] = {v: k for k, v in self.field_aliases.items()}
 

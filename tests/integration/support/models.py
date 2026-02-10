@@ -203,3 +203,12 @@ class ODataSimpleRoot(models.Model):
 
     class Meta:
         pass
+
+
+class ODataSelfM2MModel(models.Model):
+    """Model with self-referential M2M for testing."""
+    name = models.CharField(max_length=100)
+    friends = models.ManyToManyField("self", symmetrical=False, related_name="friend_of")
+
+    class Meta:
+        pass

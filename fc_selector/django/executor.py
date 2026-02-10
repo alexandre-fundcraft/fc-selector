@@ -14,7 +14,7 @@ from django.db.models import Prefetch, QuerySet
 from fc_selector.core import exceptions as core_ex
 from fc_selector.core.dtos.utils import get_dto_fields
 from fc_selector.core.intent import ExpandIntent, QueryIntent
-from fc_selector.core.utils import is_private_field, odata_path_to_django
+from fc_selector.core.utils import get_base_field, is_private_field, odata_path_to_django
 from fc_selector.django.utils import (
     get_field_safe,
     is_forward_relation,
@@ -158,6 +158,12 @@ class DjangoExecutor:
             return queryset.filter(q_object)
 
         except (ValueError, TypeError) as e:
+            logger.debug(
+                "Filter error on model=%s filter=%s: %s",
+                queryset.model.__name__,
+                intent.filter.expression,
+                e,
+            )
             raise core_ex.QueryError(f"Error applying filter: {e}") from e
 
     def _apply_ordering(self, queryset: QuerySet, intent: QueryIntent) -> QuerySet:
@@ -167,9 +173,16 @@ class DjangoExecutor:
 
         order_fields = []
         for field in intent.orderby.fields:
+            base_field = get_base_field(odata_path_to_django(field.field))
+            if self.non_sortable_fields and base_field in self.non_sortable_fields:
+                raise core_ex.InvalidFieldError(
+                    field.field,
+                    queryset.model.__name__,
+                    reason="field is not sortable",
+                )
+
             prefix = "-" if field.direction == "desc" else ""
             django_field = odata_path_to_django(field.field)
-            # Resolve alias to actual model field
             resolved_field = resolve_field_alias(django_field, self.field_aliases)
             order_fields.append(f"{prefix}{resolved_field}")
 

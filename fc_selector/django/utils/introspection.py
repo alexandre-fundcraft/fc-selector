@@ -83,10 +83,9 @@ def get_m2m_info(model: type[models.Model], relation_name: str) -> M2MInfo | Non
     """
     # Check forward M2M (e.g. tags = ManyToManyField(...))
     field = get_field_safe(model, relation_name)
-    if field and getattr(field, "many_to_many", False):
-        m2m_field = field
-        through_model = m2m_field.remote_field.through
-        related_model = m2m_field.related_model
+    if field and isinstance(field, models.ManyToManyField):
+        through_model = field.remote_field.through
+        related_model = field.related_model
         source_fk, target_fk = _resolve_through_fks(through_model, model, related_model)
         if source_fk and target_fk:
             return {
@@ -99,9 +98,7 @@ def get_m2m_info(model: type[models.Model], relation_name: str) -> M2MInfo | Non
     # Check reverse M2M (e.g. tagged_items from the other side)
     for rel in model._meta.related_objects:
         if rel.get_accessor_name() == relation_name and rel.many_to_many:
-            # rel.field is the ManyToManyField on the other model
-            m2m_field = rel.field
-            through_model = m2m_field.remote_field.through
+            through_model = rel.through
             related_model = rel.related_model
             source_fk, target_fk = _resolve_through_fks(through_model, model, related_model)
             if source_fk and target_fk:
@@ -187,29 +184,11 @@ def validate_field_name(
         return False
 
     # Check existence on model (only for direct fields, not paths or if skipped via allowed_fields logic)
-    # Note: Logic from visitor skipped check if base_field in allowed_fields AND it was complex path?
-    # Visitor logic:
-    # if "__" not in resolved_field and not (self.allowed_fields is not None and base_field in self.allowed_fields):
-    #    check existence
-
-    # We will keep it simple: strict check if requested.
-    # But wait, validate_field_name in visitor was calling resolve_field_alias first.
-    # Here we assume field_name is already resolved or we are checking the raw name?
-    # The existing validate_field_name (simple) checked get_field_safe(model, field_name).
-
     exists = get_field_safe(model, field_name) is not None
 
-    # If it's a path (contains __), get_field_safe returns None usually (unless using some traverse util, but get_field is shallow).
-    # If it is a path, we might not want to validate full existence here without traversal logic.
-    # The original simple validate_field_name returned False for paths that are not direct fields.
-
     if not exists:
-        # If it's a path, or allowed, we might be lenient?
-        # The visitor logic was: check existence UNLESS it's in allowed_fields (implies annotation?).
-
         if "__" in field_name:
             # It's a path. Simple validation fails for paths.
-            # We should probably return False/Raise if strict.
             pass
         elif allowed_fields is not None and field_name in allowed_fields:
             # It is allowed, maybe it's an annotation?

@@ -2,7 +2,11 @@
 Pytest configuration for django-odata tests.
 """
 
+import os
 import pytest
+
+# Ensure pytest-django can find the test Django settings
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "tests.settings")
 
 from example.blog.models import Author, BlogPost, Category
 

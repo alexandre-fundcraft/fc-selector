@@ -59,7 +59,7 @@ install-dev:
 # Testing
 test:
 	@echo "Running all tests (Unit + Integration + E2E)..."
-	PYTHONPATH=. DJANGO_SETTINGS_MODULE=tests.settings uv run pytest tests/ --ignore=tests/performance/ -v --no-migrations
+	PYTHONPATH=. DJANGO_SETTINGS_MODULE=tests.settings uv run pytest tests/ --ignore=tests/performance/ -v --no-migrations --cov=fc_selector --cov-report=term
 
 test-unit:
 	@echo "Running unit tests (Core)..."
