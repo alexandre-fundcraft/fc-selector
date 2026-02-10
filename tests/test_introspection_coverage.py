@@ -2,20 +2,21 @@
 Tests to improve coverage of fc_selector/django/utils/introspection.py.
 """
 import pytest
-from django.db import models
+
+from fc_selector.core.exceptions import InvalidFieldError
 from fc_selector.django.utils.introspection import (
-    is_m2m_relation,
-    get_reverse_fk_info,
     get_m2m_info,
+    get_reverse_fk_info,
+    is_m2m_relation,
     validate_field_name,
 )
-from fc_selector.core.exceptions import InvalidFieldError
 from tests.integration.support.models import (
-    ODataModelWithRelations,
-    ODataM2MTarget,
     ODataChildModel,
+    ODataM2MTarget,
+    ODataModelWithRelations,
     ODataSelfM2MModel,
 )
+
 
 @pytest.mark.django_db
 class TestIntrospectionCoverage:

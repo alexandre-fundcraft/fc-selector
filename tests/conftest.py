@@ -3,6 +3,7 @@ Pytest configuration for django-odata tests.
 """
 
 import os
+
 import pytest
 
 # Ensure pytest-django can find the test Django settings

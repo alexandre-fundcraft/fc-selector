@@ -1,13 +1,14 @@
 """
 Additional tests for fc_selector/django/visitors/filter_visitor.py to improve coverage.
 """
-import re
-import pytest
 from uuid import UUID
-from django.db.models import Value, F, Func, Expression
+
+import pytest
+from django.db.models import Expression, F, Value
+
 from fc_selector.core import ast
 from fc_selector.core import exceptions as core_ex
-from fc_selector.django.visitors.filter_visitor import AstToDjangoQVisitor, MAX_REGEX_PATTERN_LENGTH
+from fc_selector.django.visitors.filter_visitor import MAX_REGEX_PATTERN_LENGTH, AstToDjangoQVisitor
 from tests.integration.support.models import ODataTestModel
 
 
@@ -67,7 +68,7 @@ class TestFilterVisitorCoverage:
         class DummyExpr(Expression):
             def __init__(self):
                 pass
-            
+
             def get_source_expressions(self):
                 return [Value("inner")]
 

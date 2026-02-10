@@ -1,9 +1,8 @@
 import pytest
-from django.core.exceptions import FieldDoesNotExist
 
+from example.blog.models import BlogPost
 from fc_selector.core import exceptions as core_ex
 from fc_selector.django.visitors import utils as vutils
-from example.blog.models import BlogPost
 
 
 def test_reverse_relationship_empty_expr_raises():

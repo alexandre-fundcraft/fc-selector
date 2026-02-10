@@ -1,9 +1,7 @@
-import dataclasses
-import pytest
 
-from fc_selector.core.dtos.utils import get_dto_fields
 from fc_selector.core.ast import nodes
 from fc_selector.core.ast.visitor import NodeTransformer
+from fc_selector.core.dtos.utils import get_dto_fields
 
 
 def test_get_dto_fields_none_class():
