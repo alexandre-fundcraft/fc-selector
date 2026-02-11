@@ -36,10 +36,9 @@ def parse_orderby(value: str) -> list[tuple[str, OrderDirection]]:
     fields: list[tuple[str, OrderDirection]] = []
     for field in value.split(","):
         field = field.strip()
-        if field.endswith(" desc"):
-            fields.append((field[:-5].strip(), "desc"))
-        elif field.endswith(" asc"):
-            fields.append((field[:-4].strip(), "asc"))
+        parts = field.rsplit(maxsplit=1)
+        if len(parts) == 2 and parts[1].lower() in ("asc", "desc"):
+            fields.append((parts[0], parts[1].lower()))
         else:
             fields.append((field, "asc"))
 

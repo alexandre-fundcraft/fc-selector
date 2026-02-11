@@ -9,7 +9,7 @@ import pytest
 from django.db.models import QuerySet
 from django.utils import timezone
 
-from fc_selector.core.exceptions import InvalidFieldError
+from fc_selector.core.exceptions import InvalidFieldError, QueryError
 from fc_selector.core.intent import (
     ExpandIntent,
     FilterIntent,
@@ -72,14 +72,13 @@ class TestApplyFilter:
         result = executor.execute(qs, intent)
         assert isinstance(result, QuerySet)
 
-    def test_apply_filter_no_ast(self, executor, test_model):
-        """Filter without AST does nothing."""
+    def test_apply_filter_no_ast_raises_error(self, executor, test_model):
+        """Filter with expression but no AST raises QueryError."""
         intent = QueryIntent(filter=FilterIntent(expression="name eq 'test'"))  # No AST
 
         qs = test_model.objects.all()
-        result = executor.execute(qs, intent)
-        # Same queryset, no filtering applied
-        assert isinstance(result, QuerySet)
+        with pytest.raises(QueryError, match="Invalid filter expression"):
+            executor.execute(qs, intent)
 
     def test_apply_filter_none_filter(self, executor, test_model):
         """None filter does nothing."""

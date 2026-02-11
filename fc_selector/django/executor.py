@@ -153,8 +153,12 @@ class DjangoExecutor:
 
     def _apply_filter(self, queryset: QuerySet, intent: QueryIntent) -> QuerySet:
         """Apply filtering using AST visitor."""
-        if not intent.filter or not intent.filter.ast:
+        if not intent.filter:
             return queryset
+        if not intent.filter.ast:
+            raise core_ex.QueryError(
+                f"Invalid filter expression: {intent.filter.expression}"
+            )
 
         try:
             allowed = set(self.allowed_fields) if self.allowed_fields else None

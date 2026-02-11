@@ -5,6 +5,9 @@ This test suite ensures the parser correctly handles all OData query parameters
 and combinations WITHOUT any Django dependencies.
 """
 
+import pytest
+
+from fc_selector.protocols.odata.parsers.filter.exceptions import ODataSyntaxError
 from fc_selector.protocols.odata.parsers.query import parse_odata_query
 from fc_selector.protocols.odata.parsers.query.models import (
     ExpandOption,
@@ -186,6 +189,11 @@ class TestFilterParsing:
         assert result.filter is not None
         assert result.filter.value == "startswith(title,'Introduction')"
 
+    def test_malformed_filter_raises_error(self):
+        """Test that malformed $filter raises an error instead of silently passing."""
+        with pytest.raises((ODataSyntaxError, ValueError)):
+            parse_odata_query("$filter=this is not valid odata!!")
+
     def test_no_filter(self):
         """Test query without $filter."""
         result = parse_odata_query("$select=id,name")
@@ -232,6 +240,27 @@ class TestOrderByParsing:
 
         assert result.orderby is not None
         assert result.orderby.fields == [("name", "asc"), ("created_at", "desc")]
+
+    def test_orderby_case_insensitive_desc(self):
+        """Test parsing $orderby with uppercase DESC."""
+        result = parse_odata_query("$orderby=name DESC")
+
+        assert result.orderby is not None
+        assert result.orderby.fields == [("name", "desc")]
+
+    def test_orderby_case_insensitive_asc(self):
+        """Test parsing $orderby with mixed case Asc."""
+        result = parse_odata_query("$orderby=name Asc")
+
+        assert result.orderby is not None
+        assert result.orderby.fields == [("name", "asc")]
+
+    def test_orderby_field_ending_with_desc_word(self):
+        """Test that field names like sort_desc are not confused with direction."""
+        result = parse_odata_query("$orderby=sort_desc DESC")
+
+        assert result.orderby is not None
+        assert result.orderby.fields == [("sort_desc", "desc")]
 
     def test_no_orderby(self):
         """Test query without $orderby."""

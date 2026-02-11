@@ -171,7 +171,7 @@ class ODataMetadataView(View):
         lines = [f"      <!-- {name} Entity Type -->"]
         lines.append(f'      <EntityType Name="{name}">')
         lines.append("        <Key>")
-        lines.append('          <PropertyRef Name="id"/>')
+        lines.append(f'          <PropertyRef Name="{model_class._meta.pk.name}"/>')
         lines.append("        </Key>")
 
         # Get fields from model

@@ -103,15 +103,8 @@ class ODataQueryParser:
     def _parse_filter(query: ODataQuery, value: str) -> None:
         """Parse $filter option."""
         from ..filter import parse_filter
-        from ..filter.exceptions import ODataSyntaxError
 
-        # Parse the filter expression into AST
-        try:
-            ast_tree = parse_filter(value)
-        except (ODataSyntaxError, ValueError):
-            # If parsing fails, store None for AST but keep the raw value
-            ast_tree = None
-
+        ast_tree = parse_filter(value)
         query.filter = FilterOption(value=value, ast=ast_tree)
 
     @staticmethod

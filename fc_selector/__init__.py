@@ -52,7 +52,7 @@ Note:
     - django_odata.drf.* (requires Django REST Framework)
 """
 
-__version__ = "2.0.0"
+__version__ = "1.0.1"
 
 # NO imports here! Keep the package framework-agnostic.
 # Users should import directly from submodules:
