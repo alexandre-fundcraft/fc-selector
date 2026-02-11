@@ -106,4 +106,5 @@ archive
 verify_imports.py
 
 # Secrets / Private Configs
+CLAUDE.local.md
 .claude/commands/codacy.md
