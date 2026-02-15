@@ -173,6 +173,26 @@ selector = BlogPostSelector()
 results = selector.execute(intent)
 ```
 
+### Initialize from a Query String
+
+`QueryBuilder` accepts a full OData query string, making it easy to forward client requests and add server-side logic:
+
+```python
+from fc_selector.core.query_builder import QueryBuilder
+
+# Parse a raw query string
+query = QueryBuilder("$filter=status eq 'published'&$select=id,title&$top=10")
+
+# Or directly from a Django request
+query = QueryBuilder(request.META.get('QUERY_STRING', ''))
+
+# Then add server-side filters, enforce pagination, etc.
+query.and_filter(f"author/id eq {author_id}")
+query.top(25)
+
+results = selector.get_many(query)
+```
+
 See [Query Builder Documentation](docs/query-builder.md) for the full API reference.
 
 ## Example Project
