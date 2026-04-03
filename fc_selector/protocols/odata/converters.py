@@ -120,6 +120,7 @@ def _convert_expand_to_intent(
     Returns:
         ExpandIntent with converted nested QueryIntents
     """
+    from fc_selector.protocols.odata.parsers.filter import parse_filter
     from fc_selector.protocols.odata.parsers.orderby import parse_orderby
     from fc_selector.protocols.odata.parsers.select import parse_select
 
@@ -129,7 +130,8 @@ def _convert_expand_to_intent(
         nested_intent = QueryIntent()
 
         if "$filter" in options:
-            nested_intent.filter = FilterIntent(expression=options["$filter"])
+            filter_expr = options["$filter"]
+            nested_intent.filter = FilterIntent(expression=filter_expr, ast=parse_filter(filter_expr))
 
         if "$select" in options:
             select_value = options["$select"]
@@ -146,7 +148,12 @@ def _convert_expand_to_intent(
                 nested_intent.orderby = OrderIntent.from_tuples(orderby_fields)
 
         if "$top" in options:
-            limit = int(options["$top"]) if options["$top"] else None
+            from fc_selector.core.exceptions import InvalidValueError
+
+            raw_top = options["$top"]
+            limit = int(raw_top) if raw_top else None
+            if limit is not None and limit > MAX_TOP_VALUE:
+                raise InvalidValueError(raw_top, f"integer <= {MAX_TOP_VALUE}", "$expand $top")
             offset = int(options.get("$skip", 0)) if options.get("$skip") else None
             nested_intent.pagination = PaginationIntent(limit=limit, offset=offset)
 

@@ -73,20 +73,6 @@ class ODataQueryParser:
         params = ODataQueryParser._parse_query_string(query_string)
         return self.parse(params)
 
-    def parse_query_string(self, query_string: str) -> ODataQuery:
-        """
-        Parse OData query string into ODataQuery object.
-
-        Alias for parse_from_string() to match common API patterns.
-
-        Args:
-            query_string: Raw query string (e.g., "$top=10&$skip=20&$filter=name eq 'John'")
-
-        Returns:
-            ODataQuery object
-        """
-        return self.parse_from_string(query_string)
-
     @staticmethod
     def _parse_query_string(query_string: str) -> dict[str, str]:
         """Parse raw query string into parameter dictionary."""
