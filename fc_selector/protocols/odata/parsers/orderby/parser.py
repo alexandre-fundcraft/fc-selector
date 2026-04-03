@@ -5,7 +5,7 @@ Parses $orderby parameter which specifies sorting order.
 Example: "name desc,age" → [('name', 'desc'), ('age', 'asc')]
 """
 
-from typing import Literal
+from typing import Literal, cast
 
 OrderDirection = Literal["asc", "desc"]
 
@@ -38,7 +38,7 @@ def parse_orderby(value: str) -> list[tuple[str, OrderDirection]]:
         field = field.strip()
         parts = field.rsplit(maxsplit=1)
         if len(parts) == 2 and parts[1].lower() in ("asc", "desc"):
-            fields.append((parts[0], parts[1].lower()))
+            fields.append((parts[0], cast(OrderDirection, parts[1].lower())))
         else:
             fields.append((field, "asc"))
 

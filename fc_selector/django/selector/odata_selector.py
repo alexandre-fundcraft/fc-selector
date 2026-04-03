@@ -237,12 +237,6 @@ class ODataSelector:
         odata_query = parse_odata_query(resolved_qs)
         intent = odata_query_to_intent(odata_query)
 
-        # Ensure AST is populated for filters (lazy parsing handling)
-        if intent.filter and intent.filter.expression and not intent.filter.ast:
-            from fc_selector.protocols.odata.parsers.filter import parse_filter
-
-            intent.filter.ast = parse_filter(intent.filter.expression)
-
         # Use internal executor which has allowed_fields configured
         return self._executor.execute(base_queryset, intent)
 
@@ -305,11 +299,6 @@ class ODataSelector:
         odata_query = parse_odata_query(resolved_qs)
         intent = odata_query_to_intent(odata_query)
 
-        if intent.filter and intent.filter.expression and not intent.filter.ast:
-            from fc_selector.protocols.odata.parsers.filter import parse_filter
-
-            intent.filter.ast = parse_filter(intent.filter.expression)
-
         if self.values_mode:
             hybrid = self._executor.try_hybrid(base_queryset, intent, self.dto_class)
             if hybrid is not None:
@@ -360,11 +349,6 @@ class ODataSelector:
         resolved_qs = self._resolve_aliases_in_query_string(query_string)
         odata_query = parse_odata_query(resolved_qs)
         intent = odata_query_to_intent(odata_query)
-
-        if intent.filter and intent.filter.expression and not intent.filter.ast:
-            from fc_selector.protocols.odata.parsers.filter import parse_filter
-
-            intent.filter.ast = parse_filter(intent.filter.expression)
 
         if self.values_mode:
             hybrid = self._executor.try_hybrid(base_queryset, intent, self.dto_class, as_dicts=True)

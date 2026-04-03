@@ -12,7 +12,6 @@ from fc_selector.core.dtos import UNSET, BaseODataDTO
 from fc_selector.core.exceptions import QueryError
 from fc_selector.core.query_builder import QueryBuilder
 from fc_selector.django.selector import ODataSelector
-from fc_selector.protocols.odata.parsers import filter as filter_parser
 from tests.integration.support.models import (
     ODataFKTarget,
     ODataModelWithFK,
@@ -366,60 +365,6 @@ class TestODataSelectorCoverage:
         results = selector.query_as_dtos(None)
         assert len(results) >= 1
         assert isinstance(results[0], SimpleDTO)
-
-    def test_query_lazy_ast_parsing(self, monkeypatch):
-        """Lines 212-215: ensure AST is populated for filters."""
-
-        class MockSelector(ODataSelector):
-            class Meta:
-                model = ODataTestModel
-                dto_class = SimpleDTO
-
-        selector = MockSelector()
-
-        # We need an intent that has expression but NO ast.
-        # odata_query_to_intent usually populates AST if parse_odata_query succeeded.
-        # So we mock parse_filter to return None in parse_odata_query but work later.
-
-        original_parse = filter_parser.parse_filter
-
-        call_count = 0
-
-        def mock_parse(expr):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                return None  # First call (from parse_odata_query) returns None
-            return original_parse(expr)
-
-        monkeypatch.setattr(filter_parser, "parse_filter", mock_parse)
-
-        # Trigger query with filter
-        selector.query("$filter=name eq 'test'")
-
-    def test_query_as_dicts_lazy_ast_parsing(self, monkeypatch):
-        """Line 300: ensure AST is populated in query_as_dicts."""
-        ODataTestModel.objects.create(name="T1", created_at=timezone.now())
-
-        class BasicSelector(ODataSelector):
-            class Meta:
-                model = ODataTestModel
-
-        selector = BasicSelector()
-
-        original_parse = filter_parser.parse_filter
-        call_count = 0
-
-        def mock_parse(expr):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                return None
-            return original_parse(expr)
-
-        monkeypatch.setattr(filter_parser, "parse_filter", mock_parse)
-
-        selector.query_as_dicts("$filter=name eq 'T1'")
 
     def test_resolve_aliases_malformed_query(self):
         """Line 501: resolve_aliases with param without '='."""
