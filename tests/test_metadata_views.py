@@ -15,7 +15,6 @@ from fc_selector.django.views.metadata import (
     ODataMetadataRegistry,
     ODataMetadataView,
     ODataServiceDocumentView,
-    register_odata_entity,
 )
 from tests.integration.support.models import ODataRelatedModel, ODataTestModel
 
@@ -84,37 +83,6 @@ class TestODataMetadataRegistry:
 
         ODataMetadataRegistry.clear()
         assert len(ODataMetadataRegistry.get_selectors()) == 0
-
-    def test_singleton_pattern(self):
-        """Registry is a singleton."""
-        r1 = ODataMetadataRegistry()
-        r2 = ODataMetadataRegistry()
-        assert r1 is r2
-
-
-class TestRegisterODataEntityDecorator:
-    """Tests for register_odata_entity decorator."""
-
-    def test_decorator_registers_selector(self):
-        """Decorator registers the selector."""
-
-        @register_odata_entity("decorated_tests")
-        class DecoratedSelector(ODataSelector):
-            pass
-
-        selectors = ODataMetadataRegistry.get_selectors()
-        assert "decorated_tests" in selectors
-        assert selectors["decorated_tests"] is DecoratedSelector
-
-    def test_decorator_returns_class_unchanged(self):
-        """Decorator returns the class unchanged."""
-
-        @register_odata_entity("tests")
-        class MySelector(ODataSelector):
-            custom_attr = "test"
-
-        assert hasattr(MySelector, "custom_attr")
-        assert MySelector.custom_attr == "test"
 
 
 @pytest.mark.django_db
@@ -487,23 +455,3 @@ class TestSelectorFieldIntrospection:
         assert "name" in fields
         assert "count" in fields
         assert "is_active" in fields
-
-    def test_is_filterable_default_true(self):
-        """is_filterable returns True by default."""
-
-        class TestSelector(ODataSelector):
-            class Meta:
-                model = ODataTestModel
-
-        selector = TestSelector()
-        assert selector.is_filterable() is True
-
-    def test_is_sortable_default_true(self):
-        """is_sortable returns True by default."""
-
-        class TestSelector(ODataSelector):
-            class Meta:
-                model = ODataTestModel
-
-        selector = TestSelector()
-        assert selector.is_sortable() is True

@@ -1,160 +1,139 @@
 """
 Framework-agnostic OData query parser.
 
-Parses OData query strings and dictionaries into structured ODataQuery objects.
+Parses OData query strings and dictionaries straight into ``QueryIntent``, the
+protocol-agnostic representation the rest of the library executes.
 """
 
 from typing import Any
+from urllib.parse import parse_qsl
+
+from fc_selector.core.exceptions import InvalidValueError
+from fc_selector.core.intent import (
+    ExpandIntent,
+    FilterIntent,
+    OrderIntent,
+    PaginationIntent,
+    QueryIntent,
+    SelectIntent,
+)
 
 from ..expand import parse_expand
 from ..orderby import parse_orderby
 from ..select import parse_select
-from .models import (
-    ExpandOption,
-    FilterOption,
-    ODataQuery,
-    OrderByOption,
-    SelectOption,
-    SkipOption,
-    TopOption,
-)
+
+# Security: Maximum allowed values for pagination to prevent DoS
+MAX_TOP_VALUE = 10000
+MAX_SKIP_VALUE = 1000000
 
 
-class ODataQueryParser:
-    """Framework-agnostic OData query parser."""
+def parse_query_params(query_string: str) -> dict[str, str]:
+    """Split a raw OData query string into a parameter dictionary."""
+    if not query_string or not query_string.strip():
+        return {}
 
-    def __init__(self):
-        """Initialize the parser."""
-        self.query_options = {
-            "$filter": self._parse_filter,
-            "$select": self._parse_select,
-            "$expand": self._parse_expand,
-            "$orderby": self._parse_orderby,
-            "$top": self._parse_top,
-            "$skip": self._parse_skip,
-            "$count": self._parse_count,
-        }
-
-    def parse(self, query_params: dict[str, Any]) -> ODataQuery:
-        """
-        Parse OData query parameters into ODataQuery object.
-
-        Args:
-            query_params: Dictionary of query parameters
-
-        Returns:
-            ODataQuery object
-        """
-        query = ODataQuery()
-
-        # Handle None input
-        if query_params is None:
-            return query
-
-        for param_name, parser_func in self.query_options.items():
-            if param_name in query_params:
-                parser_func(query, query_params[param_name])
-
-        return query
-
-    def parse_from_string(self, query_string: str) -> ODataQuery:
-        """
-        Parse OData query string into ODataQuery object.
-
-        Args:
-            query_string: Raw query string (e.g., "$filter=status eq 'published'&$expand=author")
-
-        Returns:
-            ODataQuery object
-        """
-        if not query_string or not query_string.strip():
-            return ODataQuery()
-
-        params = ODataQueryParser._parse_query_string(query_string)
-        return self.parse(params)
-
-    def parse_query_string(self, query_string: str) -> ODataQuery:
-        """
-        Parse OData query string into ODataQuery object.
-
-        Alias for parse_from_string() to match common API patterns.
-
-        Args:
-            query_string: Raw query string (e.g., "$top=10&$skip=20&$filter=name eq 'John'")
-
-        Returns:
-            ODataQuery object
-        """
-        return self.parse_from_string(query_string)
-
-    @staticmethod
-    def _parse_query_string(query_string: str) -> dict[str, str]:
-        """Parse raw query string into parameter dictionary."""
-        from urllib.parse import parse_qsl
-
-        # Remove leading '?' if present
-        if query_string.startswith("?"):
-            query_string = query_string[1:]
-
-        # Use parse_qsl for robust query string parsing (handles decoding automatically)
-        return dict(parse_qsl(query_string))
-
-    @staticmethod
-    def _parse_filter(query: ODataQuery, value: str) -> None:
-        """Parse $filter option."""
-        from ..filter import parse_filter
-
-        ast_tree = parse_filter(value)
-        query.filter = FilterOption(value=value, ast=ast_tree)
-
-    @staticmethod
-    def _parse_select(query: ODataQuery, value: str) -> None:
-        """Parse $select option."""
-        fields = parse_select(value)
-        query.select = SelectOption(value=value, fields=fields)
-
-    @staticmethod
-    def _parse_expand(query: ODataQuery, value: str) -> None:
-        """Parse $expand option."""
-        nested = parse_expand(value)
-        query.expand = ExpandOption(value=value, nested_options=nested)
-
-    @staticmethod
-    def _parse_orderby(query: ODataQuery, value: str) -> None:
-        """Parse $orderby option."""
-        fields = parse_orderby(value)
-        query.orderby = OrderByOption(value=value, fields=fields)
-
-    @staticmethod
-    def _parse_top(query: ODataQuery, value: str) -> None:
-        """Parse $top option."""
-        query.top = TopOption(value=value)
-
-    @staticmethod
-    def _parse_skip(query: ODataQuery, value: str) -> None:
-        """Parse $skip option."""
-        query.skip = SkipOption(value=value)
-
-    @staticmethod
-    def _parse_count(query: ODataQuery, value: str) -> None:
-        """Parse $count option."""
-        query.count = value.lower() == "true"
+    return dict(parse_qsl(query_string.removeprefix("?")))
 
 
-# Singleton instance for convenience
-_parser = ODataQueryParser()
-
-
-def parse_odata_query(query_params: dict[str, Any] | str) -> ODataQuery:
+def parse_odata_query(query_params: dict[str, Any] | str) -> QueryIntent:
     """
-    Parse OData query parameters into ODataQuery object.
+    Parse OData query parameters into a QueryIntent.
 
     Args:
-        query_params: Dictionary of query parameters or raw query string
+        query_params: Dictionary of query parameters or a raw query string
+            (e.g. ``"$filter=status eq 'active'&$top=10"``).
 
     Returns:
-        ODataQuery object
+        QueryIntent with filter, select, expand, ordering and pagination set
+        for whichever parameters were present.
     """
     if isinstance(query_params, str):
-        return _parser.parse_from_string(query_params)
-    return _parser.parse(query_params)
+        query_params = parse_query_params(query_params)
+    elif not query_params:
+        return QueryIntent()
+
+    intent = QueryIntent()
+
+    if "$filter" in query_params:
+        from ..filter import parse_filter
+
+        expression = query_params["$filter"]
+        intent.filter = FilterIntent(expression=expression, ast=parse_filter(expression))
+
+    if "$select" in query_params:
+        intent.select = SelectIntent(fields=parse_select(query_params["$select"]))
+
+    if "$expand" in query_params:
+        intent.expand = _expand_intent(parse_expand(query_params["$expand"]))
+
+    if "$orderby" in query_params:
+        intent.orderby = OrderIntent.from_tuples(parse_orderby(query_params["$orderby"]))
+
+    intent.pagination = _pagination_intent(query_params)
+
+    return intent
+
+
+def _bounded_int(value: Any, param: str, maximum: int) -> int:
+    """Parse a pagination value, rejecting non-integers, negatives and DoS-sized values."""
+    try:
+        parsed = int(value)
+    except (ValueError, TypeError) as exc:
+        raise InvalidValueError(value, "integer", param) from exc
+
+    if parsed < 0:
+        raise InvalidValueError(value, "non-negative integer", param)
+    if parsed > maximum:
+        raise InvalidValueError(value, f"integer <= {maximum}", param)
+
+    return parsed
+
+
+def _pagination_intent(params: dict[str, Any]) -> PaginationIntent | None:
+    """Build the pagination intent from $top / $skip / $count."""
+    top = _bounded_int(params["$top"], "$top", MAX_TOP_VALUE) if params.get("$top") not in (None, "") else None
+    skip = _bounded_int(params["$skip"], "$skip", MAX_SKIP_VALUE) if params.get("$skip") not in (None, "") else None
+
+    count = params.get("$count")
+    include_count = count.lower() == "true" if isinstance(count, str) else bool(count)
+
+    if top is None and skip is None and not include_count:
+        return None
+
+    return PaginationIntent(limit=top, offset=skip, include_count=include_count)
+
+
+def _expand_intent(nested_options: dict[str, dict[str, Any]]) -> ExpandIntent:
+    """Convert parsed $expand options into nested QueryIntents."""
+    relations: dict[str, QueryIntent] = {}
+
+    for relation_name, options in nested_options.items():
+        nested = QueryIntent()
+
+        # Nested filters keep their expression only; they are not executed as ASTs.
+        if "$filter" in options:
+            nested.filter = FilterIntent(expression=options["$filter"])
+
+        if "$select" in options:
+            value = options["$select"]
+            nested.select = SelectIntent(fields=parse_select(value) if isinstance(value, str) else value)
+
+        if "$orderby" in options and isinstance(options["$orderby"], str):
+            nested.orderby = OrderIntent.from_tuples(parse_orderby(options["$orderby"]))
+
+        if options.get("$top"):
+            nested.pagination = PaginationIntent(
+                limit=int(options["$top"]),
+                offset=int(options["$skip"]) if options.get("$skip") else None,
+            )
+
+        if "$expand" in options:
+            value = options["$expand"]
+            if isinstance(value, dict):
+                nested.expand = _expand_intent(value)
+            elif isinstance(value, str):
+                nested.expand = ExpandIntent(relations={r.strip(): QueryIntent() for r in value.split(",")})
+
+        relations[relation_name] = nested
+
+    return ExpandIntent(relations=relations)

@@ -13,7 +13,7 @@ Each parser is independent and can be used standalone.
 
 # Re-export main parsers for convenience
 from .filter import ODataLexer, ODataParser
-from .query import ODataQuery, parse_odata_query
+from .query import parse_odata_query
 
 __all__ = [
     # Filter parser (AST)
@@ -21,5 +21,4 @@ __all__ = [
     "ODataParser",
     # Query parser (complete)
     "parse_odata_query",
-    "ODataQuery",
 ]

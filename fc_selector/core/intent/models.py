@@ -11,8 +11,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal, Sequence, cast
 
-from fc_selector.core.ast.nodes import And, BoolOp
-
 if TYPE_CHECKING:
     from fc_selector.core.ast.nodes import Node
 
@@ -65,10 +63,6 @@ class ExpandIntent:
     def has_relations(self) -> bool:
         """Check if any relations are expanded."""
         return len(self.relations) > 0
-
-    def get_relation_names(self) -> list[str]:
-        """Get list of relation names being expanded."""
-        return list(self.relations.keys())
 
 
 @dataclass
@@ -138,39 +132,3 @@ class QueryIntent:
     expand: ExpandIntent | None = None
     orderby: OrderIntent | None = None
     pagination: PaginationIntent | None = None
-
-    def is_empty(self) -> bool:
-        """Check if the query intent has no specifications."""
-        return (
-            (self.filter is None or not self.filter.has_filter())
-            and (self.select is None or not self.select.has_fields())
-            and (self.expand is None or not self.expand.has_relations())
-            and (self.orderby is None or not self.orderby.has_ordering())
-            and (self.pagination is None or not self.pagination.has_pagination())
-        )
-
-    def merge_with(self, other: QueryIntent) -> QueryIntent:
-        """
-        Merge another QueryIntent into this one.
-
-        The other intent's values take precedence for simple fields.
-        For filters, they are combined with AND.
-        """
-        merged_filter = None
-        if self.filter and other.filter:
-            # Combine filters with AND
-            if self.filter.ast and other.filter.ast:
-                merged_filter = FilterIntent(ast=BoolOp(op=And(), left=self.filter.ast, right=other.filter.ast))
-            else:
-                # Prioritize 'other' if it has AST, otherwise 'self'
-                merged_filter = other.filter if other.filter.ast else self.filter
-        else:
-            merged_filter = other.filter if other.filter else self.filter
-
-        return QueryIntent(
-            filter=merged_filter,
-            select=other.select if other.select else self.select,
-            expand=other.expand if other.expand else self.expand,
-            orderby=other.orderby if other.orderby else self.orderby,
-            pagination=other.pagination if other.pagination else self.pagination,
-        )

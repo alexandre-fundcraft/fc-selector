@@ -17,16 +17,11 @@ class ODataMetadataRegistry:
     Registry for OData entity sets.
 
     Selectors register themselves here to be included in $metadata.
+    All state is class level; the class is a namespace, never instantiated.
     """
 
-    _instance = None
     _selectors: dict[str, type[ODataSelector]] = {}
     _namespace: str = "ODataService"
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
 
     @classmethod
     def register(cls, entity_set_name: str, selector_class: type[ODataSelector]):
@@ -52,26 +47,6 @@ class ODataMetadataRegistry:
     def clear(cls):
         """Clear all registrations (useful for testing)."""
         cls._selectors = {}
-
-
-# Convenience function
-def register_odata_entity(entity_set_name: str):
-    """
-    Decorator to register an ODataSelector for metadata generation.
-
-    Usage:
-        @register_odata_entity("posts")
-        class BlogPostSelector(ODataSelector):
-            class Meta:
-                model = BlogPost
-                dto_class = BlogPostDTO
-    """
-
-    def decorator(cls):
-        ODataMetadataRegistry.register(entity_set_name, cls)
-        return cls
-
-    return decorator
 
 
 class ODataMetadataView(View):
@@ -320,9 +295,7 @@ class ODataMetadataView(View):
 
             lines.append(f'        <Annotation Target="{target}" Term="Org.OData.Capabilities.V1.FilterRestrictions">')
             lines.append("          <Record>")
-            lines.append(
-                f'            <PropertyValue Property="Filterable" Bool="{str(selector.is_filterable()).lower()}"/>'
-            )
+            lines.append('            <PropertyValue Property="Filterable" Bool="true"/>')
 
             non_filterable = selector.get_non_filterable_fields()
             if non_filterable:
@@ -338,9 +311,7 @@ class ODataMetadataView(View):
 
             lines.append(f'        <Annotation Target="{target}" Term="Org.OData.Capabilities.V1.SortRestrictions">')
             lines.append("          <Record>")
-            lines.append(
-                f'            <PropertyValue Property="Sortable" Bool="{str(selector.is_sortable()).lower()}"/>'
-            )
+            lines.append('            <PropertyValue Property="Sortable" Bool="true"/>')
 
             non_sortable = selector.get_non_sortable_fields()
             if non_sortable:

@@ -11,7 +11,6 @@ from .views import (
     ODataMetadataRegistry,
     ODataMetadataView,
     ODataServiceDocumentView,
-    register_odata_entity,
 )
 
 __all__ = [
@@ -20,5 +19,4 @@ __all__ = [
     "ODataMetadataView",
     "ODataServiceDocumentView",
     "ODataMetadataRegistry",
-    "register_odata_entity",
 ]

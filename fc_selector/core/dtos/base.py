@@ -9,32 +9,12 @@ import logging
 from dataclasses import dataclass
 from dataclasses import fields as dataclass_fields
 from functools import lru_cache
-from typing import TYPE_CHECKING, Any, Protocol, cast, get_args, get_origin, get_type_hints
-
-from django.db.models import Manager
+from typing import Any, cast, get_type_hints
 
 from fc_selector.core.dtos.typed_dicts import generate_typeddict
+from fc_selector.core.dtos.utils import dto_class_of, is_dto_type, is_many_relationship
 
 logger = logging.getLogger(__name__)
-
-if TYPE_CHECKING:
-    from typing import Self
-
-
-class DTOProtocol(Protocol):
-    """Protocol for DTO classes with from_model method."""
-
-    @classmethod
-    def from_model(
-        cls,
-        instance: Any,
-        selected_fields: set[str] | None = None,
-        expanded_fields: set[str] | None = None,
-        expand_options: dict | None = None,
-        field_mapping: dict[str, str] | None = None,
-        *,
-        _depth: int = 0,
-    ) -> "Self": ...
 
 
 # Sentinel for unselected fields
@@ -47,36 +27,16 @@ class Unset:
 
 UNSET = Unset()
 
-# Module-level caches for DTO introspection (shared across all DTOs)
-# Note: These caches are keyed by DTO class (type), not by instance.
-# Since DTO classes are defined statically in code, these caches are bounded
-# by the number of DTO classes in your application and will not grow indefinitely.
-# For applications with dynamic class generation, use clear_dto_caches() periodically.
+# Module-level caches for DTO introspection (shared across all DTOs).
+# Keyed by DTO class (type), not by instance: DTO classes are defined statically
+# in code, so these caches are bounded by the number of DTO classes and will not
+# grow indefinitely.
 _TYPE_HINTS_CACHE: dict[type, dict[str, Any]] = {}
 _RELATIONSHIP_INFO_CACHE: dict[type, dict[str, dict[str, Any]]] = {}
 _DTO_FIELDS_CACHE: dict[type, set[str]] = {}
 
 # Security: Maximum recursion depth for nested DTOs to prevent infinite loops
 MAX_DTO_RECURSION_DEPTH = 10
-
-
-def clear_dto_caches() -> None:
-    """
-    Clear all DTO introspection caches.
-
-    Call this function if you need to:
-    - Free memory in long-running processes
-    - Reset caches after dynamic class modifications (rare)
-    - Clear state between test runs
-
-    Note: Caches will be automatically repopulated on next DTO conversion.
-    """
-    _TYPE_HINTS_CACHE.clear()
-    _RELATIONSHIP_INFO_CACHE.clear()
-    _DTO_FIELDS_CACHE.clear()
-    cls = BaseODataDTO
-    if hasattr(cls, "_parse_nested_expand_options"):
-        cls._parse_nested_expand_options.cache_clear()  # noqa: W0212 - BaseODataDTO internal method
 
 
 class RecursionLimitExceededError(Exception):
@@ -139,109 +99,6 @@ class BaseODataDTO:
     is_odata_dto = True
 
     @classmethod
-    def _is_dto_type(cls, field_type: Any) -> bool:
-        """
-        Check if a type annotation represents a DTO relationship.
-
-        Detects DTOs by checking if the type name ends with 'DTO'.
-        Handles Optional[...], List[...], Optional[List[...]], and direct DTO types.
-
-        Args:
-            field_type: Type annotation from get_type_hints()
-
-        Returns:
-            True if the type represents a DTO relationship
-
-        Examples:
-            >>> _is_dto_type(UserDTO)  # True
-            >>> _is_dto_type(Optional[UserDTO])  # True
-            >>> _is_dto_type(List[UserDTO])  # True
-            >>> _is_dto_type(Optional[List[UserDTO]])  # True
-            >>> _is_dto_type(str)  # False
-        """
-        # Handle Optional[T] (which is Union[T, None])
-        origin = get_origin(field_type)
-        if origin is not None:
-            args = get_args(field_type)
-            if args:
-                # For Optional[T] or List[T], check the first arg
-                field_type = args[0]
-
-                # If it's still generic (e.g., List[DTO]), unwrap again
-                inner_origin = get_origin(field_type)
-                if inner_origin is not None:
-                    inner_args = get_args(field_type)
-                    if inner_args:
-                        field_type = inner_args[0]
-
-        # Check for explicit attribute (Robust)
-        if getattr(field_type, "is_odata_dto", False):
-            return True
-
-        # Check if type name ends with 'DTO'
-        if hasattr(field_type, "__name__"):
-            return bool(field_type.__name__.endswith("DTO"))
-
-        return False
-
-    @classmethod
-    def _is_many_relationship(cls, field_type: Any) -> bool:
-        """
-        Check if a relationship is one-to-many (List[DTO]).
-
-        Args:
-            field_type: Type annotation from get_type_hints()
-
-        Returns:
-            True if the type is List[SomeDTO]
-        """
-        origin = get_origin(field_type)
-        if origin is list:
-            return True
-
-        # Handle Optional[List[...]]
-        if origin is not None:
-            args = get_args(field_type)
-            if args:
-                inner_origin = get_origin(args[0])
-                if inner_origin is list:
-                    return True
-
-        return False
-
-    @classmethod
-    def _get_dto_class(cls, field_type: Any) -> type | None:
-        """
-        Extract the DTO class from a type annotation.
-
-        Args:
-            field_type: Type annotation (e.g., UserDTO, Optional[UserDTO], List[UserDTO])
-
-        Returns:
-            The DTO class, or None if not a DTO type
-        """
-        # Handle Optional[T] or List[T]
-        origin = get_origin(field_type)
-        if origin is not None:
-            args = get_args(field_type)
-            if args:
-                # For Optional[UserDTO] or List[UserDTO]
-                inner_type = args[0]
-                # If it's Optional[List[UserDTO]], go one level deeper
-                inner_origin = get_origin(inner_type)
-                if inner_origin is list:
-                    inner_args = get_args(inner_type)
-                    if inner_args:
-                        return cast(type, inner_args[0])
-                return cast(type, inner_type)
-
-        # Direct DTO type
-        if hasattr(field_type, "__name__") and field_type.__name__.endswith("DTO"):
-            return cast(type, field_type)
-
-        return None
-
-    @classmethod
     def _get_safe_type_hints(cls) -> dict[str, Any]:
         """Get type hints with fallback for forward references (cached)."""
         if cls not in _TYPE_HINTS_CACHE:
@@ -283,10 +140,10 @@ class BaseODataDTO:
         for field_name in dto_fields:
             if field_name in type_hints:
                 field_type = type_hints[field_name]
-                if cls._is_dto_type(field_type):
+                if is_dto_type(field_type):
                     relationships[field_name] = {
-                        "dto_class": cls._get_dto_class(field_type),
-                        "is_many": cls._is_many_relationship(field_type),
+                        "dto_class": dto_class_of(field_type),
+                        "is_many": is_many_relationship(field_type),
                     }
         return relationships
 
@@ -319,7 +176,9 @@ class BaseODataDTO:
             model_field = dto_to_model.get(field_name, field_name)
             if hasattr(instance, model_field):
                 value = getattr(instance, model_field)
-                if not isinstance(value, Manager):
+                # Skip relation accessors (Django managers, SQLAlchemy dynamic
+                # queries...): they expose .all() and are not scalar values.
+                if not callable(getattr(value, "all", None)):
                     data[field_name] = value
 
     @classmethod
@@ -327,22 +186,14 @@ class BaseODataDTO:
     def _parse_nested_expand_options(cls, expand_value: str) -> tuple[set[str], dict]:
         """Parse nested $expand options into expanded fields and options dict."""
         # Lazy import to avoid core-to-protocol dependency at module level
-        from fc_selector.protocols.odata.parsers.query import parse_odata_query  # noqa: PLC0415
+        from fc_selector.protocols.odata.parsers.expand import parse_expand  # noqa: PLC0415
 
         try:
-            nested_query = f"$expand={expand_value}"
-            nested_query_params = parse_odata_query(nested_query)
-
-            if nested_query_params.expand:
-                if hasattr(nested_query_params.expand, "nested_options"):
-                    nested_expand_options = nested_query_params.expand.nested_options
-                    nested_expanded_fields = set(nested_expand_options.keys())
-                    return nested_expanded_fields, nested_expand_options
-                return set(expand_value.split(",")), {}
+            options = parse_expand(expand_value)
         except (ValueError, KeyError, AttributeError):
-            pass
+            options = {}
 
-        return set(expand_value.split(",")), {}
+        return (set(options), options) if options else (set(expand_value.split(",")), {})
 
     @classmethod
     def _populate_many_relationship(
@@ -350,7 +201,7 @@ class BaseODataDTO:
         data: dict,
         instance: Any,
         field_name: str,
-        dto_class: type[DTOProtocol],
+        dto_class: type["BaseODataDTO"],
         nested_selected: set[str] | None,
         nested_expanded: set[str],
         nested_options: dict,
@@ -391,7 +242,7 @@ class BaseODataDTO:
         data: dict,
         instance: Any,
         field_name: str,
-        dto_class: type[DTOProtocol],
+        dto_class: type["BaseODataDTO"],
         nested_selected: set[str] | None,
         nested_expanded: set[str],
         nested_options: dict,
@@ -478,8 +329,7 @@ class BaseODataDTO:
             if dto_class is None or not hasattr(dto_class, "from_model"):
                 continue
 
-            # Cast to DTOProtocol now that we've verified it has from_model
-            dto_cls = cast(type[DTOProtocol], dto_class)
+            dto_cls = cast(type["BaseODataDTO"], dto_class)
 
             # Get nested options for this field
             nested_opts = expand_options.get(field_name, {})

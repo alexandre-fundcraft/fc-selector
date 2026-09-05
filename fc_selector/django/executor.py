@@ -25,6 +25,34 @@ from fc_selector.django.visitors import AstToDjangoQVisitor
 logger = logging.getLogger(__name__)
 
 
+def apply_pagination(queryset: QuerySet, intent: QueryIntent) -> QuerySet:
+    """Apply limit/offset from an intent to a queryset."""
+    if not intent.pagination or not intent.pagination.has_pagination():
+        return queryset
+
+    offset = intent.pagination.offset or 0
+    limit = intent.pagination.limit
+
+    if limit is not None:
+        return queryset[offset : offset + limit]
+    if offset > 0:
+        return queryset[offset:]
+
+    return queryset
+
+
+def get_expand_config(expandable_fields: dict[str, Any], relation_name: str) -> dict | None:
+    """Normalise an expandable_fields entry to a config dict.
+
+    Entries may be a bare DTO class or a dict with 'dto_class' and optional
+    'only_fields'. Returns None when the relation is not configured.
+    """
+    config = expandable_fields.get(relation_name)
+    if not config:
+        return None
+    return config if isinstance(config, dict) else {"dto_class": config}
+
+
 class DjangoExecutor:
     """
     Executes a QueryIntent against a Django QuerySet.
@@ -147,7 +175,7 @@ class DjangoExecutor:
         queryset = self._apply_optimizations(queryset, intent, use_values=can_use_values)
 
         # 4. Apply Pagination
-        queryset = DjangoExecutor._apply_pagination(queryset, intent)
+        queryset = apply_pagination(queryset, intent)
 
         return queryset
 
@@ -156,9 +184,7 @@ class DjangoExecutor:
         if not intent.filter:
             return queryset
         if not intent.filter.ast:
-            raise core_ex.QueryError(
-                f"Invalid filter expression: {intent.filter.expression}"
-            )
+            raise core_ex.QueryError(f"Invalid filter expression: {intent.filter.expression}")
 
         try:
             allowed = set(self.allowed_fields) if self.allowed_fields else None
@@ -200,22 +226,6 @@ class DjangoExecutor:
             order_fields.append(f"{prefix}{resolved_field}")
 
         return queryset.order_by(*order_fields)
-
-    @staticmethod
-    def _apply_pagination(queryset: QuerySet, intent: QueryIntent) -> QuerySet:
-        """Apply limit/offset."""
-        if not intent.pagination or not intent.pagination.has_pagination():
-            return queryset
-
-        offset = intent.pagination.offset or 0
-        limit = intent.pagination.limit
-
-        if limit is not None:
-            return queryset[offset : offset + limit]
-        if offset > 0:
-            return queryset[offset:]
-
-        return queryset
 
     @staticmethod
     def _model_has_properties(model) -> list[str]:
@@ -362,7 +372,7 @@ class DjangoExecutor:
         skip_only_relations: set[str],
     ) -> None:
         """Process a forward relation for expand optimization."""
-        expand_config = self._get_expand_config(relation_name)
+        expand_config = get_expand_config(self.expandable_fields, relation_name)
         field = get_field_safe(model, relation_name)
 
         if expand_config and field and hasattr(field, "related_model"):
@@ -489,25 +499,8 @@ class DjangoExecutor:
     def _process_nested_expands(nested_intent: QueryIntent, django_relation: str, select_related: list[str]) -> None:
         """Process nested expand relations for deep select_related."""
         if nested_intent.expand:
-            for nested_rel in nested_intent.expand.get_relation_names():
+            for nested_rel in nested_intent.expand.relations:
                 select_related.append(f"{django_relation}__{nested_rel.replace('.', '__')}")
-
-    def _get_expand_config(self, relation_name: str) -> dict | None:
-        """Get expand configuration for a relation.
-
-        Returns:
-            Dict with 'dto_class' and optionally 'only_fields', or None if not configured.
-        """
-        config = self.expandable_fields.get(relation_name)
-        if not config:
-            return None
-
-        # If it's a dict, return as-is
-        if isinstance(config, dict):
-            return config
-
-        # If it's a class (DTO), wrap it
-        return {"dto_class": config}
 
     @staticmethod
     def _resolve_dto_field_to_model(model, dto_field: str) -> str | None:
