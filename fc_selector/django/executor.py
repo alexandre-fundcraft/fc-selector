@@ -7,6 +7,7 @@ Centralizes the execution of protocol-agnostic QueryIntents on Django QuerySets.
 # pylint: disable=protected-access  # Django's _meta is part of the public API for model introspection
 
 import logging
+from functools import lru_cache
 from typing import Any
 
 from django.db.models import Prefetch, QuerySet
@@ -23,6 +24,9 @@ from fc_selector.django.utils import (
 from fc_selector.django.visitors import AstToDjangoQVisitor
 
 logger = logging.getLogger(__name__)
+
+# (model, relation_name) pairs already warned about @property fields
+_WARNED_PROPERTY_MODELS: set[tuple[type, str]] = set()
 
 
 def apply_pagination(queryset: QuerySet, intent: QueryIntent) -> QuerySet:
@@ -228,6 +232,7 @@ class DjangoExecutor:
         return queryset.order_by(*order_fields)
 
     @staticmethod
+    @lru_cache(maxsize=None)
     def _model_has_properties(model) -> list[str]:
         """Detect @property methods on a Django model class that might access related fields.
 
@@ -425,14 +430,17 @@ class DjangoExecutor:
         skip_only_relations: set[str],
     ) -> None:
         """Handle models that have @property methods."""
-        logger.warning(
-            "[OData] ⚠️  Model '%s' has @property methods: %s. "
-            "Skipping only() optimization for '%s' to avoid N+1 queries. "
-            "Consider adding explicit 'only_fields' config or select_related for nested relations.",
-            related_model.__name__,
-            properties,
-            relation_name,
-        )
+        # Configuration advice, not a per-request event: warn once per relation.
+        if (related_model, relation_name) not in _WARNED_PROPERTY_MODELS:
+            _WARNED_PROPERTY_MODELS.add((related_model, relation_name))
+            logger.warning(
+                "[OData] ⚠️  Model '%s' has @property methods: %s. "
+                "Skipping only() optimization for '%s' to avoid N+1 queries. "
+                "Consider adding explicit 'only_fields' config or select_related for nested relations.",
+                related_model.__name__,
+                properties,
+                relation_name,
+            )
         skip_only_relations.add(django_relation)
         DjangoExecutor._auto_add_onetoone_relations(related_model, django_relation, select_related)
 
