@@ -39,7 +39,7 @@ cd fc-selector
 uv sync --group dev
 
 # Using pip
-pip install -e ".[dev]"
+pip install -e .
 ```
 
 ### Requirements
@@ -48,7 +48,6 @@ pip install -e ".[dev]"
 - **Django** >= 4.2
 - **djangorestframework** >= 3.12.0
 - **drf-spectacular** >= 0.29.0
-- **python-dateutil** >= 2.8.2
 - **sly** >= 0.5
 
 ## Quick Start
@@ -200,7 +199,8 @@ See [Query Builder Documentation](docs/query-builder.md) for the full API refere
 A complete example is available in `example/`:
 
 ```bash
-make dev-setup      # Install deps + setup example DB
+make sync           # Install dependencies
+make example-setup  # Set up the example database
 make example-run    # Start server at localhost:8000
 ```
 

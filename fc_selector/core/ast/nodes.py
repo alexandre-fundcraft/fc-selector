@@ -18,10 +18,7 @@ Modifications:
 import datetime as dt
 import re
 from dataclasses import dataclass, field
-from typing import cast
 from uuid import UUID
-
-from dateutil.parser import isoparse
 
 DURATION_PATTERN = re.compile(r"([+-])?P(\d+Y)?(\d+M)?(\d+D)?(?:T(\d+H)?(\d+M)?(\d+(?:\.\d+)?S)?)?")
 
@@ -217,7 +214,7 @@ class DateTime(_Literal):
 
     @property
     def py_val(self) -> dt.datetime:
-        return cast(dt.datetime, isoparse(self.val))
+        return dt.datetime.fromisoformat(self.val)
 
 
 @dataclass(frozen=True)
