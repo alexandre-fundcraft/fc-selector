@@ -70,7 +70,6 @@ class Expand:
         """
         self._relation = relation
         self._select_fields: list[str] | None = None
-        self._filter_expression: Expression | None = None
         self._filter_ast: Node | None = None
         self._top_value: int | None = None
         self._skip_value: int | None = None
@@ -123,7 +122,6 @@ class Expand:
                 "Use Field('name').eq('value') to create expressions."
             )
 
-        self._filter_expression = expression
         self._filter_ast = expression.to_ast()
         return self
 
@@ -257,7 +255,7 @@ class Expand:
         parts = [f"Expand('{self._relation}')"]
         if self._select_fields:
             parts.append(f".select({', '.join(repr(f) for f in self._select_fields)})")
-        if self._filter_expression:
+        if self._filter_ast is not None:
             parts.append(".filter(...)")
         if self._top_value is not None:
             parts.append(f".top({self._top_value})")

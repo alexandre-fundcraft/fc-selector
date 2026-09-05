@@ -13,51 +13,9 @@ from rest_framework.test import APIRequestFactory
 
 from fc_selector.core.dtos.base import BaseODataDTO
 from fc_selector.django.drf.viewsets import ODataSelectorViewSetMixin
-from fc_selector.django.drf.viewsets.selector_mixin import (
-    ODATA_PARAMETERS,
-    build_odata_response,
-    get_odata_openapi_parameters,
-)
+from fc_selector.django.drf.viewsets.selector_mixin import build_odata_response
 from fc_selector.django.selector import ODataSelector
 from tests.integration.support.models import ODataTestModel
-
-
-class TestODataParameters:
-    """Tests for OData parameter definitions."""
-
-    def test_odata_parameters_list(self):
-        """ODATA_PARAMETERS contains expected parameters."""
-        param_names = [p["name"] for p in ODATA_PARAMETERS]
-        assert "$filter" in param_names
-        assert "$select" in param_names
-        assert "$expand" in param_names
-        assert "$orderby" in param_names
-        assert "$top" in param_names
-        assert "$skip" in param_names
-        assert "$count" in param_names
-
-    def test_odata_parameters_have_descriptions(self):
-        """All parameters have descriptions."""
-        for param in ODATA_PARAMETERS:
-            assert "description" in param
-            assert len(param["description"]) > 10  # Meaningful description
-
-
-class TestGetODataOpenApiParameters:
-    """Tests for get_odata_openapi_parameters."""
-
-    def test_returns_list(self):
-        """Returns list of parameters."""
-        params = get_odata_openapi_parameters()
-        assert isinstance(params, list)
-
-    def test_parameters_have_names(self):
-        """Each parameter has a name."""
-        params = get_odata_openapi_parameters()
-        # If drf-spectacular not available, returns empty list
-        if params:
-            for param in params:
-                assert hasattr(param, "name")
 
 
 class TestBuildODataResponse:
@@ -176,26 +134,6 @@ class TestODataSelectorViewSetMixin:
         viewset = TestViewSet()
         selector = viewset.get_selector()
         assert isinstance(selector, TestSelector)
-
-    def test_get_list_schema_decorator(self):
-        """get_list_schema_decorator returns callable."""
-
-        class TestViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
-            pass
-
-        viewset = TestViewSet()
-        decorator = viewset.get_list_schema_decorator()
-        assert callable(decorator)
-
-    def test_get_retrieve_schema_decorator(self):
-        """get_retrieve_schema_decorator returns callable."""
-
-        class TestViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
-            pass
-
-        viewset = TestViewSet()
-        decorator = viewset.get_retrieve_schema_decorator()
-        assert callable(decorator)
 
     def test_retrieve_returns_dto(self):
         """retrieve method returns serialized DTO."""

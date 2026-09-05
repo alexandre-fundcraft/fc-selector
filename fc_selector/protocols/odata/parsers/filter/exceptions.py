@@ -1,12 +1,6 @@
-from typing import Any
-
 from sly.lex import Token
 
-from fc_selector.core.exceptions import (
-    FieldNotFoundError,
-    InvalidValueError,
-    SelectorError,
-)
+from fc_selector.core.exceptions import SelectorError
 
 
 class ODataException(SelectorError):
@@ -46,15 +40,7 @@ class ParsingException(ODataSyntaxError):
         super().__init__(f"Failed to parse at: {token}")
 
 
-class FunctionCallException(ODataException):
-    """
-    Base class for errors in function calls.
-    """
-
-    pass
-
-
-class UnknownFunctionException(FunctionCallException):
+class UnknownFunctionException(ODataException):
     """
     Thrown when the parser encounters an undefined function call.
     """
@@ -64,7 +50,7 @@ class UnknownFunctionException(FunctionCallException):
         super().__init__(f"Unknown function: '{function_name}'")
 
 
-class ArgumentCountException(FunctionCallException):
+class ArgumentCountException(ODataException):
     """
     Thrown when the parser encounters a function called with a wrong number
     of arguments.
@@ -84,17 +70,7 @@ class ArgumentCountException(FunctionCallException):
             super().__init__(f"Function '{function_name}' takes {exp_min_args} arguments. {given_args} given.")
 
 
-class UnsupportedFunctionException(FunctionCallException):
-    """
-    Thrown when a function is used that is not implemented yet.
-    """
-
-    def __init__(self, function_name: str):
-        self.function_name = function_name
-        super().__init__(f"Function '{function_name}' is not implemented yet.")
-
-
-class ArgumentTypeException(FunctionCallException):
+class ArgumentTypeException(ODataException):
     """
     Thrown when a function is called with argument of the wrong type.
     """
@@ -119,33 +95,3 @@ class ArgumentTypeException(FunctionCallException):
                 message += f", got {actual_type}"
 
         super().__init__(message)
-
-
-class TypeException(ODataException):
-    """
-    Thrown when doing an invalid operation on a value.
-    E.g. `10 gt null` or `~date()`
-    """
-
-    def __init__(self, operation: str, value: str):
-        self.operation = operation
-        self.value = value
-        super().__init__(f"Cannot apply '{operation}' to '{value}'")
-
-
-class ValueException(InvalidValueError, ODataException):
-    """
-    Thrown when a value has an invalid value, such as an invalid datetime.
-    """
-
-    def __init__(self, value: Any):
-        super().__init__(value)
-
-
-class InvalidFieldException(FieldNotFoundError, ODataException):
-    """
-    Thrown when a field mentioned in a query does not exist.
-    """
-
-    def __init__(self, field_name: str):
-        super().__init__(field_name)

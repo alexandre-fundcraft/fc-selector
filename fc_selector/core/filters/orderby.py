@@ -87,25 +87,6 @@ class OrderBy:
         self._direction = "desc"
         return self
 
-    def to_tuple(self) -> tuple[str, Literal["asc", "desc"]]:
-        """
-        Convert to tuple format (field, direction).
-
-        Returns:
-            Tuple of (field_name, direction)
-        """
-        return (self._field, self._direction)
-
     def __repr__(self) -> str:
         """Return detailed representation."""
         return f"OrderBy('{self._field}').{self._direction}()"
-
-    def __eq__(self, other: object) -> bool:
-        """Check equality."""
-        if not isinstance(other, OrderBy):
-            return NotImplemented
-        return self._field == other._field and self._direction == other._direction
-
-    def __hash__(self) -> int:
-        """Return hash."""
-        return hash((self._field, self._direction))

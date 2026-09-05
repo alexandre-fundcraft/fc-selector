@@ -5,71 +5,9 @@ Covers fc_selector/protocols/odata/parsers/filter/rewrite.py
 """
 
 from fc_selector.core import ast
-from fc_selector.protocols.odata.parsers.filter import parse_filter as parse
-from fc_selector.protocols.odata.parsers.filter.grammar import (
-    ODataLexer,
-    ODataParser,
-)
 from fc_selector.protocols.odata.parsers.filter.rewrite import (
-    AliasRewriter,
     IdentifierStripper,
 )
-
-
-class TestAliasRewriter:
-    """Tests for AliasRewriter transformer."""
-
-    def test_simple_alias_replacement(self):
-        """Simple identifier alias is replaced."""
-        aliases = {"title": "name"}
-        rewriter = AliasRewriter(aliases)
-
-        original_ast = parse("title eq 'test'")
-        rewritten = rewriter.visit(original_ast)
-
-        # The 'title' identifier should now be 'name'
-        assert rewritten is not None
-
-    def test_multiple_aliases(self):
-        """Multiple aliases are replaced."""
-        aliases = {"title": "name", "qty": "count"}
-        rewriter = AliasRewriter(aliases)
-
-        original_ast = parse("title eq 'test' and qty gt 5")
-        rewritten = rewriter.visit(original_ast)
-
-        assert rewritten is not None
-
-    def test_attribute_alias_replacement(self):
-        """Attribute aliases are replaced."""
-        aliases = {"author/email": "author/mail_address"}
-        rewriter = AliasRewriter(aliases)
-
-        # This tests that complex aliases work
-        original_ast = parse("author/email eq 'test@test.com'")
-        rewritten = rewriter.visit(original_ast)
-
-        assert rewritten is not None
-
-    def test_no_alias_unchanged(self):
-        """Non-aliased identifiers are unchanged."""
-        aliases = {"title": "name"}
-        rewriter = AliasRewriter(aliases)
-
-        original_ast = parse("count gt 5")
-        rewritten = rewriter.visit(original_ast)
-
-        # Should be identical since no alias matches
-        assert rewritten is not None
-
-    def test_custom_lexer_parser(self):
-        """Custom lexer and parser can be provided."""
-        lexer = ODataLexer()
-        parser = ODataParser()
-        aliases = {"title": "name"}
-
-        rewriter = AliasRewriter(aliases, lexer=lexer, parser=parser)
-        assert rewriter is not None
 
 
 class TestIdentifierStripper:

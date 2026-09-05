@@ -10,7 +10,6 @@ This serializer works with ODataSelector and DTOs to provide:
 
 # pylint: disable=protected-access  # Legitimate access to protected DTO attributes
 
-import importlib
 from dataclasses import fields as dataclass_fields
 from dataclasses import is_dataclass
 from typing import Any
@@ -18,9 +17,7 @@ from typing import Any
 from rest_framework import serializers
 
 from fc_selector.core.dtos import UNSET
-
-# Cache for dynamically created serializers to avoid recursion
-_serializer_cache: dict[type, type] = {}
+from fc_selector.core.dtos.utils import is_dto_type, is_many_relationship
 
 
 class ODataDTOSerializer(serializers.Serializer):
@@ -139,10 +136,10 @@ class ODataDTOSerializer(serializers.Serializer):
         """
 
         # Check if it's a nested DTO (ends with 'DTO')
-        if ODataDTOSerializer._is_dto_type(field_type):
+        if is_dto_type(field_type):
             # Nested DTO - serialize as dict to avoid recursion issues
             # The to_representation method will handle converting the DTO to a dict
-            is_many = ODataDTOSerializer._is_many_relationship(field_type)
+            is_many = is_many_relationship(field_type)
 
             field_kwargs.setdefault("allow_null", True)
             field_kwargs.setdefault("required", False)
@@ -179,71 +176,6 @@ class ODataDTOSerializer(serializers.Serializer):
             field_kwargs.pop("min_length", None)
 
         return field_class(**field_kwargs)
-
-    @staticmethod
-    def _is_dto_type(field_type: Any) -> bool:
-        """Check if a type annotation represents a DTO."""
-        from typing import get_args, get_origin
-
-        # Unwrap Optional and List
-        origin = get_origin(field_type)
-        if origin is not None:
-            args = get_args(field_type)
-            if args:
-                field_type = args[0]
-                # Unwrap again for Optional[List[DTO]]
-                inner_origin = get_origin(field_type)
-                if inner_origin is not None:
-                    inner_args = get_args(field_type)
-                    if inner_args:
-                        field_type = inner_args[0]
-
-        # Check if type name ends with 'DTO'
-        if hasattr(field_type, "__name__"):
-            return bool(str(field_type.__name__).endswith("DTO"))
-
-        return False
-
-    @staticmethod
-    def _is_many_relationship(field_type: Any) -> bool:
-        """Check if a relationship is one-to-many (List[DTO])."""
-        from typing import get_args, get_origin
-
-        origin = get_origin(field_type)
-        if origin is list:
-            return True
-
-        # Handle Optional[List[...]]
-        if origin is not None:
-            args = get_args(field_type)
-            if args:
-                inner_origin = get_origin(args[0])
-                if inner_origin is list:
-                    return True
-
-        return False
-
-    @staticmethod
-    def _extract_dto_class(field_type: Any) -> type:
-        """Extract the DTO class from a type annotation."""
-        from typing import cast, get_args, get_origin
-
-        # Handle Optional[T] or List[T]
-        origin = get_origin(field_type)
-        if origin is not None:
-            args = get_args(field_type)
-            if args:
-                inner_type = args[0]
-                # If it's Optional[List[DTO]], go one level deeper
-                inner_origin = get_origin(inner_type)
-                if inner_origin is list:
-                    inner_args = get_args(inner_type)
-                    if inner_args:
-                        return cast(type, inner_args[0])
-                return cast(type, inner_type)
-
-        # Direct DTO type
-        return cast(type, field_type)
 
     @staticmethod
     def _get_base_type(field_type: Any) -> type:
@@ -339,68 +271,10 @@ class ODataDTOSerializer(serializers.Serializer):
 
         return result
 
-    def _get_excluded_fields(self, dto_class) -> set[str]:
-        """Get the set of fields to exclude when serializing a DTO."""
-        if hasattr(dto_class, "_excluded_fields"):
-            return set(dto_class._excluded_fields)
-
-        return self._get_excluded_fields_from_serializer(dto_class)
-
-    def _get_excluded_fields_from_serializer(self, dto_class) -> set[str]:
-        """Try to find excluded fields from the corresponding DTO serializer."""
-        try:
-            dto_module_name = dto_class.__module__
-            serializer_class_name = dto_class.__name__ + "Serializer"
-            possible_modules = ODataDTOSerializer._get_possible_serializer_modules(dto_module_name)
-
-            for module_name in possible_modules:
-                excluded = ODataDTOSerializer._try_import_serializer_exclusions(module_name, serializer_class_name)
-                if excluded is not None:
-                    return excluded
-
-        except (ImportError, AttributeError, TypeError, ValueError):
-            pass
-
-        return set()
-
     @staticmethod
-    def _get_possible_serializer_modules(dto_module_name: str) -> list[str]:
-        """Generate possible module names where the DTO serializer might be defined."""
-        base_module = (
-            dto_module_name.split(".selectors.")[0]
-            if ".selectors." in dto_module_name
-            else dto_module_name.rsplit(".", 1)[0]
-        )
-
-        return [
-            base_module + ".dto_serializers",
-            dto_module_name.rsplit(".", 1)[0] + ".dto_serializers",
-            dto_module_name.replace("_selector", "_dto_serializers"),
-        ]
-
-    @staticmethod
-    def _try_import_serializer_exclusions(module_name: str, serializer_class_name: str) -> set[str] | None:
-        """
-        Try to import a serializer class and extract its Meta.exclude fields.
-
-        Security note: module_name is derived from dto_class.__module__ and transformed
-        to predictable serializer module paths (e.g., ".dto_serializers"). This is safe
-        because it's not user-controlled input but internal framework introspection.
-        """
-        # Validate module name contains only safe characters (alphanumeric, dots, underscores)
-        if not all(c.isalnum() or c in "._" for c in module_name):  # nosec B105 - Not password validation
-            return None
-
-        try:
-            module = importlib.import_module(module_name)  # Safe: validated module name from DTO class
-            if hasattr(module, serializer_class_name):
-                serializer_class = getattr(module, serializer_class_name)
-                if hasattr(serializer_class, "Meta") and hasattr(serializer_class.Meta, "exclude"):
-                    return set(serializer_class.Meta.exclude or [])
-        except (ImportError, AttributeError):
-            pass
-
-        return None
+    def _get_excluded_fields(dto_class) -> set[str]:
+        """Fields the DTO itself declares as never serialized."""
+        return set(getattr(dto_class, "_excluded_fields", ()))
 
     def _convert_field_value(self, value):
         """Convert a field value, recursively handling DTOs."""
@@ -409,38 +283,3 @@ class ODataDTOSerializer(serializers.Serializer):
         if isinstance(value, list) and value and is_dataclass(value[0]):
             return [self._dto_to_dict(item) for item in value]
         return value
-
-    def to_internal_value(self, data):
-        """
-        Validate and convert input data.
-
-        This is used for POST/PUT/PATCH requests.
-
-        Args:
-            data: Input dictionary
-
-        Returns:
-            Validated data dictionary
-        """
-        # Use standard DRF validation
-        return super().to_internal_value(data)
-
-    @staticmethod
-    def create(validated_data):
-        """
-        Not implemented - this is a read-only serializer for DTOs.
-
-        DTOs are data transfer objects used for reading data from ODataSelector.
-        They are not meant to be persisted directly.
-        """
-        raise NotImplementedError("ODataDTOSerializer is read-only and does not support create operations")
-
-    @staticmethod
-    def update(instance, validated_data):
-        """
-        Not implemented - this is a read-only serializer for DTOs.
-
-        DTOs are data transfer objects used for reading data from ODataSelector.
-        They are not meant to be persisted directly.
-        """
-        raise NotImplementedError("ODataDTOSerializer is read-only and does not support update operations")

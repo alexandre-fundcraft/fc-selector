@@ -17,27 +17,19 @@ from fc_selector.core.exceptions import (
     UnsupportedFunctionError,
 )
 from fc_selector.exceptions import (
-    ODataExpandError,
     ODataFieldNotFoundError,
     ODataFilterError,
-    ODataInvalidFilterSyntaxError,
-    ODataInvalidOperatorError,
     ODataInvalidPaginationError,
     ODataInvalidValueError,
 )
 from fc_selector.protocols.odata.parsers.filter.exceptions import (
     ArgumentCountException,
     ArgumentTypeException,
-    FunctionCallException,
-    InvalidFieldException,
     ODataException,
     ODataSyntaxError,
     ParsingException,
     TokenizingException,
-    TypeException,
     UnknownFunctionException,
-    UnsupportedFunctionException,
-    ValueException,
 )
 
 
@@ -178,28 +170,6 @@ class TestODataAPIExceptions:
         error = ODataFieldNotFoundError("field", "Model", original_exception=original)
         assert error.original_exception is original
 
-    def test_odata_invalid_filter_syntax_error_basic(self):
-        """ODataInvalidFilterSyntaxError basic."""
-        error = ODataInvalidFilterSyntaxError("name eq ")
-        assert "name eq " in error.message
-        assert error.error_code == "InvalidFilterSyntax"
-        assert error.details["expression"] == "name eq "
-
-    def test_odata_invalid_filter_syntax_error_with_details(self):
-        """ODataInvalidFilterSyntaxError with syntax details."""
-        error = ODataInvalidFilterSyntaxError("name eq", details="unexpected end")
-        assert "unexpected end" in error.message
-        assert error.details["syntax_error"] == "unexpected end"
-
-    def test_odata_invalid_operator_error(self):
-        """ODataInvalidOperatorError lists valid operators."""
-        error = ODataInvalidOperatorError("foo", "name foo 'test'")
-        assert "foo" in error.message
-        assert error.error_code == "InvalidOperator"
-        assert "eq" in error.details["valid_operators"]
-        assert "contains" in error.details["valid_operators"]
-        assert error.details["operator"] == "foo"
-
     def test_odata_invalid_value_error(self):
         """ODataInvalidValueError with type info."""
         error = ODataInvalidValueError("abc", "integer", "age")
@@ -210,21 +180,6 @@ class TestODataAPIExceptions:
         assert error.details["value"] == "abc"
         assert error.details["expected_type"] == "integer"
         assert error.details["field"] == "age"
-
-    def test_odata_expand_error_basic(self):
-        """ODataExpandError without valid fields."""
-        error = ODataExpandError("invalid_rel", "Model")
-        assert "invalid_rel" in error.message
-        assert error.error_code == "InvalidExpandField"
-        assert error.target == "$expand"
-        assert error.details["valid_choices"] == []
-
-    def test_odata_expand_error_with_valid_fields(self):
-        """ODataExpandError with valid field suggestions."""
-        error = ODataExpandError("bad", "Model", valid_fields=["author", "category"])
-        assert "author" in error.message
-        assert "category" in error.message
-        assert error.details["valid_choices"] == ["author", "category"]
 
     def test_odata_invalid_pagination_error_basic(self):
         """ODataInvalidPaginationError basic."""
@@ -285,11 +240,6 @@ class TestParserExceptions:
         error = ParsingException(None, eof=True)
         assert error.eof is True
 
-    def test_function_call_exception_base(self):
-        """FunctionCallException is base class."""
-        error = FunctionCallException("func error")
-        assert isinstance(error, ODataException)
-
     def test_unknown_function_exception(self):
         """UnknownFunctionException stores function name."""
         error = UnknownFunctionException("myfunc")
@@ -313,12 +263,6 @@ class TestParserExceptions:
         assert "between 1 and 3" in str(error)
         assert "5 given" in str(error)
 
-    def test_unsupported_function_exception(self):
-        """UnsupportedFunctionException for unimplemented functions."""
-        error = UnsupportedFunctionException("geo.distance")
-        assert error.function_name == "geo.distance"
-        assert "not implemented" in str(error)
-
     def test_argument_type_exception_basic(self):
         """ArgumentTypeException basic."""
         error = ArgumentTypeException()
@@ -334,22 +278,3 @@ class TestParserExceptions:
         error = ArgumentTypeException(function_name="length", expected_type="string", actual_type="integer")
         assert "Expected string" in str(error)
         assert "got integer" in str(error)
-
-    def test_type_exception(self):
-        """TypeException for invalid operations."""
-        error = TypeException("gt", "null")
-        assert error.operation == "gt"
-        assert error.value == "null"
-        assert "Cannot apply" in str(error)
-
-    def test_value_exception(self):
-        """ValueException for invalid values."""
-        error = ValueException("2024-13-45")
-        assert error.value == "2024-13-45"
-        assert "Invalid value" in str(error)
-
-    def test_invalid_field_exception(self):
-        """InvalidFieldException for unknown fields."""
-        error = InvalidFieldException("nonexistent_field")
-        assert error.field_name == "nonexistent_field"
-        assert "Field 'nonexistent_field' not found" in str(error)

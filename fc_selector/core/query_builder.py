@@ -129,21 +129,6 @@ class QueryBuilder:
             elif key == "$count":
                 self._count = value.lower() == "true"
 
-    @classmethod
-    def from_query_string(cls, query_string: str) -> QueryBuilder:
-        """
-        Create a QueryBuilder from an existing OData query string.
-
-        Deprecated: Use QueryBuilder(query_string) directly instead.
-
-        Args:
-            query_string: OData query string
-
-        Returns:
-            QueryBuilder instance with parsed options
-        """
-        return cls(query_string)
-
     def filter(self, expression: str) -> QueryBuilder:
         """
         Add or replace the $filter option.
@@ -614,33 +599,6 @@ class QueryBuilder:
             return None
 
         return PaginationIntent(limit=self._top, offset=self._skip, include_count=self._count or False)
-
-    def to_odata_string(self) -> str:
-        """
-        Serialize to OData query string format.
-
-        This is an alias for build_query_string() with a more explicit name.
-
-        Returns:
-            OData query string (e.g., "$filter=Price gt 100&$top=10")
-        """
-        return self.build_query_string()
-
-    def get_filter_ast(self) -> Node | None:
-        """
-        Get the filter as an AST node.
-
-        If a string filter was set, it will be parsed. If an AST was set
-        directly (via where()), it will be returned as-is.
-
-        Returns:
-            AST node representing the filter, or None if no filter
-        """
-        if self._filter_ast is not None:
-            return self._filter_ast
-        if self._filter:
-            return self._filter_parser(self._filter)
-        return None
 
     def __str__(self) -> str:
         """Return the query string."""
