@@ -110,9 +110,11 @@ def _expand_intent(nested_options: dict[str, dict[str, Any]]) -> ExpandIntent:
     for relation_name, options in nested_options.items():
         nested = QueryIntent()
 
-        # Nested filters keep their expression only; they are not executed as ASTs.
         if "$filter" in options:
-            nested.filter = FilterIntent(expression=options["$filter"])
+            from ..filter import parse_filter
+
+            expression = options["$filter"]
+            nested.filter = FilterIntent(expression=expression, ast=parse_filter(expression))
 
         if "$select" in options:
             value = options["$select"]
@@ -121,11 +123,8 @@ def _expand_intent(nested_options: dict[str, dict[str, Any]]) -> ExpandIntent:
         if "$orderby" in options and isinstance(options["$orderby"], str):
             nested.orderby = OrderIntent.from_tuples(parse_orderby(options["$orderby"]))
 
-        if options.get("$top"):
-            nested.pagination = PaginationIntent(
-                limit=int(options["$top"]),
-                offset=int(options["$skip"]) if options.get("$skip") else None,
-            )
+        # Same bounds as the top level: nested $top/$skip are user input too
+        nested.pagination = _pagination_intent(options)
 
         if "$expand" in options:
             value = options["$expand"]

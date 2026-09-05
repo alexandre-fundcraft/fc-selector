@@ -12,6 +12,7 @@ from fc_selector.exceptions import (
     ODataFieldNotFoundError,
     ODataFilterError,
     ODataInvalidPaginationError,
+    ODataInvalidValueError,
 )
 from fc_selector.protocols.odata.parsers.query import MAX_SKIP_VALUE, MAX_TOP_VALUE
 
@@ -117,9 +118,17 @@ class ODataSelectorViewSetMixin:
                 original_exception=exc,
             ) from exc
         if isinstance(exc, core_ex.InvalidValueError):
-            raise ODataInvalidPaginationError(
-                parameter=exc.context or "$top",
+            if exc.context in ("$top", "$skip"):
+                raise ODataInvalidPaginationError(
+                    parameter=exc.context,
+                    value=str(exc.value),
+                    original_exception=exc,
+                ) from exc
+            # Any other bad literal (e.g. a malformed datetime in $filter)
+            raise ODataInvalidValueError(
                 value=str(exc.value),
+                expected_type=str(exc.expected_type) if exc.expected_type else "unknown",
+                field=exc.context or "$filter",
                 original_exception=exc,
             ) from exc
         raise ODataFilterError(message=str(exc), original_exception=exc) from exc

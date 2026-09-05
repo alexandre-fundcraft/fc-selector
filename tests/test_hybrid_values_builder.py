@@ -641,6 +641,22 @@ class TestReverseFK:
         assert len(result[0].children) == 1
         assert result[0].children[0].label == "Child-B"
 
+    @pytest.mark.parametrize("values_mode", [True, False], ids=["hybrid", "standard"])
+    def test_nested_filter_from_query_string(self, parent_with_children, values_mode):
+        """$expand=children($filter=...) given as a string filters the children in both modes."""
+
+        class ParentSelector(ODataSelector):
+            class Meta:
+                model = ODataModelWithRelations
+                dto_class = ParentWithRelationsDTO
+                expandable_fields = EXPANDABLE_FIELDS_FULL
+
+        ParentSelector.Meta.values_mode = values_mode
+        result = ParentSelector().query_as_dtos("$expand=children($filter=score gt 15)")
+
+        assert len(result) == 1
+        assert [c.label for c in result[0].children] == ["Child-B"]
+
     def test_nested_orderby_in_reverse_fk(self, parent_with_children):
         """$expand=children($orderby=label desc) -> Child-B first."""
         intent = QueryIntent(

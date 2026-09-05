@@ -1607,6 +1607,27 @@ class TestEdgeCasesInvalidValues:
 
         assert query.pagination is None
 
+    def test_nested_top_too_large_is_rejected(self):
+        """Nested $top is bounded like the top-level one."""
+        with pytest.raises(InvalidValueError):
+            parse_odata_query("$expand=children($top=999999)")
+
+    def test_nested_top_negative_is_rejected(self):
+        with pytest.raises(InvalidValueError):
+            parse_odata_query("$expand=children($top=-1)")
+
+    def test_nested_skip_non_integer_is_rejected(self):
+        with pytest.raises(InvalidValueError):
+            parse_odata_query("$expand=children($top=5;$skip=abc)")
+
+    def test_nested_filter_is_parsed_to_ast(self):
+        """A nested $filter must carry an AST, otherwise it is silently ignored at execution."""
+        query = parse_odata_query("$expand=children($filter=score gt 15)")
+        nested = query.expand.relations["children"]
+        assert nested.filter.expression == "score gt 15"
+        assert nested.filter.ast is not None
+        assert nested.filter.has_filter()
+
 
 class TestComplexRealWorldQueries:
     """Tests for complex real-world query scenarios."""

@@ -12,6 +12,7 @@ from fc_selector.django.drf.viewsets.selector_mixin import (
     ODataSelectorViewSetMixin,
     build_odata_response,
 )
+from fc_selector.exceptions import ODataInvalidPaginationError, ODataInvalidValueError
 
 
 @pytest.mark.django_db
@@ -114,6 +115,30 @@ class TestSelectorMixinCoverage:
         mock_selector.query_as_dtos.side_effect = core_ex.QueryError("error")
         with pytest.raises(Exception):  # ODataFilterError
             viewset.list(request)
+
+    def test_invalid_value_error_mapping_depends_on_context(self):
+        """Only $top/$skip errors become pagination errors; other bad literals keep their meaning."""
+        rf = RequestFactory()
+        request = rf.get("/odata/posts/")
+        mock_selector = MagicMock()
+
+        class TestViewSet(ODataSelectorViewSetMixin):
+            def selector_class(self):
+                return mock_selector
+
+            odata_entity_set_name = "posts"
+
+        viewset = TestViewSet()
+
+        mock_selector.query_as_dtos.side_effect = core_ex.InvalidValueError("abc", "integer", "$skip")
+        with pytest.raises(ODataInvalidPaginationError) as exc_info:
+            viewset.list(request)
+        assert exc_info.value.target == "$skip"
+
+        mock_selector.query_as_dtos.side_effect = core_ex.InvalidValueError("2024-13-45", expected_type="DateTime")
+        with pytest.raises(ODataInvalidValueError) as exc_info:
+            viewset.list(request)
+        assert exc_info.value.details["expected_type"] == "DateTime"
 
     def test_mixin_retrieve_not_found(self):
         """Return 404 when get_one returns None."""
