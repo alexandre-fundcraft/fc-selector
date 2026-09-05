@@ -8,9 +8,8 @@ When a user makes a request like `GET /api/posts?$filter=status eq 'published'`,
 
 1.  **View/Selector (`odata_selector.py`):**
     *   Receives the query string.
-    *   Calls `parse_odata_query` (protocol layer) to get an intermediate `ODataQuery` structure.
-    *   Converts `ODataQuery` -> `QueryIntent` (Core). This step normalizes names and structure.
-    *   If there are string filters, they are parsed to AST (`parse_filter`) and injected into `QueryIntent`.
+    *   Calls `parse_odata_query` (protocol layer), which parses the OData parameters straight into a `QueryIntent` (Core), normalizing names and structure.
+    *   String filters are parsed to an AST (`parse_filter`) as part of that step and attached to the `QueryIntent`.
 
 2.  **Executor (`django/executor.py`):**
     *   Receives the `QueryIntent`.
