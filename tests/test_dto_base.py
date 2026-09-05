@@ -317,6 +317,13 @@ class TestParseNestedExpandOptions:
         expanded, options = BaseODataDTO._parse_nested_expand_options("simple_field")
         assert "simple_field" in expanded
 
+    @pytest.mark.parametrize("value", ["", ",", ";"])
+    def test_empty_nested_expand_yields_no_relations(self, value):
+        """An empty nested $expand must not produce a '' relation (regression: split(',') fallback)."""
+        expanded, options = BaseODataDTO._parse_nested_expand_options(value)
+        assert expanded == set()
+        assert options == {}
+
 
 @pytest.mark.django_db
 class TestFromModelWithRelationships:

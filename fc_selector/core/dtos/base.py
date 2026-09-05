@@ -188,12 +188,10 @@ class BaseODataDTO:
         # Lazy import to avoid core-to-protocol dependency at module level
         from fc_selector.protocols.odata.parsers.expand import parse_expand  # noqa: PLC0415
 
-        try:
-            options = parse_expand(expand_value)
-        except (ValueError, KeyError, AttributeError):
-            options = {}
-
-        return (set(options), options) if options else (set(expand_value.split(",")), {})
+        # parse_expand already handles plain comma lists and empty input ({} -> no relations),
+        # so there is nothing to fall back to.
+        options = parse_expand(expand_value)
+        return set(options), options
 
     @classmethod
     def _populate_many_relationship(
