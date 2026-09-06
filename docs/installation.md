@@ -3,20 +3,39 @@
 ## Requirements
 
 - Python 3.11+
-- Django 4.2+
-- Django REST Framework 3.12+
+- Django 4.2+ and Django REST Framework 3.12+ — only for the `django` extra
 
 ## Install
 
+For use with Django:
+
 ```bash
-pip install fc-selector
+pip install "fc-selector[django]"
 ```
 
 Or with uv:
 
 ```bash
-uv add fc-selector
+uv add "fc-selector[django]"
 ```
+
+### Without Django
+
+The core (AST, `QueryIntent`, fluent filters, DTOs and the OData parser) is
+framework-agnostic. Install the base package to parse OData queries without
+pulling in Django or DRF:
+
+```bash
+pip install fc-selector
+```
+
+```python
+from fc_selector.protocols.odata import parse_odata_query
+
+intent = parse_odata_query("$filter=status eq 'published'&$top=10")
+```
+
+Everything under `fc_selector.django` requires the `django` extra.
 
 ## Configuration
 
@@ -35,11 +54,8 @@ That's it! No additional configuration required.
 
 ## Optional: DRF Spectacular
 
-For automatic OpenAPI/Swagger documentation of OData parameters, install drf-spectacular:
-
-```bash
-pip install drf-spectacular
-```
+`drf-spectacular` comes with the `django` extra. To document the OData
+parameters in your OpenAPI/Swagger schema:
 
 ```python
 # settings.py
@@ -65,7 +81,7 @@ cd fc-selector
 uv sync --group dev
 
 # Using pip
-pip install -e ".[dev]"
+pip install -e ".[django]"
 ```
 
 ## Verify Installation

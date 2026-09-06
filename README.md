@@ -39,16 +39,18 @@ cd fc-selector
 uv sync --group dev
 
 # Using pip
-pip install -e .
+pip install -e ".[django]"
 ```
 
 ### Requirements
 
 - **Python** >= 3.11 (tested on 3.11, 3.12, 3.13)
-- **Django** >= 4.2
-- **djangorestframework** >= 3.12.0
-- **drf-spectacular** >= 0.29.0
 - **sly** >= 0.5
+
+The `django` extra additionally requires **Django** >= 4.2,
+**djangorestframework** >= 3.12.0 and **drf-spectacular** >= 0.29.0. Without it
+you still get the framework-agnostic core: the AST, `QueryIntent`, the fluent
+filters, the DTOs and the OData parser.
 
 ## Quick Start
 
