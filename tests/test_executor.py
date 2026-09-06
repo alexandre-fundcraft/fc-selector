@@ -21,6 +21,7 @@ from fc_selector.core.intent import (
 )
 from fc_selector.django.executor import DjangoExecutor
 from fc_selector.protocols.odata.parsers.filter import parse_filter as parse
+from fc_selector.protocols.odata.parsers.query import parse_odata_query
 from tests.integration.support.models import ODataRelatedModel, ODataTestModel
 
 
@@ -40,6 +41,40 @@ def test_model():
 def related_model():
     """Fixture for related model."""
     return ODataRelatedModel
+
+
+@pytest.mark.django_db
+class TestExecutorIsLazy:
+    """Building a query must not touch the database.
+
+    Everything up to and including DjangoExecutor.execute() is pure CPU: parsing
+    produces a QueryIntent, and the executor turns it into an unevaluated
+    QuerySet. Only the caller decides when to hit the database.
+
+    This is what lets the library be used from async code, where the caller can
+    do `[row async for row in queryset]` instead of `list(queryset)`. Slip a
+    .count(), .exists() or list() into the executor and that breaks silently,
+    along with the cost of every query built and discarded.
+    """
+
+    def test_parsing_and_execute_emit_no_queries(self, executor, test_model, django_assert_num_queries):
+        query = (
+            "$filter=name eq 'x' and count gt 1"
+            "&$select=id,name&$expand=related_items&$orderby=created_at desc&$top=10&$skip=5"
+        )
+
+        with django_assert_num_queries(0):
+            intent = parse_odata_query(query)
+            queryset = executor.execute(test_model.objects.all(), intent)
+
+        # The queryset is real and unevaluated: evaluating it is what queries.
+        with django_assert_num_queries(1):
+            list(queryset)
+
+    def test_execute_emits_no_queries_in_values_mode(self, executor, test_model, django_assert_num_queries):
+        with django_assert_num_queries(0):
+            intent = parse_odata_query("$select=id,name&$top=5")
+            executor.execute(test_model.objects.all(), intent, use_values=True)
 
 
 @pytest.mark.django_db
