@@ -1,15 +1,14 @@
 """
-Core OData query parsing - Framework-agnostic.
+OData query parsing - Framework-agnostic.
 
-This module contains parsing functions that don't depend on Django,
-making them reusable across different frameworks or standalone usage.
+Parses complete OData queries into the protocol-agnostic QueryIntent.
 """
 
-from .models import ODataQuery
-from .parser import ODataQueryParser, parse_odata_query
+from .parser import MAX_SKIP_VALUE, MAX_TOP_VALUE, parse_odata_query, parse_query_params
 
 __all__ = [
     "parse_odata_query",
-    "ODataQueryParser",
-    "ODataQuery",
+    "parse_query_params",
+    "MAX_TOP_VALUE",
+    "MAX_SKIP_VALUE",
 ]

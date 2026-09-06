@@ -260,18 +260,6 @@ class TestFieldNestedAccess:
 class TestFieldAliases:
     """Tests for SQL-style method aliases."""
 
-    def test_equals(self):
-        """equals is alias for eq."""
-        assert Field("x").equals("y").to_ast() == Field("x").eq("y").to_ast()
-
-    def test_not_equals(self):
-        """not_equals is alias for ne."""
-        assert Field("x").not_equals("y").to_ast() == Field("x").ne("y").to_ast()
-
-    def test_greater_than(self):
-        """greater_than is alias for gt."""
-        assert Field("x").greater_than(1).to_ast() == Field("x").gt(1).to_ast()
-
 
 class TestExpressionEquality:
     """Tests for Expression __eq__ and __hash__ methods."""

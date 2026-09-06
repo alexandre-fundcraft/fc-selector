@@ -12,6 +12,7 @@ from django.utils import timezone
 
 from fc_selector.core.dtos import UNSET
 from fc_selector.core.dtos.base import BaseODataDTO, Unset
+from fc_selector.core.dtos.utils import dto_class_of, is_dto_type, is_many_relationship
 from tests.integration.support.models import ODataRelatedModel, ODataTestModel
 
 
@@ -68,26 +69,26 @@ class TestIsDtoType:
 
     def test_direct_dto_type(self):
         """Direct DTO type is detected."""
-        assert SimpleDTO._is_dto_type(NestedDTO) is True
+        assert is_dto_type(NestedDTO) is True
 
     def test_optional_dto_type(self):
         """Optional[DTO] is detected."""
-        assert SimpleDTO._is_dto_type(Optional[NestedDTO]) is True
+        assert is_dto_type(Optional[NestedDTO]) is True
 
     def test_list_dto_type(self):
         """List[DTO] is detected."""
-        assert SimpleDTO._is_dto_type(list[NestedDTO]) is True
+        assert is_dto_type(list[NestedDTO]) is True
 
     def test_optional_list_dto_type(self):
         """Optional[List[DTO]] is detected."""
-        assert SimpleDTO._is_dto_type(Optional[list[NestedDTO]]) is True
+        assert is_dto_type(Optional[list[NestedDTO]]) is True
 
     def test_non_dto_type(self):
         """Non-DTO types are not detected."""
-        assert SimpleDTO._is_dto_type(str) is False
-        assert SimpleDTO._is_dto_type(int) is False
-        assert SimpleDTO._is_dto_type(Optional[str]) is False
-        assert SimpleDTO._is_dto_type(list[str]) is False
+        assert is_dto_type(str) is False
+        assert is_dto_type(int) is False
+        assert is_dto_type(Optional[str]) is False
+        assert is_dto_type(list[str]) is False
 
 
 class TestIsManyRelationship:
@@ -95,19 +96,19 @@ class TestIsManyRelationship:
 
     def test_list_is_many(self):
         """List type is many relationship."""
-        assert SimpleDTO._is_many_relationship(list[NestedDTO]) is True
+        assert is_many_relationship(list[NestedDTO]) is True
 
     def test_optional_list_is_many(self):
         """Optional[List] is many relationship."""
-        assert SimpleDTO._is_many_relationship(Optional[list[NestedDTO]]) is True
+        assert is_many_relationship(Optional[list[NestedDTO]]) is True
 
     def test_direct_is_not_many(self):
         """Direct type is not many."""
-        assert SimpleDTO._is_many_relationship(NestedDTO) is False
+        assert is_many_relationship(NestedDTO) is False
 
     def test_optional_is_not_many(self):
         """Optional (non-list) is not many."""
-        assert SimpleDTO._is_many_relationship(Optional[NestedDTO]) is False
+        assert is_many_relationship(Optional[NestedDTO]) is False
 
 
 class TestGetDtoClass:
@@ -115,24 +116,24 @@ class TestGetDtoClass:
 
     def test_direct_dto(self):
         """Direct DTO type returns the class."""
-        assert SimpleDTO._get_dto_class(NestedDTO) is NestedDTO
+        assert dto_class_of(NestedDTO) is NestedDTO
 
     def test_optional_dto(self):
         """Optional[DTO] returns the DTO class."""
-        assert SimpleDTO._get_dto_class(Optional[NestedDTO]) is NestedDTO
+        assert dto_class_of(Optional[NestedDTO]) is NestedDTO
 
     def test_list_dto(self):
         """List[DTO] returns the DTO class."""
-        assert SimpleDTO._get_dto_class(list[NestedDTO]) is NestedDTO
+        assert dto_class_of(list[NestedDTO]) is NestedDTO
 
     def test_optional_list_dto(self):
         """Optional[List[DTO]] returns the DTO class."""
-        assert SimpleDTO._get_dto_class(Optional[list[NestedDTO]]) is NestedDTO
+        assert dto_class_of(Optional[list[NestedDTO]]) is NestedDTO
 
     def test_non_dto_returns_none(self):
         """Non-DTO type returns None."""
-        assert SimpleDTO._get_dto_class(str) is None
-        assert SimpleDTO._get_dto_class(int) is None
+        assert dto_class_of(str) is None
+        assert dto_class_of(int) is None
 
 
 class TestGetSafeTypeHints:
@@ -264,7 +265,7 @@ class TestIsDtoTypeEdgeCases:
     def test_non_class_type(self):
         """Non-class type without __name__ returns False."""
         # String type doesn't have __name__ ending in DTO
-        assert SimpleDTO._is_dto_type("not a type") is False
+        assert is_dto_type("not a type") is False
 
     def test_class_without_dto_suffix(self):
         """Class without DTO suffix returns False."""
@@ -272,7 +273,7 @@ class TestIsDtoTypeEdgeCases:
         class MyClass:
             pass
 
-        assert SimpleDTO._is_dto_type(MyClass) is False
+        assert is_dto_type(MyClass) is False
 
 
 class TestIsManyRelationshipEdgeCases:
@@ -280,14 +281,14 @@ class TestIsManyRelationshipEdgeCases:
 
     def test_origin_none_returns_false(self):
         """Type with no origin returns False."""
-        assert SimpleDTO._is_many_relationship(str) is False
+        assert is_many_relationship(str) is False
 
     def test_union_with_list(self):
         """Union type with list inner type."""
 
         # Optional[List[DTO]] where Optional is Union[..., None]
         union_list_type = Optional[list[NestedDTO]]
-        result = SimpleDTO._is_many_relationship(union_list_type)
+        result = is_many_relationship(union_list_type)
         assert result is True
 
 
@@ -315,6 +316,13 @@ class TestParseNestedExpandOptions:
         """Invalid expand syntax falls back to simple split."""
         expanded, options = BaseODataDTO._parse_nested_expand_options("simple_field")
         assert "simple_field" in expanded
+
+    @pytest.mark.parametrize("value", ["", ",", ";"])
+    def test_empty_nested_expand_yields_no_relations(self, value):
+        """An empty nested $expand must not produce a '' relation (regression: split(',') fallback)."""
+        expanded, options = BaseODataDTO._parse_nested_expand_options(value)
+        assert expanded == set()
+        assert options == {}
 
 
 @pytest.mark.django_db

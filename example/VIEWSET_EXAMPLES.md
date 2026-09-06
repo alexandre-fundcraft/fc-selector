@@ -27,7 +27,7 @@ python manage.py generate_odata_selector blog.BlogPost --single --force
 # example/blog/urls.py
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .viewsets import BlogPostViewSet, AuthorViewSet
+from .viewsets_fluent import BlogPostViewSet, AuthorViewSet
 
 router = DefaultRouter()
 router.register(r'blog-posts', BlogPostViewSet, basename='blogpost')
@@ -77,12 +77,12 @@ print(query.build_query_string())
 
 ### Parsing Existing Query Strings
 
-When receiving a request with an OData query string, use `from_query_string()`:
+When receiving a request with an OData query string, pass it to the constructor:
 
 ```python
 # Parse query string from request
 query_string = request.META.get('QUERY_STRING', '')
-query = QueryBuilder.from_query_string(query_string)
+query = QueryBuilder(query_string)
 
 # Add additional filters programmatically
 query.and_filter(f"id eq {pk}")
@@ -143,7 +143,7 @@ class AuthorViewSet(viewsets.ReadOnlyModelViewSet):
         query_string = request.META.get('QUERY_STRING', '')
 
         selector = AuthorSelector()
-        query = QueryBuilder.from_query_string(query_string)
+        query = QueryBuilder(query_string)
         dtos = selector.get_many(query)
 
         serializer = self.get_serializer(dtos, many=True)
@@ -154,7 +154,7 @@ class AuthorViewSet(viewsets.ReadOnlyModelViewSet):
         query_string = request.META.get('QUERY_STRING', '')
 
         selector = AuthorSelector()
-        query = QueryBuilder.from_query_string(query_string).and_filter(f"id eq {pk}")
+        query = QueryBuilder(query_string).and_filter(f"id eq {pk}")
         dto = selector.get_one(query)
 
         if dto is None:
@@ -187,7 +187,7 @@ class BlogPostViewSet(viewsets.ModelViewSet):
         query_string = request.META.get('QUERY_STRING', '')
 
         selector = BlogPostSelector()
-        query = QueryBuilder.from_query_string(query_string)
+        query = QueryBuilder(query_string)
         dtos = selector.get_many(query)
 
         serializer = self.get_serializer(dtos, many=True)
@@ -198,7 +198,7 @@ class BlogPostViewSet(viewsets.ModelViewSet):
         query_string = request.META.get('QUERY_STRING', '')
 
         selector = BlogPostSelector()
-        query = QueryBuilder.from_query_string(query_string).and_filter(f"id eq {pk}")
+        query = QueryBuilder(query_string).and_filter(f"id eq {pk}")
         dto = selector.get_one(query)
 
         if dto is None:
@@ -288,7 +288,7 @@ class BlogPostViewSet(viewsets.ModelViewSet):
 
         selector = BlogPostSelector()
         # Parse existing query and add status filter
-        query = QueryBuilder.from_query_string(query_string).and_filter("status eq 'published'")
+        query = QueryBuilder(query_string).and_filter("status eq 'published'")
         dtos = selector.get_many(query)
 
         serializer = self.get_serializer(dtos, many=True)
@@ -308,7 +308,7 @@ def by_author(self, request, author_id=None):
     query_string = request.META.get('QUERY_STRING', '')
 
     selector = BlogPostSelector()
-    query = QueryBuilder.from_query_string(query_string).and_filter(f"author/id eq {author_id}")
+    query = QueryBuilder(query_string).and_filter(f"author/id eq {author_id}")
     dtos = selector.get_many(query)
 
     serializer = self.get_serializer(dtos, many=True)
@@ -366,7 +366,7 @@ def posts(self, request, pk=None):
     from .dto_serializers import BlogPostDTOSerializer
 
     selector = BlogPostSelector()
-    query = QueryBuilder.from_query_string(query_string).and_filter(f"author/id eq {pk}")
+    query = QueryBuilder(query_string).and_filter(f"author/id eq {pk}")
     dtos = selector.get_many(query)
 
     serializer = BlogPostDTOSerializer(dtos, many=True)
@@ -386,7 +386,7 @@ def me(self, request):
     query_string = request.META.get('QUERY_STRING', '')
 
     selector = UserSelector()
-    query = QueryBuilder.from_query_string(query_string).and_filter(f"id eq {request.user.pk}")
+    query = QueryBuilder(query_string).and_filter(f"id eq {request.user.pk}")
     dto = selector.get_one(query)
 
     if dto is None:
@@ -653,7 +653,7 @@ GET /api/users/1/?$select=id,username,email
 
 ```python
 # Good - use QueryBuilder
-query = QueryBuilder.from_query_string(query_string).and_filter(f"id eq {pk}")
+query = QueryBuilder(query_string).and_filter(f"id eq {pk}")
 dto = selector.get_one(query)
 
 # Bad - exposing queryset
@@ -721,4 +721,4 @@ You now have:
 - Nested DTO handling
 - Production-ready patterns following hexagonal architecture
 
-Use `example/blog/viewsets.py` as your reference implementation!
+Use `example/blog/viewsets_fluent.py` as your reference implementation!

@@ -21,6 +21,7 @@ from fc_selector.core.dtos.base import MAX_DTO_RECURSION_DEPTH, UNSET, BaseOData
 from fc_selector.core.dtos.utils import get_dto_fields
 from fc_selector.core.intent import QueryIntent
 from fc_selector.core.utils import odata_path_to_django
+from fc_selector.django.executor import apply_pagination, get_expand_config
 from fc_selector.django.utils import (
     get_field_safe,
     get_m2m_info,
@@ -109,7 +110,7 @@ class HybridValuesBuilder:
             queryset = queryset.select_related(*list(forward_relations.keys()))
 
         queryset = queryset.values(*values_fields)
-        queryset = _apply_pagination(queryset, intent)
+        queryset = apply_pagination(queryset, intent)
 
         rows = list(queryset)
         parents = [
@@ -254,7 +255,7 @@ class HybridValuesBuilder:
             return []
 
         related_model = field_obj.related_model
-        expand_config = self._get_expand_config(relation_name)
+        expand_config = get_expand_config(self.expandable_fields, relation_name)
         dto_class = expand_config.get("dto_class") if expand_config else None
 
         related_field_names: list[str] = []
@@ -325,7 +326,7 @@ class HybridValuesBuilder:
 
         # Build nested objects for forward relations
         for relation_name, nested_intent in forward_relations.items():
-            expand_config = self._get_expand_config(relation_name)
+            expand_config = get_expand_config(self.expandable_fields, relation_name)
             nested_dto_class = expand_config.get("dto_class") if expand_config else None
 
             if not nested_dto_class:
@@ -415,7 +416,7 @@ class HybridValuesBuilder:
                 continue
 
             child_model, fk_attname = info
-            expand_config = self._get_expand_config(relation_name)
+            expand_config = get_expand_config(self.expandable_fields, relation_name)
             child_dto_class = expand_config.get("dto_class") if expand_config else None
 
             if not child_dto_class:
@@ -457,7 +458,7 @@ class HybridValuesBuilder:
                 child_qs = child_qs.select_related(*list(child_forward.keys()))
 
             child_qs = child_qs.values(*child_fields)
-            child_qs = _apply_pagination(child_qs, nested_intent)
+            child_qs = apply_pagination(child_qs, nested_intent)
             child_rows = list(child_qs)
 
             # Group by parent FK and build children
@@ -518,12 +519,9 @@ class HybridValuesBuilder:
                     _set_field(p, relation_name, [], as_dicts)
                 continue
 
-            through_model = info["through_model"]
-            related_model = info["related_model"]
-            source_fk = info["source_fk_attname"]
-            target_fk = info["target_fk_attname"]
+            through_model, related_model, source_fk, target_fk = info
 
-            expand_config = self._get_expand_config(relation_name)
+            expand_config = get_expand_config(self.expandable_fields, relation_name)
             child_dto_class = expand_config.get("dto_class") if expand_config else None
 
             if not child_dto_class:
@@ -581,7 +579,7 @@ class HybridValuesBuilder:
                 child_qs = child_qs.select_related(*list(child_forward.keys()))
 
             child_qs = child_qs.values(*child_fields)
-            child_qs = _apply_pagination(child_qs, nested_intent)
+            child_qs = apply_pagination(child_qs, nested_intent)
             child_rows = list(child_qs)
 
             # Build children indexed by PK.
@@ -720,17 +718,6 @@ class HybridValuesBuilder:
 
         return data if as_dicts else dto_class(**data)
 
-    def _get_expand_config(self, relation_name: str) -> dict | None:
-        """Get expand configuration for a relation (same logic as DjangoExecutor)."""
-        config = self.expandable_fields.get(relation_name)
-        if not config:
-            return None
-
-        if isinstance(config, dict):
-            return config
-
-        return {"dto_class": config}
-
     def _get_expand_config_nested(self, relation_name: str) -> dict | None:
         """Get expand config for a nested relation within a child.
 
@@ -783,19 +770,3 @@ class HybridValuesBuilder:
             django_field = odata_path_to_django(f.field)
             order_fields.append(f"{prefix}{django_field}")
         return child_qs.order_by(*order_fields)
-
-
-def _apply_pagination(queryset: QuerySet, intent: QueryIntent) -> QuerySet:
-    """Apply limit/offset to the queryset."""
-    if not intent.pagination or not intent.pagination.has_pagination():
-        return queryset
-
-    offset = intent.pagination.offset or 0
-    limit = intent.pagination.limit
-
-    if limit is not None:
-        return queryset[offset : offset + limit]
-    if offset > 0:
-        return queryset[offset:]
-
-    return queryset

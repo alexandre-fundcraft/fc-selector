@@ -4,10 +4,20 @@ Comprehensive tests for OData query parser based on ODATA_TEST_URLS_COMPREHENSIV
 This test suite covers ~360+ test URLs across all OData query options and combinations.
 """
 
-from fc_selector.protocols.odata.parsers.query import parse_odata_query
-from fc_selector.protocols.odata.parsers.query.models import (
-    ODataQuery,
-)
+import pytest
+
+from fc_selector.core.exceptions import InvalidValueError
+from fc_selector.core.intent import QueryIntent
+from fc_selector.protocols.odata.parsers.expand import parse_expand
+from fc_selector.protocols.odata.parsers.query import parse_odata_query, parse_query_params
+
+
+def expand_options(query_params):
+    """The nested $expand options for a query, exactly as parse_expand returns them."""
+    if isinstance(query_params, str):
+        query_params = parse_query_params(query_params)
+    return parse_expand((query_params or {}).get("$expand", "") or "")
+
 
 # ==============================================================================
 # 1. BASIC OPTIONS - $select
@@ -123,100 +133,113 @@ class TestExpandBasic:
     def test_expand_single_relation_author(self):
         """Test expanding author relation."""
         query = parse_odata_query("$expand=author")
+        query_expand = expand_options("$expand=author")
 
         assert query.expand is not None
-        assert "author" in query.expand.nested_options
-        assert query.expand.nested_options["author"] == {}
+        assert "author" in query_expand
+        assert query_expand["author"] == {}
 
     def test_expand_single_relation_categories(self):
         """Test expanding categories relation."""
         query = parse_odata_query("$expand=categories")
+        query_expand = expand_options("$expand=categories")
 
         assert query.expand is not None
-        assert "categories" in query.expand.nested_options
+        assert "categories" in query_expand
 
     def test_expand_single_relation_comments(self):
         """Test expanding comments relation."""
         query = parse_odata_query("$expand=comments")
+        query_expand = expand_options("$expand=comments")
 
         assert query.expand is not None
-        assert "comments" in query.expand.nested_options
+        assert "comments" in query_expand
 
     def test_expand_two_relations_comma(self):
         """Test expanding two relations with comma separator."""
         query = parse_odata_query("$expand=author,categories")
+        query_expand = expand_options("$expand=author,categories")
 
         assert query.expand is not None
-        assert "author" in query.expand.nested_options
-        assert "categories" in query.expand.nested_options
+        assert "author" in query_expand
+        assert "categories" in query_expand
 
     def test_expand_three_relations_comma(self):
         """Test expanding three relations with comma separator."""
         query = parse_odata_query("$expand=author,categories,comments")
+        query_expand = expand_options("$expand=author,categories,comments")
 
         assert query.expand is not None
-        assert len(query.expand.nested_options) == 3
-        assert "author" in query.expand.nested_options
-        assert "categories" in query.expand.nested_options
-        assert "comments" in query.expand.nested_options
+        assert len(query_expand) == 3
+        assert "author" in query_expand
+        assert "categories" in query_expand
+        assert "comments" in query_expand
 
     def test_expand_two_relations_semicolon(self):
         """Test expanding relations with semicolon separator (alternative syntax)."""
         query = parse_odata_query("$expand=author;categories")
+        query_expand = expand_options("$expand=author;categories")
 
         assert query.expand is not None
-        assert "author" in query.expand.nested_options
-        assert "categories" in query.expand.nested_options
+        assert "author" in query_expand
+        assert "categories" in query_expand
 
     def test_expand_three_relations_semicolon(self):
         """Test expanding three relations with semicolon separator."""
         query = parse_odata_query("$expand=author;categories;comments")
+        query_expand = expand_options("$expand=author;categories;comments")
 
         assert query.expand is not None
-        assert len(query.expand.nested_options) == 3
+        assert len(query_expand) == 3
 
     def test_expand_relation_user(self):
         """Test expanding user relation."""
         query = parse_odata_query("$expand=user")
+        query_expand = expand_options("$expand=user")
 
         assert query.expand is not None
-        assert "user" in query.expand.nested_options
+        assert "user" in query_expand
 
     def test_expand_relation_profile(self):
         """Test expanding profile relation."""
         query = parse_odata_query("$expand=profile")
+        query_expand = expand_options("$expand=profile")
 
         assert query.expand is not None
-        assert "profile" in query.expand.nested_options
+        assert "profile" in query_expand
 
     def test_expand_relation_posts(self):
         """Test expanding posts relation."""
         query = parse_odata_query("$expand=posts")
+        query_expand = expand_options("$expand=posts")
 
         assert query.expand is not None
-        assert "posts" in query.expand.nested_options
+        assert "posts" in query_expand
 
     def test_expand_relation_with_underscore(self):
         """Test expanding relation with underscore."""
         query = parse_odata_query("$expand=related_posts")
+        query_expand = expand_options("$expand=related_posts")
 
         assert query.expand is not None
-        assert "related_posts" in query.expand.nested_options
+        assert "related_posts" in query_expand
 
     def test_expand_hierarchical_relation(self):
         """Test expanding hierarchical relation."""
         query = parse_odata_query("$expand=parent_category")
+        query_expand = expand_options("$expand=parent_category")
 
         assert query.expand is not None
-        assert "parent_category" in query.expand.nested_options
+        assert "parent_category" in query_expand
 
     def test_expand_multiple_with_tags(self):
         """Test expanding multiple including tags."""
         query = parse_odata_query("$expand=author,comments,tags")
+        query_expand = expand_options("$expand=author,comments,tags")
 
         assert query.expand is not None
-        assert len(query.expand.nested_options) == 3
-        assert "tags" in query.expand.nested_options
+        assert len(query_expand) == 3
+        assert "tags" in query_expand
 
 
 # ==============================================================================
@@ -232,91 +255,91 @@ class TestFilterBasic:
         query = parse_odata_query("$filter=status eq 'published'")
 
         assert query.filter is not None
-        assert query.filter.value == "status eq 'published'"
+        assert query.filter.expression == "status eq 'published'"
 
     def test_filter_eq_string_draft(self):
         """Test filter eq with draft status."""
         query = parse_odata_query("$filter=status eq 'draft'")
 
         assert query.filter is not None
-        assert query.filter.value == "status eq 'draft'"
+        assert query.filter.expression == "status eq 'draft'"
 
     def test_filter_gt_number(self):
         """Test filter with gt (greater than) operator."""
         query = parse_odata_query("$filter=rating gt 4.0")
 
         assert query.filter is not None
-        assert query.filter.value == "rating gt 4.0"
+        assert query.filter.expression == "rating gt 4.0"
 
     def test_filter_ge_number(self):
         """Test filter with ge (greater or equal) operator."""
         query = parse_odata_query("$filter=rating ge 4.0")
 
         assert query.filter is not None
-        assert query.filter.value == "rating ge 4.0"
+        assert query.filter.expression == "rating ge 4.0"
 
     def test_filter_lt_number(self):
         """Test filter with lt (less than) operator."""
         query = parse_odata_query("$filter=rating lt 3.0")
 
         assert query.filter is not None
-        assert query.filter.value == "rating lt 3.0"
+        assert query.filter.expression == "rating lt 3.0"
 
     def test_filter_le_number(self):
         """Test filter with le (less or equal) operator."""
         query = parse_odata_query("$filter=rating le 3.0")
 
         assert query.filter is not None
-        assert query.filter.value == "rating le 3.0"
+        assert query.filter.expression == "rating le 3.0"
 
     def test_filter_views_gt(self):
         """Test filter views greater than."""
         query = parse_odata_query("$filter=views gt 1000")
 
         assert query.filter is not None
-        assert "views gt 1000" in query.filter.value
+        assert "views gt 1000" in query.filter.expression
 
     def test_filter_price_eq_decimal(self):
         """Test filter with decimal price."""
         query = parse_odata_query("$filter=price eq 99.99")
 
         assert query.filter is not None
-        assert "99.99" in query.filter.value
+        assert "99.99" in query.filter.expression
 
     def test_filter_boolean_true(self):
         """Test filter with boolean true."""
         query = parse_odata_query("$filter=is_active eq true")
 
         assert query.filter is not None
-        assert "is_active eq true" in query.filter.value
+        assert "is_active eq true" in query.filter.expression
 
     def test_filter_boolean_false(self):
         """Test filter with boolean false."""
         query = parse_odata_query("$filter=is_active eq false")
 
         assert query.filter is not None
-        assert "is_active eq false" in query.filter.value
+        assert "is_active eq false" in query.filter.expression
 
     def test_filter_ne_operator(self):
         """Test filter with ne (not equal) operator."""
         query = parse_odata_query("$filter=age ne 18")
 
         assert query.filter is not None
-        assert query.filter.value == "age ne 18"
+        assert query.filter.expression == "age ne 18"
 
     def test_filter_string_with_spaces(self):
         """Test filter with string containing spaces."""
         query = parse_odata_query("$filter=title eq 'Introduction to OData'")
 
         assert query.filter is not None
-        assert "Introduction to OData" in query.filter.value
+        assert "Introduction to OData" in query.filter.expression
 
     def test_filter_name_with_spaces(self):
         """Test filter name with spaces."""
         query = parse_odata_query("$filter=name eq 'John Doe'")
 
         assert query.filter is not None
-        assert "John Doe" in query.filter.value
+        assert "John Doe" in query.filter.expression
 
 
 class TestFilterLogicalOperators:
@@ -327,69 +350,69 @@ class TestFilterLogicalOperators:
         query = parse_odata_query("$filter=status eq 'published' and rating gt 4.0")
 
         assert query.filter is not None
-        assert "and" in query.filter.value
-        assert "status eq 'published'" in query.filter.value
-        assert "rating gt 4.0" in query.filter.value
+        assert "and" in query.filter.expression
+        assert "status eq 'published'" in query.filter.expression
+        assert "rating gt 4.0" in query.filter.expression
 
     def test_filter_and_three_conditions(self):
         """Test filter with AND operator - three conditions."""
         query = parse_odata_query("$filter=status eq 'published' and rating gt 4.0 and views gt 100")
 
         assert query.filter is not None
-        assert query.filter.value.count("and") == 2
+        assert query.filter.expression.count("and") == 2
 
     def test_filter_and_with_boolean(self):
         """Test filter AND with boolean."""
         query = parse_odata_query("$filter=is_active eq true and price lt 100")
 
         assert query.filter is not None
-        assert "is_active eq true" in query.filter.value
-        assert "price lt 100" in query.filter.value
+        assert "is_active eq true" in query.filter.expression
+        assert "price lt 100" in query.filter.expression
 
     def test_filter_and_with_date(self):
         """Test filter AND with date."""
         query = parse_odata_query("$filter=created_at gt '2024-01-01' and status eq 'published'")
 
         assert query.filter is not None
-        assert "2024-01-01" in query.filter.value
+        assert "2024-01-01" in query.filter.expression
 
     def test_filter_or_two_conditions(self):
         """Test filter with OR operator."""
         query = parse_odata_query("$filter=status eq 'draft' or status eq 'published'")
 
         assert query.filter is not None
-        assert "or" in query.filter.value
+        assert "or" in query.filter.expression
 
     def test_filter_or_different_statuses(self):
         """Test filter OR with different statuses."""
         query = parse_odata_query("$filter=status eq 'published' or status eq 'archived'")
 
         assert query.filter is not None
-        assert "archived" in query.filter.value
+        assert "archived" in query.filter.expression
 
     def test_filter_or_with_ratings(self):
         """Test filter OR with ratings."""
         query = parse_odata_query("$filter=rating eq 5.0 or rating eq 4.5")
 
         assert query.filter is not None
-        assert "5.0" in query.filter.value
-        assert "4.5" in query.filter.value
+        assert "5.0" in query.filter.expression
+        assert "4.5" in query.filter.expression
 
     def test_filter_complex_and_or(self):
         """Test filter with combination of AND and OR."""
         query = parse_odata_query("$filter=(status eq 'published' or status eq 'draft') and rating gt 4.0")
 
         assert query.filter is not None
-        assert "or" in query.filter.value
-        assert "and" in query.filter.value
+        assert "or" in query.filter.expression
+        assert "and" in query.filter.expression
 
     def test_filter_complex_and_or_reverse(self):
         """Test filter with AND and OR in different order."""
         query = parse_odata_query("$filter=status eq 'published' and (rating gt 4.0 or views gt 1000)")
 
         assert query.filter is not None
-        assert "and" in query.filter.value
-        assert "or" in query.filter.value
+        assert "and" in query.filter.expression
+        assert "or" in query.filter.expression
 
 
 class TestFilterNavigation:
@@ -400,49 +423,49 @@ class TestFilterNavigation:
         query = parse_odata_query("$filter=author/name eq 'John'")
 
         assert query.filter is not None
-        assert "author/name" in query.filter.value
+        assert "author/name" in query.filter.expression
 
     def test_filter_navigation_email(self):
         """Test filter navigation with email."""
         query = parse_odata_query("$filter=author/email eq 'john@example.com'")
 
         assert query.filter is not None
-        assert "author/email" in query.filter.value
+        assert "author/email" in query.filter.expression
 
     def test_filter_navigation_boolean(self):
         """Test filter navigation with boolean."""
         query = parse_odata_query("$filter=author/is_active eq true")
 
         assert query.filter is not None
-        assert "author/is_active" in query.filter.value
+        assert "author/is_active" in query.filter.expression
 
     def test_filter_navigation_slug(self):
         """Test filter navigation with slug."""
         query = parse_odata_query("$filter=category/slug eq 'technology'")
 
         assert query.filter is not None
-        assert "category/slug" in query.filter.value
+        assert "category/slug" in query.filter.expression
 
     def test_filter_navigation_two_levels(self):
         """Test filter with two-level navigation."""
         query = parse_odata_query("$filter=author/user/first_name eq 'Patricia'")
 
         assert query.filter is not None
-        assert "author/user/first_name" in query.filter.value
+        assert "author/user/first_name" in query.filter.expression
 
     def test_filter_navigation_three_levels(self):
         """Test filter with three-level navigation."""
         query = parse_odata_query("$filter=author/user/profile/country eq 'Spain'")
 
         assert query.filter is not None
-        assert "author/user/profile/country" in query.filter.value
+        assert "author/user/profile/country" in query.filter.expression
 
     def test_filter_navigation_deep_path(self):
         """Test filter with deep navigation path."""
         query = parse_odata_query("$filter=post/author/user/email eq 'test@example.com'")
 
         assert query.filter is not None
-        assert "post/author/user/email" in query.filter.value
+        assert "post/author/user/email" in query.filter.expression
 
 
 class TestFilterFunctions:
@@ -453,87 +476,87 @@ class TestFilterFunctions:
         query = parse_odata_query("$filter=startswith(title,'Introduction')")
 
         assert query.filter is not None
-        assert "startswith" in query.filter.value
-        assert "Introduction" in query.filter.value
+        assert "startswith" in query.filter.expression
+        assert "Introduction" in query.filter.expression
 
     def test_filter_endswith(self):
         """Test filter with endswith function."""
         query = parse_odata_query("$filter=endswith(email,'@gmail.com')")
 
         assert query.filter is not None
-        assert "endswith" in query.filter.value
-        assert "@gmail.com" in query.filter.value
+        assert "endswith" in query.filter.expression
+        assert "@gmail.com" in query.filter.expression
 
     def test_filter_contains(self):
         """Test filter with contains function."""
         query = parse_odata_query("$filter=contains(title,'OData')")
 
         assert query.filter is not None
-        assert "contains" in query.filter.value
-        assert "OData" in query.filter.value
+        assert "contains" in query.filter.expression
+        assert "OData" in query.filter.expression
 
     def test_filter_tolower(self):
         """Test filter with tolower function."""
         query = parse_odata_query("$filter=tolower(name) eq 'john'")
 
         assert query.filter is not None
-        assert "tolower" in query.filter.value
+        assert "tolower" in query.filter.expression
 
     def test_filter_toupper(self):
         """Test filter with toupper function."""
         query = parse_odata_query("$filter=toupper(status) eq 'PUBLISHED'")
 
         assert query.filter is not None
-        assert "toupper" in query.filter.value
+        assert "toupper" in query.filter.expression
 
     def test_filter_round(self):
         """Test filter with round function."""
         query = parse_odata_query("$filter=round(rating) eq 4")
 
         assert query.filter is not None
-        assert "round" in query.filter.value
+        assert "round" in query.filter.expression
 
     def test_filter_floor(self):
         """Test filter with floor function."""
         query = parse_odata_query("$filter=floor(price) eq 99")
 
         assert query.filter is not None
-        assert "floor" in query.filter.value
+        assert "floor" in query.filter.expression
 
     def test_filter_ceiling(self):
         """Test filter with ceiling function."""
         query = parse_odata_query("$filter=ceiling(rating) eq 5")
 
         assert query.filter is not None
-        assert "ceiling" in query.filter.value
+        assert "ceiling" in query.filter.expression
 
     def test_filter_year(self):
         """Test filter with year function."""
         query = parse_odata_query("$filter=year(created_at) eq 2024")
 
         assert query.filter is not None
-        assert "year" in query.filter.value
+        assert "year" in query.filter.expression
 
     def test_filter_month(self):
         """Test filter with month function."""
         query = parse_odata_query("$filter=month(created_at) eq 12")
 
         assert query.filter is not None
-        assert "month" in query.filter.value
+        assert "month" in query.filter.expression
 
     def test_filter_day(self):
         """Test filter with day function."""
         query = parse_odata_query("$filter=day(created_at) eq 25")
 
         assert query.filter is not None
-        assert "day" in query.filter.value
+        assert "day" in query.filter.expression
 
     def test_filter_hour(self):
         """Test filter with hour function."""
         query = parse_odata_query("$filter=hour(created_at) eq 14")
 
         assert query.filter is not None
-        assert "hour" in query.filter.value
+        assert "hour" in query.filter.expression
 
 
 # ==============================================================================
@@ -549,89 +572,89 @@ class TestOrderByBasic:
         query = parse_odata_query("$orderby=name")
 
         assert query.orderby is not None
-        assert query.orderby.fields == [("name", "asc")]
+        assert [(f.field, f.direction) for f in query.orderby.fields] == [("name", "asc")]
 
     def test_orderby_single_field_explicit_asc(self):
         """Test orderby single field with explicit asc."""
         query = parse_odata_query("$orderby=name asc")
 
         assert query.orderby is not None
-        assert query.orderby.fields == [("name", "asc")]
+        assert [(f.field, f.direction) for f in query.orderby.fields] == [("name", "asc")]
 
     def test_orderby_single_field_desc(self):
         """Test orderby single field descending."""
         query = parse_odata_query("$orderby=created_at desc")
 
         assert query.orderby is not None
-        assert query.orderby.fields == [("created_at", "desc")]
+        assert [(f.field, f.direction) for f in query.orderby.fields] == [("created_at", "desc")]
 
     def test_orderby_rating_desc(self):
         """Test orderby rating descending."""
         query = parse_odata_query("$orderby=rating desc")
 
         assert query.orderby is not None
-        assert query.orderby.fields == [("rating", "desc")]
+        assert [(f.field, f.direction) for f in query.orderby.fields] == [("rating", "desc")]
 
     def test_orderby_price_asc(self):
         """Test orderby price ascending."""
         query = parse_odata_query("$orderby=price asc")
 
         assert query.orderby is not None
-        assert query.orderby.fields == [("price", "asc")]
+        assert [(f.field, f.direction) for f in query.orderby.fields] == [("price", "asc")]
 
     def test_orderby_two_fields(self):
         """Test orderby with two fields."""
         query = parse_odata_query("$orderby=status asc,created_at desc")
 
         assert query.orderby is not None
-        assert len(query.orderby.fields) == 2
-        assert query.orderby.fields[0] == ("status", "asc")
-        assert query.orderby.fields[1] == ("created_at", "desc")
+        assert len([(f.field, f.direction) for f in query.orderby.fields]) == 2
+        assert [(f.field, f.direction) for f in query.orderby.fields][0] == ("status", "asc")
+        assert [(f.field, f.direction) for f in query.orderby.fields][1] == ("created_at", "desc")
 
     def test_orderby_two_fields_same_direction(self):
         """Test orderby with two fields, both descending."""
         query = parse_odata_query("$orderby=rating desc,created_at desc")
 
         assert query.orderby is not None
-        assert len(query.orderby.fields) == 2
-        assert query.orderby.fields[0] == ("rating", "desc")
-        assert query.orderby.fields[1] == ("created_at", "desc")
+        assert len([(f.field, f.direction) for f in query.orderby.fields]) == 2
+        assert [(f.field, f.direction) for f in query.orderby.fields][0] == ("rating", "desc")
+        assert [(f.field, f.direction) for f in query.orderby.fields][1] == ("created_at", "desc")
 
     def test_orderby_two_fields_both_asc(self):
         """Test orderby with two fields, both ascending."""
         query = parse_odata_query("$orderby=name asc,email asc")
 
         assert query.orderby is not None
-        assert len(query.orderby.fields) == 2
+        assert len([(f.field, f.direction) for f in query.orderby.fields]) == 2
 
     def test_orderby_four_fields(self):
         """Test orderby with four fields."""
         query = parse_odata_query("$orderby=category asc,title asc,created_at desc")
 
         assert query.orderby is not None
-        assert len(query.orderby.fields) == 3
+        assert len([(f.field, f.direction) for f in query.orderby.fields]) == 3
 
     def test_orderby_mixed_explicit_implicit(self):
         """Test orderby with mixed explicit and implicit directions."""
         query = parse_odata_query("$orderby=status,created_at desc")
 
         assert query.orderby is not None
-        assert query.orderby.fields[0] == ("status", "asc")
-        assert query.orderby.fields[1] == ("created_at", "desc")
+        assert [(f.field, f.direction) for f in query.orderby.fields][0] == ("status", "asc")
+        assert [(f.field, f.direction) for f in query.orderby.fields][1] == ("created_at", "desc")
 
     def test_orderby_with_extra_spaces(self):
         """Test orderby with extra spaces."""
         query = parse_odata_query("$orderby=name  asc")
 
         assert query.orderby is not None
-        assert query.orderby.fields == [("name", "asc")]
+        assert [(f.field, f.direction) for f in query.orderby.fields] == [("name", "asc")]
 
     def test_orderby_with_spaces_around_comma(self):
         """Test orderby with spaces around comma."""
         query = parse_odata_query("$orderby=name asc , created_at desc")
 
         assert query.orderby is not None
-        assert len(query.orderby.fields) == 2
+        assert len([(f.field, f.direction) for f in query.orderby.fields]) == 2
 
 
 # ==============================================================================
@@ -646,157 +669,155 @@ class TestPaginationBasic:
         """Test top with value 1."""
         query = parse_odata_query("$top=1")
 
-        assert query.top is not None
-        assert query.top.value == "1"
+        assert query.pagination is not None and query.pagination.limit is not None
+        assert query.pagination.limit == 1
 
     def test_top_value_5(self):
         """Test top with value 5."""
         query = parse_odata_query("$top=5")
 
-        assert query.top is not None
-        assert query.top.value == "5"
+        assert query.pagination is not None and query.pagination.limit is not None
+        assert query.pagination.limit == 5
 
     def test_top_value_10(self):
         """Test top with value 10."""
         query = parse_odata_query("$top=10")
 
-        assert query.top is not None
-        assert query.top.value == "10"
+        assert query.pagination is not None and query.pagination.limit is not None
+        assert query.pagination.limit == 10
 
     def test_top_value_20(self):
         """Test top with value 20."""
         query = parse_odata_query("$top=20")
 
-        assert query.top is not None
-        assert query.top.value == "20"
+        assert query.pagination is not None and query.pagination.limit is not None
+        assert query.pagination.limit == 20
 
     def test_top_value_50(self):
         """Test top with value 50."""
         query = parse_odata_query("$top=50")
 
-        assert query.top is not None
-        assert query.top.value == "50"
+        assert query.pagination is not None and query.pagination.limit is not None
+        assert query.pagination.limit == 50
 
     def test_top_value_100(self):
         """Test top with value 100."""
         query = parse_odata_query("$top=100")
 
-        assert query.top is not None
-        assert query.top.value == "100"
+        assert query.pagination is not None and query.pagination.limit is not None
+        assert query.pagination.limit == 100
 
     def test_top_value_1000(self):
         """Test top with value 1000."""
         query = parse_odata_query("$top=1000")
 
-        assert query.top is not None
-        assert query.top.value == "1000"
+        assert query.pagination is not None and query.pagination.limit is not None
+        assert query.pagination.limit == 1000
 
     def test_top_value_0(self):
         """Test top with value 0."""
         query = parse_odata_query("$top=0")
 
-        assert query.top is not None
-        assert query.top.value == "0"
+        assert query.pagination is not None and query.pagination.limit is not None
+        assert query.pagination.limit == 0
 
     def test_top_large_value(self):
-        """Test top with large value."""
-        query = parse_odata_query("$top=999999")
-
-        assert query.top is not None
-        assert query.top.value == "999999"
+        """$top above MAX_TOP_VALUE is rejected."""
+        with pytest.raises(InvalidValueError):
+            parse_odata_query("$top=999999")
 
     def test_skip_value_0(self):
         """Test skip with value 0."""
         query = parse_odata_query("$skip=0")
 
-        assert query.skip is not None
-        assert query.skip.value == "0"
+        assert query.pagination is not None and query.pagination.offset is not None
+        assert query.pagination.offset == 0
 
     def test_skip_value_5(self):
         """Test skip with value 5."""
         query = parse_odata_query("$skip=5")
 
-        assert query.skip is not None
-        assert query.skip.value == "5"
+        assert query.pagination is not None and query.pagination.offset is not None
+        assert query.pagination.offset == 5
 
     def test_skip_value_10(self):
         """Test skip with value 10."""
         query = parse_odata_query("$skip=10")
 
-        assert query.skip is not None
-        assert query.skip.value == "10"
+        assert query.pagination is not None and query.pagination.offset is not None
+        assert query.pagination.offset == 10
 
     def test_skip_value_20(self):
         """Test skip with value 20."""
         query = parse_odata_query("$skip=20")
 
-        assert query.skip is not None
-        assert query.skip.value == "20"
+        assert query.pagination is not None and query.pagination.offset is not None
+        assert query.pagination.offset == 20
 
     def test_skip_value_50(self):
         """Test skip with value 50."""
         query = parse_odata_query("$skip=50")
 
-        assert query.skip is not None
-        assert query.skip.value == "50"
+        assert query.pagination is not None and query.pagination.offset is not None
+        assert query.pagination.offset == 50
 
     def test_skip_value_100(self):
         """Test skip with value 100."""
         query = parse_odata_query("$skip=100")
 
-        assert query.skip is not None
-        assert query.skip.value == "100"
+        assert query.pagination is not None and query.pagination.offset is not None
+        assert query.pagination.offset == 100
 
     def test_skip_value_1000(self):
         """Test skip with value 1000."""
         query = parse_odata_query("$skip=1000")
 
-        assert query.skip is not None
-        assert query.skip.value == "1000"
+        assert query.pagination is not None and query.pagination.offset is not None
+        assert query.pagination.offset == 1000
 
     def test_skip_large_value(self):
         """Test skip with large value."""
         query = parse_odata_query("$skip=999999")
 
-        assert query.skip is not None
-        assert query.skip.value == "999999"
+        assert query.pagination is not None and query.pagination.offset is not None
+        assert query.pagination.offset == 999999
 
     def test_top_and_skip_together(self):
         """Test top and skip together."""
         query = parse_odata_query("$top=10&$skip=20")
 
-        assert query.top is not None
-        assert query.skip is not None
-        assert query.top.value == "10"
-        assert query.skip.value == "20"
+        assert query.pagination is not None and query.pagination.limit is not None
+        assert query.pagination is not None and query.pagination.offset is not None
+        assert query.pagination.limit == 10
+        assert query.pagination.offset == 20
 
     def test_pagination_page_1(self):
         """Test pagination first page."""
         query = parse_odata_query("$top=10&$skip=0")
 
-        assert query.top.value == "10"
-        assert query.skip.value == "0"
+        assert query.pagination.limit == 10
+        assert query.pagination.offset == 0
 
     def test_pagination_page_2(self):
         """Test pagination second page."""
         query = parse_odata_query("$top=10&$skip=10")
 
-        assert query.top.value == "10"
-        assert query.skip.value == "10"
+        assert query.pagination.limit == 10
+        assert query.pagination.offset == 10
 
     def test_pagination_page_3(self):
         """Test pagination third page."""
         query = parse_odata_query("$top=10&$skip=20")
 
-        assert query.top.value == "10"
-        assert query.skip.value == "20"
+        assert query.pagination.limit == 10
+        assert query.pagination.offset == 20
 
     def test_pagination_large_page_size(self):
         """Test pagination with large page size."""
         query = parse_odata_query("$top=20&$skip=40")
 
-        assert query.top.value == "20"
-        assert query.skip.value == "40"
+        assert query.pagination.limit == 20
+        assert query.pagination.offset == 40
 
 
 # ==============================================================================
@@ -811,37 +832,37 @@ class TestCountBasic:
         """Test count with lowercase true."""
         query = parse_odata_query("$count=true")
 
-        assert query.count is True
+        assert query.pagination.include_count is True
 
     def test_count_false_lowercase(self):
         """Test count with lowercase false."""
         query = parse_odata_query("$count=false")
 
-        assert query.count is False
+        assert query.pagination is None or query.pagination.include_count is False
 
     def test_count_true_capitalized(self):
         """Test count with capitalized True."""
         query = parse_odata_query("$count=True")
 
-        assert query.count is True
+        assert query.pagination.include_count is True
 
     def test_count_true_uppercase(self):
         """Test count with uppercase TRUE."""
         query = parse_odata_query("$count=TRUE")
 
-        assert query.count is True
+        assert query.pagination.include_count is True
 
     def test_count_false_capitalized(self):
         """Test count with capitalized False."""
         query = parse_odata_query("$count=False")
 
-        assert query.count is False
+        assert query.pagination is None or query.pagination.include_count is False
 
     def test_count_false_uppercase(self):
         """Test count with uppercase FALSE."""
         query = parse_odata_query("$count=FALSE")
 
-        assert query.count is False
+        assert query.pagination is None or query.pagination.include_count is False
 
 
 # ==============================================================================
@@ -855,65 +876,73 @@ class TestNestedExpandsWithSelect:
     def test_expand_with_select_single_field(self):
         """Test expand with select single field."""
         query = parse_odata_query("$expand=author($select=id)")
+        query_expand = expand_options("$expand=author($select=id)")
 
         assert query.expand is not None
-        assert "author" in query.expand.nested_options
-        assert "$select" in query.expand.nested_options["author"]
-        assert query.expand.nested_options["author"]["$select"] == "id"
+        assert "author" in query_expand
+        assert "$select" in query_expand["author"]
+        assert query_expand["author"]["$select"] == "id"
 
     def test_expand_with_select_two_fields(self):
         """Test expand with select two fields."""
         query = parse_odata_query("$expand=author($select=id,name)")
+        query_expand = expand_options("$expand=author($select=id,name)")
 
         assert query.expand is not None
-        assert query.expand.nested_options["author"]["$select"] == "id,name"
+        assert query_expand["author"]["$select"] == "id,name"
 
     def test_expand_with_select_three_fields(self):
         """Test expand with select three fields."""
         query = parse_odata_query("$expand=author($select=id,name,email)")
+        query_expand = expand_options("$expand=author($select=id,name,email)")
 
         assert query.expand is not None
-        assert query.expand.nested_options["author"]["$select"] == "id,name,email"
+        assert query_expand["author"]["$select"] == "id,name,email"
 
     def test_multiple_expands_each_with_select(self):
         """Test multiple expands, each with their own select."""
         query = parse_odata_query("$expand=author($select=id,name),categories($select=name)")
+        query_expand = expand_options("$expand=author($select=id,name),categories($select=name)")
 
         assert query.expand is not None
-        assert "author" in query.expand.nested_options
-        assert "categories" in query.expand.nested_options
-        assert query.expand.nested_options["author"]["$select"] == "id,name"
-        assert query.expand.nested_options["categories"]["$select"] == "name"
+        assert "author" in query_expand
+        assert "categories" in query_expand
+        assert query_expand["author"]["$select"] == "id,name"
+        assert query_expand["categories"]["$select"] == "name"
 
     def test_multiple_expands_complex_selects(self):
         """Test multiple expands with complex selects."""
         query = parse_odata_query("$expand=author($select=id,name),categories($select=id,name,slug)")
+        query_expand = expand_options("$expand=author($select=id,name),categories($select=id,name,slug)")
 
         assert query.expand is not None
-        assert "slug" in query.expand.nested_options["categories"]["$select"]
+        assert "slug" in query_expand["categories"]["$select"]
 
     def test_multiple_expands_with_timestamps(self):
         """Test multiple expands selecting timestamp fields."""
         query = parse_odata_query("$expand=author($select=id,name,email),comments($select=id,text,created_at)")
+        query_expand = expand_options("$expand=author($select=id,name,email),comments($select=id,text,created_at)")
 
         assert query.expand is not None
-        assert "created_at" in query.expand.nested_options["comments"]["$select"]
+        assert "created_at" in query_expand["comments"]["$select"]
 
     def test_expand_with_select_semicolon_separator(self):
         """Test expand with select using semicolon separator."""
         query = parse_odata_query("$expand=author($select=id,name);categories($select=name)")
+        query_expand = expand_options("$expand=author($select=id,name);categories($select=name)")
 
         assert query.expand is not None
-        assert "author" in query.expand.nested_options
-        assert "categories" in query.expand.nested_options
+        assert "author" in query_expand
+        assert "categories" in query_expand
 
     def test_expand_with_select_multiple_semicolon(self):
         """Test multiple expands with semicolon and select."""
         query = parse_odata_query("$expand=author($select=id);categories($select=name);tags($select=id,name)")
+        query_expand = expand_options("$expand=author($select=id);categories($select=name);tags($select=id,name)")
 
         assert query.expand is not None
-        assert len(query.expand.nested_options) == 3
-        assert "tags" in query.expand.nested_options
+        assert len(query_expand) == 3
+        assert "tags" in query_expand
 
 
 # ==============================================================================
@@ -927,85 +956,96 @@ class TestNestedExpandsRecursive:
     def test_expand_one_level_nesting(self):
         """Test expand with one level of nesting."""
         query = parse_odata_query("$expand=author($expand=user)")
+        query_expand = expand_options("$expand=author($expand=user)")
 
         assert query.expand is not None
-        assert "author" in query.expand.nested_options
-        assert "$expand" in query.expand.nested_options["author"]
-        assert query.expand.nested_options["author"]["$expand"] == "user"
+        assert "author" in query_expand
+        assert "$expand" in query_expand["author"]
+        assert query_expand["author"]["$expand"] == "user"
 
     def test_expand_nested_profile(self):
         """Test expand with nested profile."""
         query = parse_odata_query("$expand=author($expand=profile)")
+        query_expand = expand_options("$expand=author($expand=profile)")
 
         assert query.expand is not None
-        assert query.expand.nested_options["author"]["$expand"] == "profile"
+        assert query_expand["author"]["$expand"] == "profile"
 
     def test_expand_posts_nested_author(self):
         """Test expand posts with nested author."""
         query = parse_odata_query("$expand=posts($expand=author)")
+        query_expand = expand_options("$expand=posts($expand=author)")
 
         assert query.expand is not None
-        assert "posts" in query.expand.nested_options
-        assert query.expand.nested_options["posts"]["$expand"] == "author"
+        assert "posts" in query_expand
+        assert query_expand["posts"]["$expand"] == "author"
 
     def test_expand_hierarchical_parent(self):
         """Test expand with hierarchical parent relation."""
         query = parse_odata_query("$expand=category($expand=parent)")
+        query_expand = expand_options("$expand=category($expand=parent)")
 
         assert query.expand is not None
-        assert "category" in query.expand.nested_options
+        assert "category" in query_expand
 
     def test_expand_two_levels_nesting(self):
         """Test expand with two levels of nesting."""
         query = parse_odata_query("$expand=author($expand=user($expand=profile))")
+        query_expand = expand_options("$expand=author($expand=user($expand=profile))")
 
         assert query.expand is not None
-        assert "author" in query.expand.nested_options
-        assert "$expand" in query.expand.nested_options["author"]
+        assert "author" in query_expand
+        assert "$expand" in query_expand["author"]
 
     def test_expand_two_levels_post_author_user(self):
         """Test expand post > author > user."""
         query = parse_odata_query("$expand=post($expand=author($expand=user))")
+        query_expand = expand_options("$expand=post($expand=author($expand=user))")
 
         assert query.expand is not None
-        assert "post" in query.expand.nested_options
+        assert "post" in query_expand
 
     def test_expand_two_levels_comment_post_author(self):
         """Test expand comment > post > author."""
         query = parse_odata_query("$expand=comment($expand=post($expand=author))")
+        query_expand = expand_options("$expand=comment($expand=post($expand=author))")
 
         assert query.expand is not None
-        assert "comment" in query.expand.nested_options
+        assert "comment" in query_expand
 
     def test_expand_three_levels_deep(self):
         """Test expand with three levels deep."""
         query = parse_odata_query("$expand=post($expand=author($expand=user($expand=profile)))")
+        query_expand = expand_options("$expand=post($expand=author($expand=user($expand=profile)))")
 
         assert query.expand is not None
-        assert "post" in query.expand.nested_options
+        assert "post" in query_expand
 
     def test_expand_multiple_with_nested(self):
         """Test multiple expands where some have nested expands."""
         query = parse_odata_query("$expand=author($expand=user),categories($expand=parent)")
+        query_expand = expand_options("$expand=author($expand=user),categories($expand=parent)")
 
         assert query.expand is not None
-        assert "author" in query.expand.nested_options
-        assert "categories" in query.expand.nested_options
+        assert "author" in query_expand
+        assert "categories" in query_expand
 
     def test_expand_multiple_one_nested_one_simple(self):
         """Test multiple expands, one nested and one simple."""
         query = parse_odata_query("$expand=author($expand=user($expand=profile)),categories")
+        query_expand = expand_options("$expand=author($expand=user($expand=profile)),categories")
 
         assert query.expand is not None
-        assert "author" in query.expand.nested_options
-        assert "categories" in query.expand.nested_options
+        assert "author" in query_expand
+        assert "categories" in query_expand
 
     def test_expand_posts_and_comments_nested(self):
         """Test expand posts with author and comments with user."""
         query = parse_odata_query("$expand=posts($expand=author),comments($expand=user)")
+        query_expand = expand_options("$expand=posts($expand=author),comments($expand=user)")
 
         assert query.expand is not None
-        assert len(query.expand.nested_options) == 2
+        assert len(query_expand) == 2
 
 
 # ==============================================================================
@@ -1019,86 +1059,103 @@ class TestNestedExpandsMultipleOptions:
     def test_expand_with_select_and_expand(self):
         """Test expand with both select and nested expand."""
         query = parse_odata_query("$expand=author($select=id,name;$expand=user)")
+        query_expand = expand_options("$expand=author($select=id,name;$expand=user)")
 
         assert query.expand is not None
-        assert "author" in query.expand.nested_options
-        assert "$select" in query.expand.nested_options["author"]
-        assert "$expand" in query.expand.nested_options["author"]
+        assert "author" in query_expand
+        assert "$select" in query_expand["author"]
+        assert "$expand" in query_expand["author"]
 
     def test_expand_select_and_nested_expand_simple(self):
         """Test expand with select and simple nested expand."""
         query = parse_odata_query("$expand=author($select=id;$expand=profile)")
+        query_expand = expand_options("$expand=author($select=id;$expand=profile)")
 
         assert query.expand is not None
-        assert query.expand.nested_options["author"]["$select"] == "id"
-        assert query.expand.nested_options["author"]["$expand"] == "profile"
+        assert query_expand["author"]["$select"] == "id"
+        assert query_expand["author"]["$expand"] == "profile"
 
     def test_expand_posts_with_select_and_expand(self):
         """Test expand posts with select and nested expand author."""
         query = parse_odata_query("$expand=posts($select=title,content;$expand=author)")
+        query_expand = expand_options("$expand=posts($select=title,content;$expand=author)")
 
         assert query.expand is not None
-        assert "title,content" in query.expand.nested_options["posts"]["$select"]
+        assert "title,content" in query_expand["posts"]["$select"]
 
     def test_expand_two_levels_with_select_at_each(self):
         """Test expand with select at each level."""
         query = parse_odata_query("$expand=author($select=id;$expand=user($select=username))")
+        query_expand = expand_options("$expand=author($select=id;$expand=user($select=username))")
 
         assert query.expand is not None
-        assert "$expand" in query.expand.nested_options["author"]
+        assert "$expand" in query_expand["author"]
 
     def test_expand_complex_nested_with_selects(self):
         """Test complex nested expand with selects at multiple levels."""
         query = parse_odata_query("$expand=author($select=id,name;$expand=user($select=id,username,email))")
+        query_expand = expand_options("$expand=author($select=id,name;$expand=user($select=id,username,email))")
 
         assert query.expand is not None
-        assert "$select" in query.expand.nested_options["author"]
+        assert "$select" in query_expand["author"]
 
     def test_expand_three_levels_with_selects(self):
         """Test expand with three levels and select at each."""
         query = parse_odata_query("$expand=post($select=title;$expand=author($select=name;$expand=user))")
+        query_expand = expand_options("$expand=post($select=title;$expand=author($select=name;$expand=user))")
 
         assert query.expand is not None
-        assert "post" in query.expand.nested_options
+        assert "post" in query_expand
 
     def test_expand_with_select_expand_and_top(self):
         """Test expand with select, nested expand, and top."""
         query = parse_odata_query("$expand=author($select=id,name;$expand=user;$top=5)")
+        query_expand = expand_options("$expand=author($select=id,name;$expand=user;$top=5)")
 
         assert query.expand is not None
-        assert "$top" in query.expand.nested_options["author"]
+        assert "$top" in query_expand["author"]
 
     def test_expand_with_filter_and_orderby(self):
         """Test expand with filter and orderby options."""
         query = parse_odata_query("$expand=posts($select=title;$filter=status eq 'published';$orderby=created_at desc)")
+        query_expand = expand_options(
+            "$expand=posts($select=title;$filter=status eq 'published';$orderby=created_at desc)"
+        )
 
         assert query.expand is not None
-        assert "$filter" in query.expand.nested_options["posts"]
-        assert "$orderby" in query.expand.nested_options["posts"]
+        assert "$filter" in query_expand["posts"]
+        assert "$orderby" in query_expand["posts"]
 
     def test_expand_comments_with_orderby_top(self):
         """Test expand comments with orderby and top."""
         query = parse_odata_query("$expand=comments($select=text,created_at;$orderby=created_at desc;$top=10)")
+        query_expand = expand_options("$expand=comments($select=text,created_at;$orderby=created_at desc;$top=10)")
 
         assert query.expand is not None
-        assert "$orderby" in query.expand.nested_options["comments"]
-        assert "$top" in query.expand.nested_options["comments"]
+        assert "$orderby" in query_expand["comments"]
+        assert "$top" in query_expand["comments"]
 
     def test_multiple_expands_each_with_options(self):
         """Test multiple expands each with their own options."""
         query = parse_odata_query("$expand=author($select=id,name;$expand=user),categories($select=name;$orderby=name)")
+        query_expand = expand_options(
+            "$expand=author($select=id,name;$expand=user),categories($select=name;$orderby=name)"
+        )
 
         assert query.expand is not None
-        assert len(query.expand.nested_options) == 2
-        assert "$orderby" in query.expand.nested_options["categories"]
+        assert len(query_expand) == 2
+        assert "$orderby" in query_expand["categories"]
 
     def test_multiple_expands_different_options(self):
         """Test multiple expands with different option combinations."""
         query = parse_odata_query("$expand=posts($select=title;$top=5),comments($select=text;$orderby=created_at desc)")
+        query_expand = expand_options(
+            "$expand=posts($select=title;$top=5),comments($select=text;$orderby=created_at desc)"
+        )
 
         assert query.expand is not None
-        assert "$top" in query.expand.nested_options["posts"]
-        assert "$orderby" in query.expand.nested_options["comments"]
+        assert "$top" in query_expand["posts"]
+        assert "$orderby" in query_expand["comments"]
 
 
 # ==============================================================================
@@ -1112,63 +1169,68 @@ class TestDeeplyNestedExpands:
     def test_three_levels_with_select_at_bottom(self):
         """Test three-level expand with select at deepest level."""
         query = parse_odata_query("$expand=post($expand=author($expand=user($select=username)))")
+        query_expand = expand_options("$expand=post($expand=author($expand=user($select=username)))")
 
         assert query.expand is not None
-        assert "post" in query.expand.nested_options
+        assert "post" in query_expand
 
     def test_three_levels_comment_post_author_profile(self):
         """Test three levels: comment > post > author > profile."""
         query = parse_odata_query("$expand=comment($expand=post($expand=author($expand=profile)))")
+        query_expand = expand_options("$expand=comment($expand=post($expand=author($expand=profile)))")
 
         assert query.expand is not None
-        assert "comment" in query.expand.nested_options
+        assert "comment" in query_expand
 
     def test_four_levels_deep(self):
         """Test four levels of nested expands."""
         query = parse_odata_query("$expand=reply($expand=comment($expand=post($expand=author($expand=user))))")
+        query_expand = expand_options("$expand=reply($expand=comment($expand=post($expand=author($expand=user))))")
 
         assert query.expand is not None
-        assert "reply" in query.expand.nested_options
+        assert "reply" in query_expand
 
     def test_four_levels_with_select(self):
         """Test four levels with select at deepest level."""
         query = parse_odata_query("$expand=post($expand=category($expand=parent($expand=root($select=name))))")
+        query_expand = expand_options("$expand=post($expand=category($expand=parent($expand=root($select=name))))")
 
         assert query.expand is not None
-        assert "post" in query.expand.nested_options
+        assert "post" in query_expand
 
     def test_deep_nesting_with_options_at_each_level(self):
         """Test deep nesting with options at each level."""
-        query = parse_odata_query(
-            "$expand=author($select=id;$expand=user($select=id,username;$expand=profile($select=bio)))"
-        )
+        qs = "$expand=author($select=id;$expand=user($select=id,username;$expand=profile($select=bio)))"
+        query = parse_odata_query(qs)
+        query_expand = expand_options(qs)
 
         assert query.expand is not None
-        assert "$select" in query.expand.nested_options["author"]
+        assert "$select" in query_expand["author"]
 
     def test_deep_nesting_all_selects(self):
         """Test deep nesting with select at all levels."""
-        query = parse_odata_query(
-            "$expand=post($select=title;$expand=author($select=name;$expand=user($select=email;$expand=profile)))"
-        )
+        qs = "$expand=post($select=title;$expand=author($select=name;$expand=user($select=email;$expand=profile)))"
+        query = parse_odata_query(qs)
 
         assert query.expand is not None
-        assert "post" in query.expand.nested_options
+        assert "post" in expand_options(qs)
 
     def test_multiple_branches_nested(self):
         """Test expand with multiple nested branches."""
         query = parse_odata_query("$expand=author($expand=user,profile),categories($expand=parent)")
+        query_expand = expand_options("$expand=author($expand=user,profile),categories($expand=parent)")
 
         assert query.expand is not None
-        assert "author" in query.expand.nested_options
-        assert "categories" in query.expand.nested_options
+        assert "author" in query_expand
+        assert "categories" in query_expand
 
     def test_complex_multiple_branches(self):
         """Test complex expand with multiple branches and nesting."""
         query = parse_odata_query("$expand=post($expand=author($expand=user,profile),category($expand=parent))")
+        query_expand = expand_options("$expand=post($expand=author($expand=user,profile),category($expand=parent))")
 
         assert query.expand is not None
-        assert "post" in query.expand.nested_options
+        assert "post" in query_expand
 
 
 # ==============================================================================
@@ -1182,20 +1244,22 @@ class TestTwoOptionCombinations:
     def test_select_and_expand(self):
         """Test select with expand."""
         query = parse_odata_query("$select=id,title&$expand=author")
+        query_expand = expand_options("$select=id,title&$expand=author")
 
         assert query.select is not None
         assert query.expand is not None
         assert "id" in query.select.fields
-        assert "author" in query.expand.nested_options
+        assert "author" in query_expand
 
     def test_select_and_expand_multiple(self):
         """Test select with multiple expands."""
         query = parse_odata_query("$select=id,title,content&$expand=author,categories")
+        query_expand = expand_options("$select=id,title,content&$expand=author,categories")
 
         assert query.select is not None
         assert query.expand is not None
         assert len(query.select.fields) == 3
-        assert len(query.expand.nested_options) == 2
+        assert len(query_expand) == 2
 
     def test_select_and_filter(self):
         """Test select with filter."""
@@ -1216,22 +1280,22 @@ class TestTwoOptionCombinations:
         query = parse_odata_query("$select=id,title&$top=10")
 
         assert query.select is not None
-        assert query.top is not None
-        assert query.top.value == "10"
+        assert query.pagination is not None and query.pagination.limit is not None
+        assert query.pagination.limit == 10
 
     def test_select_and_skip(self):
         """Test select with skip."""
         query = parse_odata_query("$select=id,title&$skip=20")
 
         assert query.select is not None
-        assert query.skip is not None
+        assert query.pagination is not None and query.pagination.offset is not None
 
     def test_select_and_count(self):
         """Test select with count."""
         query = parse_odata_query("$select=id,title&$count=true")
 
         assert query.select is not None
-        assert query.count is True
+        assert query.pagination.include_count is True
 
     def test_expand_and_filter(self):
         """Test expand with filter."""
@@ -1252,14 +1316,14 @@ class TestTwoOptionCombinations:
         query = parse_odata_query("$expand=author&$top=10")
 
         assert query.expand is not None
-        assert query.top is not None
+        assert query.pagination is not None and query.pagination.limit is not None
 
     def test_expand_and_count(self):
         """Test expand with count."""
         query = parse_odata_query("$expand=author&$count=true")
 
         assert query.expand is not None
-        assert query.count is True
+        assert query.pagination.include_count is True
 
     def test_filter_and_orderby(self):
         """Test filter with orderby."""
@@ -1273,37 +1337,37 @@ class TestTwoOptionCombinations:
         query = parse_odata_query("$filter=status eq 'published'&$top=10")
 
         assert query.filter is not None
-        assert query.top is not None
+        assert query.pagination is not None and query.pagination.limit is not None
 
     def test_filter_and_count(self):
         """Test filter with count."""
         query = parse_odata_query("$filter=status eq 'published'&$count=true")
 
         assert query.filter is not None
-        assert query.count is True
+        assert query.pagination.include_count is True
 
     def test_orderby_and_top(self):
         """Test orderby with top."""
         query = parse_odata_query("$orderby=created_at desc&$top=10")
 
         assert query.orderby is not None
-        assert query.top is not None
+        assert query.pagination is not None and query.pagination.limit is not None
 
     def test_top_and_skip_pagination(self):
         """Test top and skip together for pagination."""
         query = parse_odata_query("$top=10&$skip=20")
 
-        assert query.top is not None
-        assert query.skip is not None
-        assert query.top.value == "10"
-        assert query.skip.value == "20"
+        assert query.pagination is not None and query.pagination.limit is not None
+        assert query.pagination is not None and query.pagination.offset is not None
+        assert query.pagination.limit == 10
+        assert query.pagination.offset == 20
 
     def test_top_and_count(self):
         """Test top with count."""
         query = parse_odata_query("$top=10&$count=true")
 
-        assert query.top is not None
-        assert query.count is True
+        assert query.pagination is not None and query.pagination.limit is not None
+        assert query.pagination.include_count is True
 
 
 class TestThreeOptionCombinations:
@@ -1331,7 +1395,7 @@ class TestThreeOptionCombinations:
 
         assert query.select is not None
         assert query.expand is not None
-        assert query.top is not None
+        assert query.pagination is not None and query.pagination.limit is not None
 
     def test_select_filter_orderby(self):
         """Test select, filter, and orderby together."""
@@ -1347,7 +1411,7 @@ class TestThreeOptionCombinations:
 
         assert query.select is not None
         assert query.filter is not None
-        assert query.top is not None
+        assert query.pagination is not None and query.pagination.limit is not None
 
     def test_expand_filter_orderby(self):
         """Test expand, filter, and orderby together."""
@@ -1363,7 +1427,7 @@ class TestThreeOptionCombinations:
 
         assert query.expand is not None
         assert query.filter is not None
-        assert query.top is not None
+        assert query.pagination is not None and query.pagination.limit is not None
 
     def test_filter_orderby_top(self):
         """Test filter, orderby, and top together."""
@@ -1371,7 +1435,7 @@ class TestThreeOptionCombinations:
 
         assert query.filter is not None
         assert query.orderby is not None
-        assert query.top is not None
+        assert query.pagination is not None and query.pagination.limit is not None
 
     def test_filter_orderby_count(self):
         """Test filter, orderby, and count together."""
@@ -1379,23 +1443,23 @@ class TestThreeOptionCombinations:
 
         assert query.filter is not None
         assert query.orderby is not None
-        assert query.count is True
+        assert query.pagination.include_count is True
 
     def test_orderby_top_skip(self):
         """Test orderby, top, and skip together."""
         query = parse_odata_query("$orderby=created_at desc&$top=10&$skip=20")
 
         assert query.orderby is not None
-        assert query.top is not None
-        assert query.skip is not None
+        assert query.pagination is not None and query.pagination.limit is not None
+        assert query.pagination is not None and query.pagination.offset is not None
 
     def test_top_skip_count(self):
         """Test top, skip, and count together."""
         query = parse_odata_query("$top=10&$skip=20&$count=true")
 
-        assert query.top is not None
-        assert query.skip is not None
-        assert query.count is True
+        assert query.pagination is not None and query.pagination.limit is not None
+        assert query.pagination is not None and query.pagination.offset is not None
+        assert query.pagination.include_count is True
 
 
 class TestAllOptionsCombined:
@@ -1412,32 +1476,34 @@ class TestAllOptionsCombined:
         assert query.expand is not None
         assert query.filter is not None
         assert query.orderby is not None
-        assert query.top is not None
-        assert query.skip is not None
-        assert query.count is True
+        assert query.pagination is not None and query.pagination.limit is not None
+        assert query.pagination is not None and query.pagination.offset is not None
+        assert query.pagination.include_count is True
 
     def test_all_options_with_complex_expand(self):
         """Test all options with complex nested expand."""
-        query = parse_odata_query(
+        qs = (
             "$select=id,title&$expand=author($select=id,name),categories"
             "&$filter=status eq 'published'&$orderby=created_at desc"
             "&$top=10&$skip=20&$count=true"
         )
+        query = parse_odata_query(qs)
 
         assert query.select is not None
         assert query.expand is not None
-        assert "$select" in query.expand.nested_options["author"]
+        assert "$select" in expand_options(qs)["author"]
 
     def test_all_options_with_nested_expand(self):
         """Test all options with nested expand."""
-        query = parse_odata_query(
+        qs = (
             "$select=id,title&$expand=author($select=id;$expand=user)"
             "&$filter=status eq 'published'&$orderby=created_at desc"
             "&$top=10&$skip=20&$count=true"
         )
+        query = parse_odata_query(qs)
 
         assert query.select is not None
-        assert "$expand" in query.expand.nested_options["author"]
+        assert "$expand" in expand_options(qs)["author"]
 
     def test_all_options_complex_filter(self):
         """Test all options with complex filter."""
@@ -1448,7 +1514,7 @@ class TestAllOptionsCombined:
         )
 
         assert query.filter is not None
-        assert "and" in query.filter.value
+        assert "and" in query.filter.expression
 
     def test_all_options_multiple_orderby(self):
         """Test all options with multiple orderby fields."""
@@ -1458,7 +1524,7 @@ class TestAllOptionsCombined:
         )
 
         assert query.orderby is not None
-        assert len(query.orderby.fields) == 2
+        assert len([(f.field, f.direction) for f in query.orderby.fields]) == 2
 
 
 # ==============================================================================
@@ -1473,7 +1539,7 @@ class TestEdgeCasesEmptyAndWhitespace:
         """Test parsing empty query string."""
         query = parse_odata_query("")
 
-        assert isinstance(query, ODataQuery)
+        assert isinstance(query, QueryIntent)
         assert query.select is None
         assert query.expand is None
         assert query.filter is None
@@ -1482,14 +1548,14 @@ class TestEdgeCasesEmptyAndWhitespace:
         """Test parsing whitespace-only string."""
         query = parse_odata_query("   ")
 
-        assert isinstance(query, ODataQuery)
+        assert isinstance(query, QueryIntent)
         assert query.select is None
 
     def test_none_input(self):
         """Test parsing None input."""
         query = parse_odata_query(None)
 
-        assert isinstance(query, ODataQuery)
+        assert isinstance(query, QueryIntent)
 
 
 class TestEdgeCasesURLEncoding:
@@ -1501,7 +1567,7 @@ class TestEdgeCasesURLEncoding:
 
         assert query.filter is not None
         # After decoding, should contain readable text
-        assert "first_name" in query.filter.value
+        assert "first_name" in query.filter.expression
 
     def test_url_encoded_quotes(self):
         """Test URL-encoded quotes."""
@@ -1521,32 +1587,46 @@ class TestEdgeCasesInvalidValues:
     """Tests for invalid or extreme values."""
 
     def test_top_negative_value(self):
-        """Test top with negative value (should parse but may fail validation)."""
-        query = parse_odata_query("$top=-1")
-
-        assert query.top is not None
-        assert query.top.value == "-1"
+        """Negative $top is rejected."""
+        with pytest.raises(InvalidValueError):
+            parse_odata_query("$top=-1")
 
     def test_skip_negative_value(self):
-        """Test skip with negative value."""
-        query = parse_odata_query("$skip=-1")
-
-        assert query.skip is not None
-        assert query.skip.value == "-1"
+        """Negative $skip is rejected."""
+        with pytest.raises(InvalidValueError):
+            parse_odata_query("$skip=-1")
 
     def test_top_string_value(self):
-        """Test top with string value (should parse but validation should fail)."""
-        query = parse_odata_query("$top=abc")
-
-        assert query.top is not None
-        assert query.top.value == "abc"
+        """Non-integer $top is rejected."""
+        with pytest.raises(InvalidValueError):
+            parse_odata_query("$top=abc")
 
     def test_count_invalid_value(self):
-        """Test count with invalid value."""
+        """A $count value that is not 'true' does not request a count."""
         query = parse_odata_query("$count=maybe")
 
-        # Parser should handle this, validator should reject
-        assert query.count is not True
+        assert query.pagination is None
+
+    def test_nested_top_too_large_is_rejected(self):
+        """Nested $top is bounded like the top-level one."""
+        with pytest.raises(InvalidValueError):
+            parse_odata_query("$expand=children($top=999999)")
+
+    def test_nested_top_negative_is_rejected(self):
+        with pytest.raises(InvalidValueError):
+            parse_odata_query("$expand=children($top=-1)")
+
+    def test_nested_skip_non_integer_is_rejected(self):
+        with pytest.raises(InvalidValueError):
+            parse_odata_query("$expand=children($top=5;$skip=abc)")
+
+    def test_nested_filter_is_parsed_to_ast(self):
+        """A nested $filter must carry an AST, otherwise it is silently ignored at execution."""
+        query = parse_odata_query("$expand=children($filter=score gt 15)")
+        nested = query.expand.relations["children"]
+        assert nested.filter.expression == "score gt 15"
+        assert nested.filter.ast is not None
+        assert nested.filter.has_filter()
 
 
 class TestComplexRealWorldQueries:
@@ -1567,8 +1647,8 @@ class TestComplexRealWorldQueries:
         assert query.expand is not None
         assert query.filter is not None
         assert query.orderby is not None
-        assert query.top is not None
-        assert query.count is True
+        assert query.pagination is not None and query.pagination.limit is not None
+        assert query.pagination.include_count is True
 
     def test_blog_posts_by_author(self):
         """Test blog: posts from specific author."""
@@ -1578,7 +1658,7 @@ class TestComplexRealWorldQueries:
 
         assert query.expand is not None
         assert query.filter is not None
-        assert "author/id" in query.filter.value
+        assert "author/id" in query.filter.expression
 
     def test_blog_search_by_title(self):
         """Test blog: search posts by title."""
@@ -1588,7 +1668,7 @@ class TestComplexRealWorldQueries:
 
         assert query.select is not None
         assert query.filter is not None
-        assert "contains" in query.filter.value
+        assert "contains" in query.filter.expression
 
     def test_ecommerce_products_in_stock(self):
         """Test e-commerce: products in stock with category."""
@@ -1604,7 +1684,7 @@ class TestComplexRealWorldQueries:
         assert query.select is not None
         assert query.expand is not None
         assert query.filter is not None
-        assert "stock gt 0" in query.filter.value
+        assert "stock gt 0" in query.filter.expression
 
     def test_ecommerce_products_by_category(self):
         """Test e-commerce: products from specific category."""
@@ -1617,7 +1697,7 @@ class TestComplexRealWorldQueries:
         )
 
         assert query.filter is not None
-        assert "category/slug" in query.filter.value
+        assert "category/slug" in query.filter.expression
 
     def test_users_active_with_profile(self):
         """Test users: active users with profile."""
@@ -1644,7 +1724,7 @@ class TestComplexRealWorldQueries:
         )
 
         assert query.filter is not None
-        assert "or" in query.filter.value
+        assert "or" in query.filter.expression
 
     def test_social_posts_with_likes(self):
         """Test social: posts with most likes."""
@@ -1674,47 +1754,11 @@ class TestComplexRealWorldQueries:
         assert query.select is not None
         assert query.expand is not None
         assert query.filter is not None
-        assert "and" in query.filter.value
+        assert "and" in query.filter.expression
 
 
 class TestParserValidation:
     """Tests for ODataQuery validation."""
-
-    def test_valid_query_validates(self):
-        """Test that valid query passes validation."""
-        query = parse_odata_query("$select=id,name&$filter=status eq 'published'")
-
-        assert query.validate() is True
-
-    def test_empty_query_validates(self):
-        """Test that empty query passes validation."""
-        query = parse_odata_query("")
-
-        assert query.validate() is True
-
-    def test_to_dict_method(self):
-        """Test ODataQuery.to_dict() method."""
-        query = parse_odata_query("$select=id,name&$filter=status eq 'published'&$top=10&$count=true")
-
-        result = query.to_dict()
-
-        assert "$select" in result
-        assert "$filter" in result
-        assert "$top" in result
-        assert "$count" in result
-        assert result["$select"] == "id,name"
-        assert result["$filter"] == "status eq 'published'"
-        assert result["$top"] == "10"
-        assert result["$count"] is True
-
-    def test_to_dict_with_expand(self):
-        """Test to_dict with expand options."""
-        query = parse_odata_query("$select=id&$expand=author($select=name)")
-
-        result = query.to_dict()
-
-        assert "$select" in result
-        assert "$expand" in result
 
 
 class TestParserDictInput:
@@ -1735,7 +1779,7 @@ class TestParserDictInput:
 
         assert query.select is not None
         assert query.expand is not None
-        assert query.top is not None
+        assert query.pagination is not None and query.pagination.limit is not None
 
     def test_dict_input_all_options(self):
         """Test dict input with all options."""
@@ -1754,9 +1798,9 @@ class TestParserDictInput:
         assert query.expand is not None
         assert query.filter is not None
         assert query.orderby is not None
-        assert query.top is not None
-        assert query.skip is not None
-        assert query.count is True
+        assert query.pagination is not None and query.pagination.limit is not None
+        assert query.pagination is not None and query.pagination.offset is not None
+        assert query.pagination.include_count is True
 
 
 # Run with: pytest tests/core/test_parser_comprehensive.py -v

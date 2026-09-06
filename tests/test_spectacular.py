@@ -2,53 +2,7 @@
 Tests for DRF Spectacular integration.
 """
 
-from rest_framework.viewsets import ViewSet
-
-from fc_selector.django.drf.spectacular import (
-    ODATA_PARAMETERS,
-    get_odata_parameters,
-    get_odata_schema_extension,
-    postprocess_odata_schema,
-    preprocess_odata_parameters,
-)
-from fc_selector.django.drf.viewsets.selector_mixin import ODataSelectorViewSetMixin
-
-
-class MockODataViewSet(ODataSelectorViewSetMixin, ViewSet):
-    pass
-
-
-class MockNormalViewSet(ViewSet):
-    pass
-
-
-def test_preprocess_odata_parameters():
-    """Test preprocess hook marks callbacks."""
-
-    # Mock endpoints structure: (path, regex, method, callback)
-    # Callback usually has .cls attribute pointing to ViewSet
-
-    def callback_odata():
-        pass
-
-    callback_odata.cls = MockODataViewSet
-
-    def callback_normal():
-        pass
-
-    callback_normal.cls = MockNormalViewSet
-
-    endpoints = [
-        ("/odata", "regex", "GET", callback_odata),
-        ("/normal", "regex", "GET", callback_normal),
-    ]
-
-    preprocess_odata_parameters(endpoints)
-
-    assert hasattr(callback_odata, "_odata_params_added")
-    assert callback_odata._odata_params_added is True
-
-    assert not hasattr(callback_normal, "_odata_params_added")
+from fc_selector.django.drf.spectacular import postprocess_odata_schema
 
 
 def test_postprocess_odata_schema_list():
@@ -111,13 +65,3 @@ def test_postprocess_odata_schema_existing_params():
     top_params = [p for p in params if p["name"] == "$top"]
     assert len(top_params) == 1
     assert top_params[0]["description"] == "existing"
-
-
-def test_get_odata_schema_extension():
-    """Test get_odata_schema_extension returns the callback."""
-    assert get_odata_schema_extension() == preprocess_odata_parameters
-
-
-def test_get_odata_parameters():
-    """Test get_odata_parameters returns the list."""
-    assert get_odata_parameters() == ODATA_PARAMETERS

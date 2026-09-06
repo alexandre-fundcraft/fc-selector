@@ -23,42 +23,42 @@ class TestQueryBuilderFromQueryString:
     """Tests for from_query_string class method."""
 
     def test_from_empty_string(self):
-        query = QueryBuilder.from_query_string("")
+        query = QueryBuilder("")
         assert query.build_query_string() == ""
 
     def test_from_none_string(self):
-        query = QueryBuilder.from_query_string(None)
+        query = QueryBuilder(None)
         assert query.build_query_string() == ""
 
     def test_from_select(self):
-        query = QueryBuilder.from_query_string("$select=id,name")
+        query = QueryBuilder("$select=id,name")
         assert "$select=id,name" in query.build_query_string()
 
     def test_from_filter(self):
-        query = QueryBuilder.from_query_string("$filter=status eq 'active'")
+        query = QueryBuilder("$filter=status eq 'active'")
         assert "$filter=status eq 'active'" in query.build_query_string()
 
     def test_from_top_skip(self):
-        query = QueryBuilder.from_query_string("$top=10&$skip=20")
+        query = QueryBuilder("$top=10&$skip=20")
         result = query.build_query_string()
         assert "$top=10" in result
         assert "$skip=20" in result
 
     def test_from_orderby(self):
-        query = QueryBuilder.from_query_string("$orderby=name desc")
+        query = QueryBuilder("$orderby=name desc")
         assert "$orderby=name desc" in query.build_query_string()
 
     def test_from_expand(self):
-        query = QueryBuilder.from_query_string("$expand=author,categories")
+        query = QueryBuilder("$expand=author,categories")
         assert "$expand=author,categories" in query.build_query_string()
 
     def test_from_count(self):
-        query = QueryBuilder.from_query_string("$count=true")
+        query = QueryBuilder("$count=true")
         assert "$count=true" in query.build_query_string()
 
     def test_from_complex_query(self):
         query_string = "$filter=status eq 'published'&$select=id,title&$top=10&$orderby=created_at desc"
-        query = QueryBuilder.from_query_string(query_string)
+        query = QueryBuilder(query_string)
         result = query.build_query_string()
         assert "$filter=status eq 'published'" in result
         assert "$select=id,title" in result
@@ -226,7 +226,7 @@ class TestQueryBuilderChaining:
 
     def test_from_query_string_and_modify(self):
         """Test parsing existing query and adding more filters."""
-        query = QueryBuilder.from_query_string("$select=id,name&$top=10")
+        query = QueryBuilder("$select=id,name&$top=10")
         query.and_filter("id eq 5")
         result = query.build_query_string()
         assert "$filter=id eq 5" in result

@@ -29,18 +29,6 @@ class TestOrderBy:
         assert ob.field == "created_at"
         assert ob.direction == "desc"
 
-    def test_orderby_to_tuple(self):
-        """OrderBy.to_tuple() returns (field, direction)."""
-        assert OrderBy("name").to_tuple() == ("name", "asc")
-        assert OrderBy("created_at").desc().to_tuple() == ("created_at", "desc")
-
-    def test_orderby_equality(self):
-        """OrderBy equality comparison."""
-        assert OrderBy("name") == OrderBy("name").asc()
-        assert OrderBy("name").desc() == OrderBy("name").desc()
-        assert OrderBy("name") != OrderBy("name").desc()
-        assert OrderBy("name") != OrderBy("other")
-
     def test_orderby_repr(self):
         """OrderBy has readable repr."""
         assert "name" in repr(OrderBy("name"))
@@ -131,8 +119,7 @@ class TestExpandToIntent:
         """Empty expand returns empty QueryIntent."""
         exp = Expand("author")
         intent = exp.to_intent()
-        assert isinstance(intent, QueryIntent)
-        assert intent.is_empty()
+        assert intent == QueryIntent()
 
     def test_to_intent_with_select(self):
         """Expand with select creates SelectIntent."""
@@ -194,7 +181,7 @@ class TestQueryBuilderExpandFluent:
         )
         intent = builder.build()
 
-        assert set(intent.expand.get_relation_names()) == {"author", "category"}
+        assert set(intent.expand.relations) == {"author", "category"}
         assert intent.expand.relations["author"].select.fields == ["id", "name"]
         assert intent.expand.relations["category"].select.fields == ["id", "title"]
 
@@ -222,7 +209,7 @@ class TestQueryBuilderExpandFluent:
         builder = QueryBuilder().expand("author", "category")
         intent = builder.build()
 
-        assert set(intent.expand.get_relation_names()) == {"author", "category"}
+        assert set(intent.expand.relations) == {"author", "category"}
 
 
 class TestQueryBuilderOrderbyFluent:

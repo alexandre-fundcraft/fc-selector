@@ -11,6 +11,7 @@ import pytest
 from rest_framework import serializers
 
 from fc_selector.core.dtos import UNSET
+from fc_selector.core.dtos.utils import is_dto_type, is_many_relationship
 from fc_selector.django.drf.serializers import ODataDTOSerializer
 
 
@@ -333,26 +334,14 @@ class TestDTOTypeDetection:
 
     def test_is_dto_type_simple(self):
         """Simple DTO type is detected."""
-
-        class TestSerializer(ODataDTOSerializer):
-            class Meta:
-                dto_class = SimpleDTO
-
-        serializer = TestSerializer()
-        assert serializer._is_dto_type(NestedDTO) is True
-        assert serializer._is_dto_type(int) is False
-        assert serializer._is_dto_type(str) is False
+        assert is_dto_type(NestedDTO) is True
+        assert is_dto_type(int) is False
+        assert is_dto_type(str) is False
 
     def test_is_many_relationship_list(self):
         """List type detected as many relationship."""
-
-        class TestSerializer(ODataDTOSerializer):
-            class Meta:
-                dto_class = SimpleDTO
-
-        serializer = TestSerializer()
-        assert serializer._is_many_relationship(list[NestedDTO]) is True
-        assert serializer._is_many_relationship(NestedDTO) is False
+        assert is_many_relationship(list[NestedDTO]) is True
+        assert is_many_relationship(NestedDTO) is False
 
     def test_get_base_type_optional(self):
         """Base type extracted from Optional."""

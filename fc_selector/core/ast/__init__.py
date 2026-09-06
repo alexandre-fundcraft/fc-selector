@@ -10,7 +10,7 @@ Authors: Original odata-query authors
 Modified by: Alexandre Busquets (django-odata)
 
 Usage:
-    from django_odata.core.parsers.filter.ast import nodes, visitor
+    from fc_selector.core.ast import nodes, visitor
 
     # Create AST nodes
     ast_node = nodes.Compare(

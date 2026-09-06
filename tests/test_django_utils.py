@@ -10,12 +10,10 @@ Covers:
 
 import pytest
 
-from fc_selector.django.query.applier import QueryApplier, apply_odata_query_params
+from fc_selector.django.query.applier import apply_odata_query_params
 from fc_selector.django.utils.introspection import (
     get_field_safe,
-    get_related_model,
     is_forward_relation,
-    validate_field_name,
 )
 from fc_selector.django.visitors.utils import reverse_relationship
 from fc_selector.exceptions import (
@@ -58,26 +56,6 @@ class TestGetFieldSafe:
 
 
 @pytest.mark.django_db
-class TestGetRelatedModel:
-    """Tests for get_related_model utility."""
-
-    def test_forward_relation(self, related_model, test_model):
-        """Returns related model for ForeignKey."""
-        model = get_related_model(related_model, "test_model")
-        assert model is test_model
-
-    def test_reverse_relation(self, test_model, related_model):
-        """Returns related model for reverse relation."""
-        model = get_related_model(test_model, "related_items")
-        assert model is related_model
-
-    def test_nonexistent_relation(self, test_model):
-        """Returns None for non-existent relation."""
-        model = get_related_model(test_model, "nonexistent")
-        assert model is None
-
-
-@pytest.mark.django_db
 class TestIsForwardRelation:
     """Tests for is_forward_relation utility."""
 
@@ -108,28 +86,6 @@ class TestIsForwardRelation:
 
 
 @pytest.mark.django_db
-class TestValidateFieldName:
-    """Tests for validate_field_name utility."""
-
-    def test_valid_field(self, test_model):
-        """Valid field passes validation."""
-        assert validate_field_name(test_model, "name") is True
-
-    def test_private_field_fails(self, test_model):
-        """Private field (starting with _) fails."""
-        assert validate_field_name(test_model, "_private") is False
-
-    def test_nonexistent_field_fails(self, test_model):
-        """Non-existent field fails."""
-        assert validate_field_name(test_model, "nonexistent") is False
-
-    def test_allowed_fields_filter(self, test_model):
-        """Field not in allowed_fields fails."""
-        assert validate_field_name(test_model, "name", allowed_fields={"count"}) is False
-        assert validate_field_name(test_model, "name", allowed_fields={"name", "count"}) is True
-
-
-@pytest.mark.django_db
 class TestReverseRelationship:
     """Tests for reverse_relationship utility."""
 
@@ -141,71 +97,62 @@ class TestReverseRelationship:
 
 
 @pytest.mark.django_db
-class TestQueryApplier:
-    """Tests for QueryApplier."""
+class TestApplyOdataQueryParams:
+    """Tests for apply_odata_query_params."""
 
     def test_apply_empty_params(self, test_model):
         """Empty params returns unchanged queryset."""
-        applier = QueryApplier()
         qs = test_model.objects.all()
-        result = applier.apply(qs, "")
+        result = apply_odata_query_params(qs, "")
         assert result.query.__str__() == qs.query.__str__()
 
     def test_apply_none_params(self, test_model):
         """None params returns unchanged queryset."""
-        applier = QueryApplier()
         qs = test_model.objects.all()
-        result = applier.apply(qs, None)
+        result = apply_odata_query_params(qs, None)
         assert result is qs
 
     def test_apply_string_query(self, test_model):
         """Apply string query params."""
-        applier = QueryApplier()
         qs = test_model.objects.all()
-        result = applier.apply(qs, "$top=10")
+        result = apply_odata_query_params(qs, "$top=10")
         assert result is not None
 
     def test_apply_dict_query(self, test_model):
         """Apply dict query params."""
-        applier = QueryApplier()
         qs = test_model.objects.all()
-        result = applier.apply(qs, {"$top": "10"})
+        result = apply_odata_query_params(qs, {"$top": "10"})
         assert result is not None
 
     def test_apply_filter(self, test_model):
         """Apply filter query."""
-        applier = QueryApplier()
         qs = test_model.objects.all()
-        result = applier.apply(qs, "$filter=count gt 0")
+        result = apply_odata_query_params(qs, "$filter=count gt 0")
         assert result is not None
 
     def test_apply_invalid_top_value(self, test_model):
         """Invalid $top value raises error."""
-        applier = QueryApplier()
         qs = test_model.objects.all()
         with pytest.raises(ODataInvalidPaginationError):
-            applier.apply(qs, {"$top": "abc"})
+            apply_odata_query_params(qs, {"$top": "abc"})
 
     def test_apply_negative_top_value(self, test_model):
         """Negative $top value raises error."""
-        applier = QueryApplier()
         qs = test_model.objects.all()
         with pytest.raises(ODataInvalidPaginationError):
-            applier.apply(qs, {"$top": "-5"})
+            apply_odata_query_params(qs, {"$top": "-5"})
 
     def test_apply_invalid_skip_value(self, test_model):
         """Invalid $skip value raises error."""
-        applier = QueryApplier()
         qs = test_model.objects.all()
         with pytest.raises(ODataInvalidPaginationError):
-            applier.apply(qs, {"$skip": "abc"})
+            apply_odata_query_params(qs, {"$skip": "abc"})
 
     def test_apply_negative_skip_value(self, test_model):
         """Negative $skip value raises error."""
-        applier = QueryApplier()
         qs = test_model.objects.all()
         with pytest.raises(ODataInvalidPaginationError):
-            applier.apply(qs, {"$skip": "-5"})
+            apply_odata_query_params(qs, {"$skip": "-5"})
 
 
 @pytest.mark.django_db

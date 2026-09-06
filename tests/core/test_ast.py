@@ -177,6 +177,12 @@ class TestLiteralNodes:
         assert result.month == 1
         assert result.day == 15
 
+    def test_datetime_literal_high_precision_fraction(self):
+        """The lexer accepts 1-12 fractional digits; py_val must parse them (truncating to µs)."""
+        node = nodes.DateTime(val="2023-01-15T14:30:00.123456789012Z")
+        result = node.py_val
+        assert result == dt.datetime(2023, 1, 15, 14, 30, 0, 123456, tzinfo=dt.timezone.utc)
+
     def test_guid_literal(self):
         """Test GUID literal."""
         guid_str = "12345678-1234-1234-1234-123456789abc"

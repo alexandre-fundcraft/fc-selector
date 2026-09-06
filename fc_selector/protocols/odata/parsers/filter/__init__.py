@@ -36,9 +36,6 @@ from .exceptions import (
     ODataSyntaxError,
     ParsingException,
     TokenizingException,
-    TypeException,
-    UnsupportedFunctionException,
-    ValueException,
 )
 from .grammar import ODataLexer, ODataParser
 
@@ -107,7 +104,4 @@ __all__ = [
     "ODataSyntaxError",
     "TokenizingException",
     "ParsingException",
-    "UnsupportedFunctionException",
-    "TypeException",
-    "ValueException",
 ]

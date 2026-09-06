@@ -5,8 +5,6 @@ These exceptions are framework-agnostic and should not depend on external librar
 like Django or DRF. They represent domain-level errors.
 """
 
-from typing import Any
-
 
 class SelectorError(Exception):
     """Base class for all selector exceptions."""
@@ -78,29 +76,4 @@ class InvalidFieldError(QueryError):
         msg = f"Field '{field_name}' is not valid for model '{model_name}'"
         if reason:
             msg += f": {reason}"
-        super().__init__(msg)
-
-
-class InvalidSyntaxError(QueryError):
-    """Raised when a query has invalid syntax."""
-
-    def __init__(self, expression: str, reason: str | None = None):
-        self.expression = expression
-        self.reason = reason
-        msg = f"Invalid syntax in expression: {expression}"
-        if reason:
-            msg += f" ({reason})"
-        super().__init__(msg)
-
-
-class PaginationError(QueryError):
-    """Raised when pagination parameters are invalid."""
-
-    def __init__(self, parameter: str, value: Any, reason: str | None = None):
-        self.parameter = parameter
-        self.value = value
-        self.reason = reason
-        msg = f"Invalid pagination parameter '{parameter}': {value}"
-        if reason:
-            msg += f" ({reason})"
         super().__init__(msg)

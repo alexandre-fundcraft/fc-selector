@@ -62,7 +62,7 @@ class TestFilterComparisonOperators:
         query = parse_odata_query("$filter=status eq 'published'")
 
         assert query.filter is not None
-        assert query.filter.value == "status eq 'published'"
+        assert query.filter.expression == "status eq 'published'"
 
         # Validate AST
         assert query.filter.ast is not None
@@ -134,7 +134,7 @@ class TestFilterLogicalAnd:
         query = parse_odata_query("$filter=status eq 'published' and rating gt 4.0")
 
         assert query.filter is not None
-        assert "and" in query.filter.value
+        assert "and" in query.filter.expression
 
         # Validate AST
         assert query.filter.ast is not None
@@ -718,66 +718,66 @@ class TestFilterFunctions:
         query = parse_odata_query("$filter=startswith(title,'Introduction')")
 
         assert query.filter is not None
-        assert "startswith" in query.filter.value
-        assert "title" in query.filter.value
-        assert "Introduction" in query.filter.value
+        assert "startswith" in query.filter.expression
+        assert "title" in query.filter.expression
+        assert "Introduction" in query.filter.expression
 
     def test_endswith_function(self):
         """Test endswith string function."""
         query = parse_odata_query("$filter=endswith(email,'@gmail.com')")
 
         assert query.filter is not None
-        assert "endswith" in query.filter.value
-        assert "email" in query.filter.value
+        assert "endswith" in query.filter.expression
+        assert "email" in query.filter.expression
 
     def test_contains_function(self):
         """Test contains string function."""
         query = parse_odata_query("$filter=contains(title,'OData')")
 
         assert query.filter is not None
-        assert "contains" in query.filter.value
-        assert "OData" in query.filter.value
+        assert "contains" in query.filter.expression
+        assert "OData" in query.filter.expression
 
     def test_tolower_function(self):
         """Test tolower string function."""
         query = parse_odata_query("$filter=tolower(name) eq 'john'")
 
         assert query.filter is not None
-        assert "tolower" in query.filter.value
-        assert "name" in query.filter.value
+        assert "tolower" in query.filter.expression
+        assert "name" in query.filter.expression
 
     def test_toupper_function(self):
         """Test toupper string function."""
         query = parse_odata_query("$filter=toupper(status) eq 'PUBLISHED'")
 
         assert query.filter is not None
-        assert "toupper" in query.filter.value
+        assert "toupper" in query.filter.expression
 
     def test_function_with_and(self):
         """Test function combined with AND."""
         query = parse_odata_query("$filter=startswith(title,'Hello') and rating gt 4.0")
 
         assert query.filter is not None
-        assert "startswith" in query.filter.value
-        assert "and" in query.filter.value
-        assert "rating gt 4.0" in query.filter.value
+        assert "startswith" in query.filter.expression
+        assert "and" in query.filter.expression
+        assert "rating gt 4.0" in query.filter.expression
 
     def test_multiple_functions_with_or(self):
         """Test multiple functions combined with OR."""
         query = parse_odata_query("$filter=startswith(title,'Hello') or endswith(title,'World')")
 
         assert query.filter is not None
-        assert "startswith" in query.filter.value
-        assert "endswith" in query.filter.value
-        assert "or" in query.filter.value
+        assert "startswith" in query.filter.expression
+        assert "endswith" in query.filter.expression
+        assert "or" in query.filter.expression
 
     def test_function_with_navigation(self):
         """Test function on navigation path."""
         query = parse_odata_query("$filter=startswith(author/name,'John')")
 
         assert query.filter is not None
-        assert "startswith" in query.filter.value
-        assert "author/name" in query.filter.value
+        assert "startswith" in query.filter.expression
+        assert "author/name" in query.filter.expression
 
 
 class TestFilterDateFunctions:
@@ -788,39 +788,39 @@ class TestFilterDateFunctions:
         query = parse_odata_query("$filter=year(created_at) eq 2024")
 
         assert query.filter is not None
-        assert "year" in query.filter.value
-        assert "created_at" in query.filter.value
-        assert "2024" in query.filter.value
+        assert "year" in query.filter.expression
+        assert "created_at" in query.filter.expression
+        assert "2024" in query.filter.expression
 
     def test_month_function(self):
         """Test month date function."""
         query = parse_odata_query("$filter=month(created_at) eq 12")
 
         assert query.filter is not None
-        assert "month" in query.filter.value
+        assert "month" in query.filter.expression
 
     def test_day_function(self):
         """Test day date function."""
         query = parse_odata_query("$filter=day(created_at) eq 25")
 
         assert query.filter is not None
-        assert "day" in query.filter.value
+        assert "day" in query.filter.expression
 
     def test_hour_function(self):
         """Test hour time function."""
         query = parse_odata_query("$filter=hour(created_at) eq 14")
 
         assert query.filter is not None
-        assert "hour" in query.filter.value
+        assert "hour" in query.filter.expression
 
     def test_date_function_with_and(self):
         """Test date function combined with AND."""
         query = parse_odata_query("$filter=year(created_at) eq 2024 and month(created_at) eq 12")
 
         assert query.filter is not None
-        assert "year" in query.filter.value
-        assert "month" in query.filter.value
-        assert "and" in query.filter.value
+        assert "year" in query.filter.expression
+        assert "month" in query.filter.expression
+        assert "and" in query.filter.expression
 
 
 class TestFilterComplexExpressions:
@@ -835,10 +835,10 @@ class TestFilterComplexExpressions:
         )
 
         assert query.filter is not None
-        assert "status eq 'published'" in query.filter.value
-        assert "rating gt 4.0" in query.filter.value
-        assert "contains" in query.filter.value
-        assert "year" in query.filter.value
+        assert "status eq 'published'" in query.filter.expression
+        assert "rating gt 4.0" in query.filter.expression
+        assert "contains" in query.filter.expression
+        assert "year" in query.filter.expression
 
     def test_complex_expression_2(self):
         """Test complex expression with navigation and functions."""
@@ -848,9 +848,9 @@ class TestFilterComplexExpressions:
         )
 
         assert query.filter is not None
-        assert "author/user/is_active" in query.filter.value
-        assert "author/rating" in query.filter.value
-        assert "is_featured" in query.filter.value
+        assert "author/user/is_active" in query.filter.expression
+        assert "author/rating" in query.filter.expression
+        assert "is_featured" in query.filter.expression
 
     def test_complex_expression_3(self):
         """Test deeply nested complex expression."""
@@ -862,9 +862,9 @@ class TestFilterComplexExpressions:
         )
 
         assert query.filter is not None
-        assert query.filter.value.count("(") >= 4
-        assert query.filter.value.count("and") >= 3
-        assert query.filter.value.count("or") >= 2
+        assert query.filter.expression.count("(") >= 4
+        assert query.filter.expression.count("and") >= 3
+        assert query.filter.expression.count("or") >= 2
 
     def test_complex_expression_4(self):
         """Test complex expression with multiple navigation levels."""
@@ -876,9 +876,9 @@ class TestFilterComplexExpressions:
         )
 
         assert query.filter is not None
-        assert "post/author/user/is_active" in query.filter.value
-        assert "post/category/slug" in query.filter.value
-        assert "startswith" in query.filter.value
+        assert "post/author/user/is_active" in query.filter.expression
+        assert "post/category/slug" in query.filter.expression
+        assert "startswith" in query.filter.expression
 
     def test_complex_expression_5(self):
         """Test complex expression with all operator types."""
@@ -891,10 +891,10 @@ class TestFilterComplexExpressions:
         )
 
         assert query.filter is not None
-        assert "not" in query.filter.value
-        assert "contains" in query.filter.value
-        assert "author/user/profile/country" in query.filter.value
-        assert "year" in query.filter.value
+        assert "not" in query.filter.expression
+        assert "contains" in query.filter.expression
+        assert "author/user/profile/country" in query.filter.expression
+        assert "year" in query.filter.expression
 
 
 class TestFilterEdgeCases:
@@ -905,7 +905,7 @@ class TestFilterEdgeCases:
         query = parse_odata_query("$filter=title eq 'Hello World'")
 
         assert query.filter is not None
-        assert "Hello World" in query.filter.value
+        assert "Hello World" in query.filter.expression
 
     def test_filter_with_special_characters(self):
         """Test filter with special characters.
@@ -917,43 +917,43 @@ class TestFilterEdgeCases:
         query = parse_odata_query("$filter=email eq 'user%2Btag@example.com'")
 
         assert query.filter is not None
-        assert "user+tag@example.com" in query.filter.value
+        assert "user+tag@example.com" in query.filter.expression
 
     def test_filter_with_numbers_in_strings(self):
         """Test filter with numbers in string values."""
         query = parse_odata_query("$filter=code eq 'ABC123'")
 
         assert query.filter is not None
-        assert "ABC123" in query.filter.value
+        assert "ABC123" in query.filter.expression
 
     def test_filter_with_decimal_numbers(self):
         """Test filter with decimal numbers."""
         query = parse_odata_query("$filter=price eq 99.99")
 
         assert query.filter is not None
-        assert "99.99" in query.filter.value
+        assert "99.99" in query.filter.expression
 
     def test_filter_with_negative_numbers(self):
         """Test filter with negative numbers."""
         query = parse_odata_query("$filter=temperature lt -5")
 
         assert query.filter is not None
-        assert "-5" in query.filter.value
+        assert "-5" in query.filter.expression
 
     def test_filter_with_null(self):
         """Test filter with null value."""
         query = parse_odata_query("$filter=deleted_at eq null")
 
         assert query.filter is not None
-        assert "null" in query.filter.value
+        assert "null" in query.filter.expression
 
     def test_filter_with_extra_spaces(self):
         """Test filter with extra spaces (should be preserved)."""
         query = parse_odata_query("$filter=status  eq  'published'")
 
         assert query.filter is not None
-        assert "status" in query.filter.value
-        assert "published" in query.filter.value
+        assert "status" in query.filter.expression
+        assert "published" in query.filter.expression
 
 
 class TestFilterRealWorldScenarios:
@@ -964,18 +964,18 @@ class TestFilterRealWorldScenarios:
         query = parse_odata_query("$filter=status eq 'published' and rating ge 4.5 and views gt 1000")
 
         assert query.filter is not None
-        assert "status eq 'published'" in query.filter.value
-        assert "rating ge 4.5" in query.filter.value
-        assert "views gt 1000" in query.filter.value
+        assert "status eq 'published'" in query.filter.expression
+        assert "rating ge 4.5" in query.filter.expression
+        assert "views gt 1000" in query.filter.expression
 
     def test_ecommerce_price_range_in_stock(self):
         """Test e-commerce: products in price range and in stock."""
         query = parse_odata_query("$filter=price ge 10.00 and price le 100.00 and stock gt 0 and is_active eq true")
 
         assert query.filter is not None
-        assert "price ge 10.00" in query.filter.value
-        assert "price le 100.00" in query.filter.value
-        assert "stock gt 0" in query.filter.value
+        assert "price ge 10.00" in query.filter.expression
+        assert "price le 100.00" in query.filter.expression
+        assert "stock gt 0" in query.filter.expression
 
     def test_users_active_in_country(self):
         """Test users: active users in specific country."""
@@ -984,8 +984,8 @@ class TestFilterRealWorldScenarios:
         )
 
         assert query.filter is not None
-        assert "is_active eq true" in query.filter.value
-        assert "profile/country eq 'Spain'" in query.filter.value
+        assert "is_active eq true" in query.filter.expression
+        assert "profile/country eq 'Spain'" in query.filter.expression
 
     def test_search_title_or_content(self):
         """Test search: find posts by title or content."""
@@ -994,8 +994,8 @@ class TestFilterRealWorldScenarios:
         )
 
         assert query.filter is not None
-        assert "contains(title,'Python')" in query.filter.value
-        assert "contains(content,'Python')" in query.filter.value
+        assert "contains(title,'Python')" in query.filter.expression
+        assert "contains(content,'Python')" in query.filter.expression
 
     def test_moderation_queue(self):
         """Test moderation: posts awaiting review."""
@@ -1006,9 +1006,9 @@ class TestFilterRealWorldScenarios:
         )
 
         assert query.filter is not None
-        assert "status eq 'pending'" in query.filter.value
-        assert "status eq 'in_review'" in query.filter.value
-        assert "not" in query.filter.value
+        assert "status eq 'pending'" in query.filter.expression
+        assert "status eq 'in_review'" in query.filter.expression
+        assert "not" in query.filter.expression
 
     def test_trending_content(self):
         """Test trending: popular recent content."""
@@ -1020,9 +1020,9 @@ class TestFilterRealWorldScenarios:
         )
 
         assert query.filter is not None
-        assert "views gt 1000" in query.filter.value
-        assert "likes gt 100" in query.filter.value
-        assert "year(created_at) eq 2024" in query.filter.value
+        assert "views gt 1000" in query.filter.expression
+        assert "likes gt 100" in query.filter.expression
+        assert "year(created_at) eq 2024" in query.filter.expression
 
 
 # Run with: pytest tests/core/test_filter_comprehensive.py -v

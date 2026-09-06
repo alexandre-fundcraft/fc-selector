@@ -15,6 +15,8 @@ import operator
 import types
 from typing import Any, TypedDict, Union, get_args, get_origin
 
+from fc_selector.core.dtos.utils import is_dto_type
+
 # Track DTOs currently being generated to break circular references.
 _GENERATING: set[type] = set()
 
@@ -51,16 +53,11 @@ def generate_typeddict(dto_class: type) -> type:
 # ---------------------------------------------------------------------------
 
 
-def _is_dto_class(tp: Any) -> bool:
-    """Return True if *tp* is a concrete BaseODataDTO subclass."""
-    return isinstance(tp, type) and getattr(tp, "is_odata_dto", False)
-
-
 def _resolve_type(tp: Any) -> Any:
     """Swap DTO references inside a type annotation for their TypedDicts."""
-    # Direct DTO class → its TypedDict
-    if _is_dto_class(tp):
-        return tp.__td__
+    # Direct DTO class → its TypedDict (lazily built by the __td__ descriptor)
+    if isinstance(tp, type) and is_dto_type(tp):
+        return getattr(tp, "__td__", dict)
 
     origin = get_origin(tp)
     if origin is None:

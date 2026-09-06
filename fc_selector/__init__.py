@@ -1,64 +1,47 @@
 """
-Django OData - Framework-agnostic OData implementation for Django.
+FC Selector - DDD Selector/Query pattern for Django with OData query support.
 
-This package provides a clean, layered architecture for OData support:
+The package is layered so that only the last layer knows about Django:
 
-1. Core Layer (django_odata.core):
-   - Framework-agnostic AST, query parsing and filtering
-   - Reusable in FastAPI, Flask, or any Python framework
-   - NO Django dependencies
+1. Core (fc_selector.core):
+   - AST, QueryIntent, fluent filters, QueryBuilder and DTOs
+   - Framework-agnostic: importing it never loads Django
 
-2. Django Layer (django_odata.django):
-   - Django ORM-specific implementations
-   - Query application, optimization, and selector pattern
+2. Protocols (fc_selector.protocols):
+   - OData query language: parses query strings into a QueryIntent
+   - Framework-agnostic
 
-3. DRF Layer (django_odata.drf):
-   - Django REST Framework integration
-   - Mixins, viewsets, and serializers with OData support
-
-4. Utils Layer (django_odata.utils):
-   - Shared utilities and exceptions
+3. Django (fc_selector.django):
+   - Executes a QueryIntent on Django QuerySets, selector pattern,
+     DRF viewset mixin, DTO serializer and $metadata views
 
 Example Usage:
 
-    # Framework-agnostic AST (no Django required)
-    from django_odata.core.parsers.filter.ast import nodes, visitor
-    ast_node = nodes.Compare(comparator=nodes.Eq(), ...)
+    # Parse an OData query string (no Django required)
+    from fc_selector.protocols.odata import parse_odata_query
+    intent = parse_odata_query("$filter=status eq 'published'&$expand=author")
 
-    # Framework-agnostic query parsing
-    from django_odata.core.parsers.query import parse_odata_query
-    query = parse_odata_query("$filter=status eq 'published'&$expand=author")
-
-    # Django query application
-    from django_odata.django.query import apply_odata_query_params
-    queryset = apply_odata_query_params(BlogPost.objects.all(), query.to_dict())
-
-    # DRF viewset integration
-    from django_odata.drf.viewsets import ODataModelViewSet
-    class BlogPostViewSet(ODataModelViewSet):
-        queryset = BlogPost.objects.all()
-        serializer_class = BlogPostSerializer
+    # Build the same intent programmatically
+    from fc_selector.core import QueryBuilder
+    from fc_selector.core.filters import Field
+    intent = QueryBuilder().where(Field("status").eq("published")).expand("author").build()
 
     # Selector pattern
-    from django_odata.django.selector import ODataSelector
-    selector = ODataSelector(BlogPost)
-    posts = selector.query("$filter=status eq 'published'")
+    from fc_selector.django.selector import ODataSelector
+    class BlogPostSelector(ODataSelector):
+        class Meta:
+            model = BlogPost
+            dto_class = BlogPostDTO
+    posts = BlogPostSelector().query_as_dtos("$filter=status eq 'published'")
+
+    # DRF viewset integration
+    from fc_selector.django.drf.viewsets import ODataSelectorViewSetMixin
 
 Note:
-    This __init__.py intentionally does NOT import anything to keep the package
-    framework-agnostic. Import only what you need from submodules:
-    - django_odata.core.* (no Django required)
-    - django_odata.django.* (requires Django)
-    - django_odata.drf.* (requires Django REST Framework)
+    This __init__.py intentionally imports nothing, so that fc_selector.core and
+    fc_selector.protocols stay importable without Django installed.
 """
 
 __version__ = "1.0.1"
-
-# NO imports here! Keep the package framework-agnostic.
-# Users should import directly from submodules:
-#   from django_odata.core.parsers.filter.ast import nodes
-#   from django_odata.core.parsers.query import parse_odata_query
-#   from django_odata.django.query import apply_odata_query_params
-#   etc.
 
 __all__: list[str] = []

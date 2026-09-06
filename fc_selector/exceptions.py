@@ -96,70 +96,6 @@ class ODataFieldNotFoundError(ODataFilterError):
         )
 
 
-class ODataInvalidFilterSyntaxError(ODataFilterError):
-    """
-    Exception raised when filter expression has invalid syntax.
-    """
-
-    def __init__(
-        self,
-        filter_expression: str,
-        details: str = "",
-        original_exception: Exception | None = None,
-    ):
-        message = f"Invalid filter expression: {filter_expression}"
-        if details:
-            message += f" - {details}"
-
-        super().__init__(
-            message=message,
-            code="InvalidFilterSyntax",
-            target="$filter",
-            details={"expression": filter_expression, "syntax_error": details},
-            original_exception=original_exception,
-        )
-
-
-class ODataInvalidOperatorError(ODataFilterError):
-    """
-    Exception raised when an invalid operator is used in filter expression.
-    """
-
-    def __init__(
-        self,
-        operator: str,
-        filter_expression: str,
-        original_exception: Exception | None = None,
-    ):
-        valid_operators = [
-            "eq",
-            "ne",
-            "gt",
-            "ge",
-            "lt",
-            "le",
-            "and",
-            "or",
-            "not",
-            "contains",
-            "startswith",
-            "endswith",
-        ]
-        message = f"Unknown operator '{operator}'. Valid operators: {', '.join(valid_operators)}"
-
-        super().__init__(
-            message=message,
-            code="InvalidOperator",
-            target="$filter",
-            details={
-                "operator": operator,
-                "expression": filter_expression,
-                "valid_operators": valid_operators,
-            },
-            original_exception=original_exception,
-        )
-
-
 class ODataInvalidValueError(ODataFilterError):
     """
     Exception raised when a filter value doesn't match the expected type.
@@ -179,37 +115,6 @@ class ODataInvalidValueError(ODataFilterError):
             code="InvalidValue",
             target="$filter",
             details={"value": value, "expected_type": expected_type, "field": field},
-            original_exception=original_exception,
-        )
-
-
-class ODataExpandError(ODataFilterError):
-    """
-    Exception raised when $expand parameter contains invalid field references.
-    """
-
-    def __init__(
-        self,
-        field_name: str,
-        model_name: str,
-        valid_fields: list | None = None,
-        original_exception: Exception | None = None,
-    ):
-        if valid_fields:
-            choices_str = ", ".join(f"'{f}'" for f in valid_fields)
-            message = f"Invalid $expand field '{field_name}'. Valid expandable fields are: {choices_str}"
-        else:
-            message = f"Invalid $expand field '{field_name}'"
-
-        super().__init__(
-            message=message,
-            code="InvalidExpandField",
-            target="$expand",
-            details={
-                "field": field_name,
-                "entity": model_name,
-                "valid_choices": valid_fields or [],
-            },
             original_exception=original_exception,
         )
 

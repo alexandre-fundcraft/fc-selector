@@ -99,7 +99,7 @@ class TestSelectorGetOne:
         obj = ODataTestModel.objects.create(name="Test Object", count=10, created_at=timezone.now())
 
         selector = ODataTestSelector()
-        query = QueryBuilder.from_query_string("$select=id,name").and_filter(f"id eq {obj.id}")
+        query = QueryBuilder("$select=id,name").and_filter(f"id eq {obj.id}")
         dto = selector.get_one(query)
 
         assert dto is not None
@@ -318,7 +318,7 @@ class TestSelectorODataQueryIntegration:
 
         # Simulate: query_string comes from request, then we add id filter
         request_query_string = "$select=id,name,count"
-        query = QueryBuilder.from_query_string(request_query_string).and_filter(f"id eq {obj.id}")
+        query = QueryBuilder(request_query_string).and_filter(f"id eq {obj.id}")
 
         dto = selector.get_one(query)
 

@@ -242,7 +242,7 @@ HTTP Request with OData query
          ↓
 ViewSet method (list, retrieve, etc.)
          ↓
-QueryBuilder.from_query_string(query_string)
+QueryBuilder(query_string)
          ↓
 ODataSelector.get_one(query) / get_many(query)
          ↓
@@ -259,7 +259,7 @@ The new architecture follows hexagonal/clean architecture principles:
 
 ```python
 # Good - using QueryBuilder (pure OData, no ORM exposure)
-query = QueryBuilder.from_query_string(query_string).and_filter(f"id eq {pk}")
+query = QueryBuilder(query_string).and_filter(f"id eq {pk}")
 dto = selector.get_one(query)
 
 # Bad - exposing queryset (old pattern)
@@ -285,7 +285,7 @@ instance = queryset.filter(pk=pk).first()
 
 ## 📚 Additional Documentation
 
-- **ViewSets**: `blog/viewsets.py` - Complete implementation
+- **ViewSets**: `blog/viewsets_fluent.py` - Complete implementation
 - **DTOs**: `blog/selectors/blog_post.py` - Generated DTOs
 - **Serializers**: `blog/dto_serializers.py` - Customization
 - **URLs**: `example/urls.py` - OData metadata registration

@@ -411,15 +411,6 @@ class Field:
         """
         return self.ge(low) & self.le(high)
 
-    # === SQL-style Aliases ===
-
-    equals = eq
-    not_equals = ne
-    greater_than = gt
-    greater_than_or_equal = ge
-    less_than = lt
-    less_than_or_equal = le
-
     def __repr__(self) -> str:
         """Return string representation."""
         return f"Field('{self._name}')"

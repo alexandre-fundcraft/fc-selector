@@ -2,17 +2,17 @@
 Targeted tests to reach 100% coverage in fc_selector/django/drf/viewsets/selector_mixin.py
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
-from django.test import RequestFactory, override_settings
+from django.test import RequestFactory
 
 from fc_selector.core import exceptions as core_ex
 from fc_selector.django.drf.viewsets.selector_mixin import (
     ODataSelectorViewSetMixin,
     build_odata_response,
-    get_odata_openapi_parameters,
 )
+from fc_selector.exceptions import ODataInvalidPaginationError, ODataInvalidValueError
 
 
 @pytest.mark.django_db
@@ -68,42 +68,6 @@ class TestSelectorMixinCoverage:
         response = build_odata_response(request, [], "$top=abc&$skip=def", "posts")
         assert response["value"] == []
 
-    @override_settings(FC_SELECTOR_DEBUG_QUERIES=True, DEBUG=True)
-    def test_build_odata_response_debug_queries(self):
-        """Test debug queries inclusion."""
-        rf = RequestFactory()
-        request = rf.get("/odata/posts/")
-
-        mock_conn = MagicMock()
-        mock_conn.queries = [{"sql": "SELECT 1", "time": "0.001"}]
-        with patch("fc_selector.django.drf.viewsets.selector_mixin.connection", mock_conn):
-            response = build_odata_response(request, [], "", "posts")
-            assert "@debug" in response
-            assert response["@debug"]["query_count"] == 1
-
-    @override_settings(FC_SELECTOR_DEBUG_QUERIES=True, DEBUG=True)
-    def test_build_odata_response_debug_queries_truncated(self):
-        """Test SQL truncation in debug info."""
-        rf = RequestFactory()
-        request = rf.get("/odata/posts/")
-        long_sql = "SELECT " + ("x" * 1000)
-
-        mock_conn = MagicMock()
-        mock_conn.queries = [{"sql": long_sql, "time": "0.001"}]
-        with patch("fc_selector.django.drf.viewsets.selector_mixin.connection", mock_conn):
-            response = build_odata_response(request, [], "", "posts")
-            assert "... [truncated]" in response["@debug"]["queries"][0]["sql"]
-
-    @override_settings(FC_SELECTOR_DEBUG_QUERIES=True, DEBUG=False)
-    def test_build_odata_response_debug_queries_no_debug_mode(self):
-        """Warning when debug queries enabled but DEBUG is False."""
-        rf = RequestFactory()
-        request = rf.get("/odata/posts/")
-
-        with pytest.warns(UserWarning, match="is enabled but DEBUG is False"):
-            response = build_odata_response(request, [], "", "posts")
-            assert "@debug" not in response
-
     def test_viewset_mixin_get_selector_errors(self):
         """get_selector error cases."""
 
@@ -118,19 +82,6 @@ class TestSelectorMixinCoverage:
 
         with pytest.raises(TypeError):
             NotCallableViewSet().get_selector()
-
-    @patch("fc_selector.django.drf.viewsets.selector_mixin.HAS_SPECTACULAR", False)
-    def test_get_odata_openapi_parameters_no_spectacular(self):
-        """Return empty list when spectacular is missing."""
-        assert get_odata_openapi_parameters() == []
-
-    @patch("fc_selector.django.drf.viewsets.selector_mixin.HAS_SPECTACULAR", True)
-    def test_get_odata_openapi_parameters_with_spectacular(self):
-        """Return parameter list when spectacular is present."""
-        with patch("fc_selector.django.drf.viewsets.selector_mixin.OpenApiParameter") as mock_param:
-            params = get_odata_openapi_parameters()
-            assert len(params) > 0
-            assert mock_param.called
 
     def test_mixin_list_error_handling(self):
         """Coverage for exception mapping in list()."""
@@ -164,6 +115,30 @@ class TestSelectorMixinCoverage:
         mock_selector.query_as_dtos.side_effect = core_ex.QueryError("error")
         with pytest.raises(Exception):  # ODataFilterError
             viewset.list(request)
+
+    def test_invalid_value_error_mapping_depends_on_context(self):
+        """Only $top/$skip errors become pagination errors; other bad literals keep their meaning."""
+        rf = RequestFactory()
+        request = rf.get("/odata/posts/")
+        mock_selector = MagicMock()
+
+        class TestViewSet(ODataSelectorViewSetMixin):
+            def selector_class(self):
+                return mock_selector
+
+            odata_entity_set_name = "posts"
+
+        viewset = TestViewSet()
+
+        mock_selector.query_as_dtos.side_effect = core_ex.InvalidValueError("abc", "integer", "$skip")
+        with pytest.raises(ODataInvalidPaginationError) as exc_info:
+            viewset.list(request)
+        assert exc_info.value.target == "$skip"
+
+        mock_selector.query_as_dtos.side_effect = core_ex.InvalidValueError("2024-13-45", expected_type="DateTime")
+        with pytest.raises(ODataInvalidValueError) as exc_info:
+            viewset.list(request)
+        assert exc_info.value.details["expected_type"] == "DateTime"
 
     def test_mixin_retrieve_not_found(self):
         """Return 404 when get_one returns None."""
@@ -212,12 +187,3 @@ class TestSelectorMixinCoverage:
         mock_selector.get_one.side_effect = core_ex.QueryError("error")
         with pytest.raises(Exception):
             viewset.retrieve(request, pk=1)
-
-    def test_schema_decorators(self):
-        """Coverage for schema decorator methods."""
-
-        class TestViewSet(ODataSelectorViewSetMixin):
-            pass
-
-        assert callable(TestViewSet.get_list_schema_decorator())
-        assert callable(TestViewSet.get_retrieve_schema_decorator())

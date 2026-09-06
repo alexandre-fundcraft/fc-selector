@@ -9,7 +9,7 @@ Authors: Original odata-query authors
 Modified by: Alexandre Busquets (django-odata)
 
 Modifications:
-- Changed imports to use django_odata.core modules
+- Changed imports to use fc_selector.core modules
 - Removed unused functions (infer_type, infer_return_type)
 - Maintained MIT license and original credits
 """

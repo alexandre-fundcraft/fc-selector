@@ -6,18 +6,15 @@ Provides a clean selector interface for executing OData queries on Django models
 
 # pylint: disable=protected-access  # Django's _meta is part of the public API for model introspection
 
-import logging
 import re
-import time
 from typing import TYPE_CHECKING, Any, Literal, Optional, cast
+from urllib.parse import unquote_plus
 
 from django.db.models import QuerySet
 
 from fc_selector.core import exceptions as core_ex
 from fc_selector.core.query_builder import QueryBuilder
 from fc_selector.django.executor import DjangoExecutor
-
-logger = logging.getLogger(__name__)
 
 # Security: Valid field name pattern (alphanumeric + underscore only)
 _VALID_FIELD_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
@@ -160,16 +157,6 @@ class ODataSelector:
             return list(self.non_sortable_fields)
         return []
 
-    @staticmethod
-    def is_filterable() -> bool:
-        """Check if $filter is supported for this entity."""
-        return True
-
-    @staticmethod
-    def is_sortable() -> bool:
-        """Check if $orderby is supported for this entity."""
-        return True
-
     # ==================== Public API ====================
 
     def get_queryset(self) -> QuerySet:
@@ -200,6 +187,34 @@ class ODataSelector:
 
         return qs
 
+    def _parse(self, query_string: str) -> tuple[dict[str, str], "QueryIntent"]:
+        """Parse an OData query string into (raw params, QueryIntent).
+
+        Field aliases are resolved per field further down (executor, visitor and
+        hybrid builder all call ``resolve_field_alias``), so nothing is rewritten
+        in the raw query string here.
+        """
+        from fc_selector.protocols.odata.parsers.query import parse_odata_query, parse_query_params
+
+        # Security: Validate query string length to prevent DoS
+        if len(query_string) > MAX_QUERY_STRING_LENGTH:
+            raise core_ex.QueryError(
+                f"Query string too long ({len(query_string)} chars). Maximum allowed: {MAX_QUERY_STRING_LENGTH}"
+            )
+
+        params = parse_query_params(unquote_plus(query_string))
+        return params, parse_odata_query(params)
+
+    @staticmethod
+    def _dto_options(params: dict[str, str]) -> tuple[set[str] | None, dict]:
+        """Read the $select fields and raw $expand options the DTO layer needs."""
+        from fc_selector.protocols.odata.parsers.expand import parse_expand
+        from fc_selector.protocols.odata.parsers.select import parse_select
+
+        selected = set(parse_select(params["$select"])) if params.get("$select") else None
+        expand_options = parse_expand(params["$expand"]) if params.get("$expand") else {}
+        return selected, expand_options
+
     def query(
         self,
         query_string: str | None = None,
@@ -211,11 +226,7 @@ class ODataSelector:
         Uses the internal executor which has allowed_fields configured,
         enabling filtering on annotated fields.
         """
-        from fc_selector.protocols.odata.converters import odata_query_to_intent
-        from fc_selector.protocols.odata.parsers.query.parser import parse_odata_query
-
-        model = model_class or self.model
-        if not model:
+        if not (model_class or self.model):
             raise ValueError("model_class required")
 
         if base_queryset is None:
@@ -224,26 +235,7 @@ class ODataSelector:
         if not query_string:
             return base_queryset
 
-        # Security: Validate query string length to prevent DoS
-        if len(query_string) > MAX_QUERY_STRING_LENGTH:
-            raise core_ex.QueryError(
-                f"Query string too long ({len(query_string)} chars). Maximum allowed: {MAX_QUERY_STRING_LENGTH}"
-            )
-
-        # Resolve aliases in query string (OData specific logic)
-        resolved_qs = self._resolve_aliases_in_query_string(query_string)
-
-        # Parse OData query string to QueryIntent
-        odata_query = parse_odata_query(resolved_qs)
-        intent = odata_query_to_intent(odata_query)
-
-        # Ensure AST is populated for filters (lazy parsing handling)
-        if intent.filter and intent.filter.expression and not intent.filter.ast:
-            from fc_selector.protocols.odata.parsers.filter import parse_filter
-
-            intent.filter.ast = parse_filter(intent.filter.expression)
-
-        # Use internal executor which has allowed_fields configured
+        _, intent = self._parse(query_string)
         return self._executor.execute(base_queryset, intent)
 
     def execute(
@@ -282,11 +274,7 @@ class ODataSelector:
         return [self.to_dto(inst, selected_fields, expanded_fields, expand_options) for inst in instances]
 
     def query_as_dtos(self, query_string: str | None = None, model_class=None, base_queryset=None) -> list[Any]:
-        from fc_selector.protocols.odata.converters import odata_query_to_intent
-        from fc_selector.protocols.odata.parsers.query.parser import parse_odata_query
-
-        model = model_class or self.model
-        if not model:
+        if not (model_class or self.model):
             raise ValueError("model_class required")
 
         if base_queryset is None:
@@ -295,20 +283,7 @@ class ODataSelector:
         if not query_string:
             return self.to_dtos(base_queryset)
 
-        # Security: Validate query string length to prevent DoS
-        if len(query_string) > MAX_QUERY_STRING_LENGTH:
-            raise core_ex.QueryError(
-                f"Query string too long ({len(query_string)} chars). Maximum allowed: {MAX_QUERY_STRING_LENGTH}"
-            )
-
-        resolved_qs = self._resolve_aliases_in_query_string(query_string)
-        odata_query = parse_odata_query(resolved_qs)
-        intent = odata_query_to_intent(odata_query)
-
-        if intent.filter and intent.filter.expression and not intent.filter.ast:
-            from fc_selector.protocols.odata.parsers.filter import parse_filter
-
-            intent.filter.ast = parse_filter(intent.filter.expression)
+        params, intent = self._parse(query_string)
 
         if self.values_mode:
             hybrid = self._executor.try_hybrid(base_queryset, intent, self.dto_class)
@@ -317,10 +292,9 @@ class ODataSelector:
 
         # Standard path: convert model instances to DTOs
         queryset = self._executor.execute(base_queryset, intent)
-        selected_fields = set(odata_query.select.fields) if odata_query.select else None
-        expand_options = dict(odata_query.expand.nested_options) if odata_query.expand else {}
+        selected_fields, expand_options = self._dto_options(params)
 
-        return self.to_dtos(queryset, selected_fields, set(expand_options.keys()), expand_options)
+        return self.to_dtos(queryset, selected_fields, set(expand_options), expand_options)
 
     def query_as_dicts(
         self,
@@ -338,11 +312,7 @@ class ODataSelector:
         Returns:
             List of dicts.
         """
-        from fc_selector.protocols.odata.converters import odata_query_to_intent
-        from fc_selector.protocols.odata.parsers.query.parser import parse_odata_query
-
-        model = model_class or self.model
-        if not model:
+        if not (model_class or self.model):
             raise ValueError("model_class required")
 
         if base_queryset is None:
@@ -351,20 +321,7 @@ class ODataSelector:
         if not query_string:
             return list(base_queryset.values())
 
-        # Security: Validate query string length to prevent DoS
-        if len(query_string) > MAX_QUERY_STRING_LENGTH:
-            raise core_ex.QueryError(
-                f"Query string too long ({len(query_string)} chars). Maximum allowed: {MAX_QUERY_STRING_LENGTH}"
-            )
-
-        resolved_qs = self._resolve_aliases_in_query_string(query_string)
-        odata_query = parse_odata_query(resolved_qs)
-        intent = odata_query_to_intent(odata_query)
-
-        if intent.filter and intent.filter.expression and not intent.filter.ast:
-            from fc_selector.protocols.odata.parsers.filter import parse_filter
-
-            intent.filter.ast = parse_filter(intent.filter.expression)
+        _, intent = self._parse(query_string)
 
         if self.values_mode:
             hybrid = self._executor.try_hybrid(base_queryset, intent, self.dto_class, as_dicts=True)
@@ -375,142 +332,58 @@ class ODataSelector:
 
     # --- New Query Builder Methods ---
 
-    def get_many(self, query_builder: QueryBuilder | None = None) -> list[Any]:
-        t0 = time.perf_counter()
+    def _build_intent(self, query_builder: QueryBuilder | None) -> "QueryIntent":
+        """Build the intent for a builder, applying the selector's defaults."""
+        from fc_selector.core.intent import OrderField, OrderIntent, PaginationIntent
 
-        if query_builder is None:
-            query_builder = QueryBuilder()
+        intent = (query_builder or QueryBuilder()).build()
 
-        intent = query_builder.build()
-
-        # Apply default ordering if not specified
         if self.default_ordering and (not intent.orderby or not intent.orderby.has_ordering()):
-            from fc_selector.core.intent import OrderField, OrderIntent
+            intent.orderby = OrderIntent(
+                fields=[
+                    OrderField(
+                        field=field.lstrip("-"),
+                        direction=cast(Literal["asc", "desc"], "desc" if field.startswith("-") else "asc"),
+                    )
+                    for field in self.default_ordering
+                ]
+            )
 
-            order_fields = []
-            for field in self.default_ordering:
-                direction = cast(Literal["asc", "desc"], "desc" if field.startswith("-") else "asc")
-                field_name = field.lstrip("-")
-                order_fields.append(OrderField(field=field_name, direction=direction))
-            intent.orderby = OrderIntent(fields=order_fields)
-
-        # Apply default pagination if not specified
         if not intent.pagination or not intent.pagination.has_pagination():
-            from fc_selector.core.intent import PaginationIntent
-
             intent.pagination = PaginationIntent(limit=self.default_limit, offset=0)
         elif intent.pagination.limit and intent.pagination.limit > self.max_limit:
-            # Cap at max_limit
             intent.pagination.limit = self.max_limit
 
-        t1 = time.perf_counter()
+        return intent
 
-        # Try hybrid values path first
-        base_qs = self.get_queryset()
+    def get_many(self, query_builder: QueryBuilder | None = None) -> list[Any]:
+        """Execute a query and return results as DTOs."""
+        intent = self._build_intent(query_builder)
+
         if self.values_mode:
-            hybrid = self._executor.try_hybrid(base_qs, intent, self.dto_class)
-            t2 = time.perf_counter()
-
+            hybrid = self._executor.try_hybrid(self.get_queryset(), intent, self.dto_class)
             if hybrid is not None:
-                logger.debug(
-                    "[get_many] build_intent=%.3fs, hybrid_execute=%.3fs",
-                    t1 - t0,
-                    t2 - t1,
-                )
                 return hybrid
-        else:
-            t2 = t1
 
         # Standard path: evaluate queryset -> model instances -> DTOs
-        qs_str = query_builder.build_query_string()
-        from fc_selector.protocols.odata.parsers.query import parse_odata_query
-
-        qp = parse_odata_query(qs_str) if qs_str else None
-
-        sel = set(qp.select.fields) if qp and qp.select else None
-        opts = dict(qp.expand.nested_options) if qp and qp.expand else {}
-        t3 = time.perf_counter()
-
-        queryset = self.execute(intent)
-        t4 = time.perf_counter()
-
-        dtos = self.to_dtos(queryset, sel, set(opts.keys()), opts)
-        t5 = time.perf_counter()
-
-        logger.debug(
-            "[get_many] build_intent=%.3fs, execute=%.3fs, parse_opts=%.3fs, fetch_db=%.3fs, to_dtos=%.3fs",
-            t1 - t0,
-            t2 - t1,
-            t3 - t2,
-            t4 - t3,
-            t5 - t4,
-        )
-
-        return dtos
+        sel, opts = self._select_and_expand_options(query_builder)
+        return self.to_dtos(self.execute(intent), sel, set(opts.keys()), opts)
 
     def get_many_dicts(self, query_builder: QueryBuilder | None = None) -> list[dict]:
-        """Execute query and return results as plain dictionaries.
+        """Execute a query and return results as plain dictionaries."""
+        intent = self._build_intent(query_builder)
 
-        Args:
-            query_builder: Optional QueryBuilder with filter, select, orderby, etc.
-
-        Returns:
-            List of dicts.
-        """
-        t0 = time.perf_counter()
-
-        if query_builder is None:
-            query_builder = QueryBuilder()
-
-        intent = query_builder.build()
-
-        # Apply default ordering if not specified
-        if self.default_ordering and (not intent.orderby or not intent.orderby.has_ordering()):
-            from fc_selector.core.intent import OrderField, OrderIntent
-
-            order_fields = []
-            for field in self.default_ordering:
-                direction = cast(Literal["asc", "desc"], "desc" if field.startswith("-") else "asc")
-                field_name = field.lstrip("-")
-                order_fields.append(OrderField(field=field_name, direction=direction))
-            intent.orderby = OrderIntent(fields=order_fields)
-
-        # Apply default pagination if not specified
-        if not intent.pagination or not intent.pagination.has_pagination():
-            from fc_selector.core.intent import PaginationIntent
-
-            intent.pagination = PaginationIntent(limit=self.default_limit, offset=0)
-        elif intent.pagination.limit and intent.pagination.limit > self.max_limit:
-            intent.pagination.limit = self.max_limit
-
-        t1 = time.perf_counter()
-
-        base_qs = self.get_queryset()
         if self.values_mode:
-            hybrid = self._executor.try_hybrid(base_qs, intent, self.dto_class, as_dicts=True)
-            t2 = time.perf_counter()
-
+            hybrid = self._executor.try_hybrid(self.get_queryset(), intent, self.dto_class, as_dicts=True)
             if hybrid is not None:
-                logger.debug(
-                    "[get_many_dicts] build_intent=%.3fs, hybrid_execute=%.3fs",
-                    t1 - t0,
-                    t2 - t1,
-                )
                 return hybrid
-        else:
-            t2 = t1
 
-        results = list(self.execute(intent, use_values=True))
-        t3 = time.perf_counter()
+        return list(self.execute(intent, use_values=True))
 
-        logger.debug(
-            "[get_many_dicts] build_intent=%.3fs, execute=%.3fs, fetch_db=%.3fs",
-            t1 - t0,
-            t2 - t1,
-            t3 - t2,
-        )
-
-        return results
+    @staticmethod
+    def _select_and_expand_options(query_builder: QueryBuilder | None) -> tuple[set[str] | None, dict]:
+        """Read back $select fields and $expand options from a builder."""
+        return ODataSelector._dto_options(query_builder.to_dict() if query_builder else {})
 
     def get_one(self, query_builder: QueryBuilder) -> Any | None:
         intent = query_builder.build()
@@ -519,12 +392,7 @@ class ODataSelector:
         if not instance:
             return None
 
-        qs_str = query_builder.build_query_string()
-        from fc_selector.protocols.odata.parsers.query import parse_odata_query
-
-        qp = parse_odata_query(qs_str) if qs_str else None
-        sel = set(qp.select.fields) if qp and qp.select else None
-        opts = dict(qp.expand.nested_options) if qp and qp.expand else {}
+        sel, opts = self._select_and_expand_options(query_builder)
 
         return self.to_dto(instance, sel, set(opts.keys()), opts)
 
@@ -547,43 +415,3 @@ class ODataSelector:
         return exists
 
     # --- Alias Support (Private implementation needed by query()) ---
-
-    def _resolve_aliases_in_query_string(self, query_string: str) -> str:
-        if not query_string or not self.field_aliases:
-            return query_string
-        from urllib.parse import unquote_plus
-
-        query_string = unquote_plus(query_string)
-        params = {}
-        for param in query_string.split("&"):
-            if "=" in param:
-                k, v = param.split("=", 1)
-                if k == "$filter":
-                    v = self._resolve_aliases_in_filter(v)
-                elif k == "$select":
-                    v = self._resolve_aliases_in_select(v)
-                elif k == "$orderby":
-                    v = self._resolve_aliases_in_orderby(v)
-                params[k] = v
-        return "&".join(f"{k}={v}" for k, v in params.items())
-
-    def _resolve_aliases_in_filter(self, filter_value: str) -> str:
-        result = filter_value
-        for alias in sorted(self.field_aliases.keys(), key=len, reverse=True):
-            internal = self.field_aliases[alias]
-            pattern = r"\b" + re.escape(alias) + r"\b(?=(?:[^']*'[^']*')*[^']*$)"
-            result = re.sub(pattern, internal, result)
-        return result
-
-    def _resolve_aliases_in_select(self, val):
-        return ",".join([self.field_aliases.get(f.strip(), f.strip()) for f in val.split(",")])
-
-    def _resolve_aliases_in_orderby(self, val):
-        parts = []
-        for p in val.split(","):
-            tokens = p.split()
-            if tokens:
-                f = self.field_aliases.get(tokens[0], tokens[0])
-                direction = tokens[1] if len(tokens) > 1 else ""
-                parts.append(f"{f} {direction}".strip())
-        return ",".join(parts)

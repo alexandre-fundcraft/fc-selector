@@ -2,8 +2,6 @@
 Additional tests for fc_selector/django/visitors/filter_visitor.py to improve coverage.
 """
 
-from uuid import UUID
-
 import pytest
 from django.db.models import Expression, F, Value
 from django.db.models.lookups import Exact
@@ -79,21 +77,6 @@ class TestFilterVisitorCoverage:
         name = visitor._gen_annotation_name(expr)
         assert "invalid_name" in name
         assert "!" not in name
-
-    def test_fix_uuid_value(self, visitor):
-        """_fix_uuid should handle UUID values."""
-        uuid_val = UUID("550e8400-e29b-41d4-a716-446655440000")
-        node = Value(uuid_val)
-        result = visitor._fix_uuid(node)
-        assert result == uuid_val
-
-    def test_fix_uuid_list(self, visitor):
-        """_fix_uuid should handle lists of UUID values."""
-        uuid_val = UUID("550e8400-e29b-41d4-a716-446655440000")
-        node = [Value(uuid_val), "string"]
-        result = visitor._fix_uuid(node)
-        assert result[0] == uuid_val
-        assert result[1] == "string"
 
     def test_attempt_keywordify_literal(self, visitor):
         """_attempt_keywordify returns None for literals."""

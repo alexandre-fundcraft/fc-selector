@@ -17,8 +17,8 @@ Usage:
     # Execute with selector
     results = selector.execute(intent)
 
-For OData-specific converters, use:
-    from fc_selector.protocols.odata import odata_query_to_intent, intent_to_odata_query
+To build one from an OData query string, use:
+    from fc_selector.protocols.odata import parse_odata_query
 """
 
 from .models import (

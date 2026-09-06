@@ -65,7 +65,7 @@ class TestExpandIntent:
         """ExpandIntent with no relations is not active."""
         intent = ExpandIntent()
         assert not intent.has_relations()
-        assert intent.get_relation_names() == []
+        assert list(intent.relations) == []
 
     def test_expand_with_relations(self):
         """ExpandIntent with relations is active."""
@@ -76,7 +76,7 @@ class TestExpandIntent:
             }
         )
         assert intent.has_relations()
-        assert set(intent.get_relation_names()) == {"author", "category"}
+        assert set(intent.relations) == {"author", "category"}
 
     def test_nested_expand(self):
         """ExpandIntent supports nested QueryIntents."""
@@ -156,16 +156,22 @@ class TestQueryIntent:
     """Tests for QueryIntent model."""
 
     def test_empty_intent(self):
-        """Empty QueryIntent is_empty returns True."""
+        """A default QueryIntent carries no query options."""
         intent = QueryIntent()
-        assert intent.is_empty()
+        assert (intent.filter, intent.select, intent.expand, intent.orderby, intent.pagination) == (
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
 
     def test_intent_with_filter(self):
         """QueryIntent with filter is not empty (if filter is active)."""
         ast = Compare(Eq(), Identifier("status"), String("'active'"))
 
         intent = QueryIntent(filter=FilterIntent(expression="status eq 'active'", ast=ast))
-        assert not intent.is_empty()
+        assert intent.filter.has_filter()
 
     def test_intent_with_all_options(self):
         """QueryIntent with all options."""
@@ -176,35 +182,9 @@ class TestQueryIntent:
             orderby=OrderIntent.from_tuples([("created_at", "desc")]),
             pagination=PaginationIntent(limit=10),
         )
-        assert not intent.is_empty()
-        # Even if filter is inactive (no AST), other fields make it not empty
+        # Even if the filter is inactive (no AST), the other options are set
+        assert not intent.filter.has_filter()
         assert intent.select.fields == ["id", "name"]
         assert "author" in intent.expand.relations
         assert intent.orderby.fields[0].field == "created_at"
         assert intent.pagination.limit == 10
-
-    def test_merge_with(self):
-        """QueryIntent.merge_with combines two intents."""
-        ast1 = Compare(Eq(), Identifier("status"), String("'active'"))
-        ast2 = Compare(Eq(), Identifier("age"), String("'18'"))
-
-        intent1 = QueryIntent(
-            filter=FilterIntent(ast=ast1),
-            select=SelectIntent(fields=["id"]),
-        )
-        intent2 = QueryIntent(
-            filter=FilterIntent(ast=ast2),
-            pagination=PaginationIntent(limit=10),
-        )
-
-        merged = intent1.merge_with(intent2)
-
-        # Filters should be combined with AND
-        assert merged.filter is not None
-        assert merged.filter.ast is not None
-        # In a real merge logic, it would be an And node, but our mock might behave simply
-        # Checking if it has AST is enough for unit test of structure
-
-        # Other fields take second intent's value if present
-        assert merged.select.fields == ["id"]  # First intent's select
-        assert merged.pagination.limit == 10  # Second intent's pagination

@@ -18,8 +18,7 @@ class TestQueryBuilderBuild:
         builder = QueryBuilder()
         intent = builder.build()
 
-        assert isinstance(intent, QueryIntent)
-        assert intent.is_empty()
+        assert intent == QueryIntent()
 
     def test_build_with_filter(self):
         """Building query with filter."""
@@ -43,7 +42,7 @@ class TestQueryBuilderBuild:
         intent = builder.build()
 
         assert intent.expand is not None
-        assert set(intent.expand.get_relation_names()) == {"author", "category"}
+        assert set(intent.expand.relations) == {"author", "category"}
 
     def test_build_with_orderby(self):
         """Building query with orderby."""
@@ -190,33 +189,6 @@ class TestQueryBuilderOrWhere:
         assert isinstance(node.op, ast.Or)
 
 
-class TestQueryBuilderGetFilterAst:
-    """Tests for QueryBuilder.get_filter_ast() method."""
-
-    def test_get_filter_ast_from_where(self):
-        """get_filter_ast() returns AST from where()."""
-        builder = QueryBuilder().where(Field("x").eq(1))
-        ast_node = builder.get_filter_ast()
-
-        assert ast_node is not None
-        assert isinstance(ast_node, ast.Compare)
-
-    def test_get_filter_ast_from_string(self):
-        """get_filter_ast() parses string filter."""
-        builder = QueryBuilder().filter("x eq 1")
-        ast_node = builder.get_filter_ast()
-
-        assert ast_node is not None
-        assert isinstance(ast_node, ast.Compare)
-
-    def test_get_filter_ast_empty(self):
-        """get_filter_ast() returns None for empty filter."""
-        builder = QueryBuilder()
-        ast_node = builder.get_filter_ast()
-
-        assert ast_node is None
-
-
 class TestQueryBuilderMixedApi:
     """Tests for mixing string and fluent APIs."""
 
@@ -250,4 +222,4 @@ class TestQueryBuilderMixedApi:
 
         assert intent.filter.ast is not None
         assert intent.select.fields == ["id", "name", "email"]
-        assert set(intent.expand.get_relation_names()) == {"author", "posts"}
+        assert set(intent.expand.relations) == {"author", "posts"}

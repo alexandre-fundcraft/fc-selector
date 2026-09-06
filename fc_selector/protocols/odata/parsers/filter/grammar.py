@@ -11,7 +11,7 @@ Authors: Original odata-query authors
 Modified by: Alexandre Busquets (django-odata)
 
 Modifications:
-- Changed imports to use django_odata.core.ast
+- Changed imports to use fc_selector.core.ast
 - Maintained MIT license and original credits
 """
 
@@ -59,7 +59,6 @@ ODATA_FUNCTIONS = {
     "second": 1,
     "date": 1,
     "time": 1,
-    "totaloffsetminutes": 1,
     "now": 0,
     # Math functions
     "round": 1,
