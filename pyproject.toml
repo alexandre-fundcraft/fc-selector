@@ -22,15 +22,20 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 
-dependencies = [
+# Core (AST, QueryIntent, fluent filters, DTOs and the OData parser) needs no framework.
+dependencies = ["sly>=0.5"]
+
+[project.optional-dependencies]
+# Everything under fc_selector.django
+django = [
     "django>=4.2.20",  # Minimum version with security fixes (CVE-2026-1287, CVE-2026-1312)
     "djangorestframework>=3.12.0",
     "drf-spectacular>=0.29.0",
-    "sly>=0.5",
 ]
 
 [dependency-groups]
 dev = [
+    "fc-selector[django]",
     "pytest>=6.0",
     "pytest-cov>=2.0",
     "pytest-django>=4.0",
