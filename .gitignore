@@ -109,3 +109,6 @@ verify_imports.py
 CLAUDE.local.md
 .claude/commands/codacy.md
 .serena/
+
+# Keep completed OpenSpec changes versioned.
+!openspec/changes/archive/
