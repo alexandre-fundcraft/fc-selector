@@ -2,21 +2,35 @@
 
 ## Requirements
 
-- Python 3.11+
-- Django 4.2+
-- Django REST Framework 3.12+
+- Python 3.11+ and sly 0.5+ for the core and OData parser.
+- The `django` extra additionally requires Django 4.2.20+, Django REST Framework
+  3.12+ and drf-spectacular 0.29+.
 
 ## Install
 
-```bash
-pip install fc-selector
-```
-
-Or with uv:
+The package is not published to PyPI. Install from the repository:
 
 ```bash
-uv add fc-selector
+git clone https://github.com/alexandre-fundcraft/fc-selector.git
+cd fc-selector
+pip install -e ".[django]"
 ```
+
+### Without Django
+
+Install only the neutral core and OData parser:
+
+```bash
+pip install -e .
+```
+
+```python
+from fc_selector.protocols.odata import parse_odata_query
+intent = parse_odata_query("$filter=status eq 'published'&$top=10")
+```
+
+The base package does not install Django, DRF or drf-spectacular. Django adapter
+APIs require the `django` extra. SQLAlchemy is not implemented yet.
 
 ## Configuration
 
@@ -35,11 +49,8 @@ That's it! No additional configuration required.
 
 ## Optional: DRF Spectacular
 
-For automatic OpenAPI/Swagger documentation of OData parameters, install drf-spectacular:
-
-```bash
-pip install drf-spectacular
-```
+`drf-spectacular` is included in the `django` extra. To enable automatic
+OpenAPI/Swagger documentation of OData parameters:
 
 ```python
 # settings.py
@@ -65,8 +76,11 @@ cd fc-selector
 uv sync --group dev
 
 # Using pip
-pip install -e ".[dev]"
+pip install -e ".[django]"
 ```
+
+The `dev` dependency group supplies test/docs tooling and adapter requirements
+without a project self-dependency; use `uv sync --group dev` to run the suite.
 
 ## Verify Installation
 

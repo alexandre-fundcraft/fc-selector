@@ -22,15 +22,21 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
 ]
 
-dependencies = [
-    "django>=4.2.20",  # Minimum version with security fixes (CVE-2026-1287, CVE-2026-1312)
+# Core and OData parsing do not require an ORM.
+dependencies = ["sly>=0.5"]
+
+[project.optional-dependencies]
+django = [
+    "django>=4.2.20",
     "djangorestframework>=3.12.0",
     "drf-spectacular>=0.29.0",
-    "sly>=0.5",
 ]
 
 [dependency-groups]
 dev = [
+    "django>=4.2.20",
+    "djangorestframework>=3.12.0",
+    "drf-spectacular>=0.29.0",
     "pytest>=6.0",
     "pytest-cov>=2.0",
     "pytest-django>=4.0",

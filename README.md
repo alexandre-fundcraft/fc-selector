@@ -41,16 +41,18 @@ cd fc-selector
 uv sync --group dev
 
 # Using pip
-pip install -e .
+pip install -e ".[django]"
 ```
 
 ### Requirements
 
 - **Python** >= 3.11 (tested on 3.11, 3.12, 3.13)
-- **Django** >= 4.2.20
-- **djangorestframework** >= 3.12.0
-- **drf-spectacular** >= 0.29.0
 - **sly** >= 0.5
+
+The `django` extra additionally installs **Django >= 4.2.20**, **Django REST
+Framework >= 3.12.0** and **drf-spectacular >= 0.29.0**. For the standalone core
+and OData parser without these packages, use `pip install -e .` from the checkout.
+`uv sync --group dev` includes the adapter and test tools for contributors.
 
 ## Quick Start
 

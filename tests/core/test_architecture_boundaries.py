@@ -11,7 +11,7 @@ import pytest
     "blocked,body",
     [
         (
-            ("django", "sqlalchemy", "fc_selector.protocols"),
+            ("django", "rest_framework", "drf_spectacular", "sqlalchemy", "fc_selector.protocols"),
             """
 from dataclasses import dataclass
 from types import SimpleNamespace
@@ -35,14 +35,14 @@ assert Parent.from_object({'label': 'root', 'children': [{'name': 'child'}]}, pr
 """,
         ),
         (
-            ("django", "sqlalchemy"),
+            ("django", "rest_framework", "drf_spectacular", "sqlalchemy"),
             """
 from fc_selector.protocols.odata import parse_odata_query
 assert parse_odata_query('$filter=value gt 1&$expand=children($select=name)').expand is not None
 """,
         ),
         (
-            ("fc_selector.protocols", "rest_framework", "sqlalchemy"),
+            ("fc_selector.protocols", "rest_framework", "drf_spectacular", "sqlalchemy"),
             """
 from django.conf import settings
 settings.configure(INSTALLED_APPS=[], DATABASES={'default': {'ENGINE': 'django.db.backends.sqlite3', 'NAME': ':memory:'}})

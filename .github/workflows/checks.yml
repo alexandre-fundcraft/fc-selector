@@ -18,6 +18,12 @@ jobs:
         with:
           python-version: '3.11'
       - run: uv sync --frozen --group dev
+      - run: uv build --wheel
+      - name: Verify standalone wheel without adapter dependencies
+        run: |
+          for wheel in dist/*.whl; do
+            uv run --no-project --isolated --with "$wheel" python -I tests/test_core_without_django.py
+          done
       - run: make lint
       - run: uv run --frozen python -m mkdocs build --strict
   compatibility:
