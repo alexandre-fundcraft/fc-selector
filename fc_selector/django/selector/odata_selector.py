@@ -7,16 +7,16 @@ Provides a clean selector interface for executing OData queries on Django models
 # pylint: disable=protected-access  # Django's _meta is part of the public API for model introspection
 
 import re
-from copy import deepcopy
-from typing import TYPE_CHECKING, Any, Literal, Optional, cast
+from typing import TYPE_CHECKING, Any, Optional
 
 from django.db.models import QuerySet
 
 from fc_selector.core import exceptions as core_ex
-from fc_selector.core.intent.models import dto_options
+from fc_selector.core.intent.policies import collection_defaults
 from fc_selector.core.query_builder import QueryBuilder
 from fc_selector.django.executor import DjangoExecutor
 from fc_selector.django.utils import resolve_field_alias
+from fc_selector.protocols.odata.builder import dto_options
 
 # Security: Valid field name pattern (alphanumeric + underscore only)
 _VALID_FIELD_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
@@ -284,13 +284,14 @@ class ODataSelector:
         return self._materialize(intent, base_queryset)
 
     def _materialize(self, intent, queryset, *, as_dicts=False) -> list:
+        intent = self._executor.prepare(queryset, intent)
         if self.values_mode:
-            hybrid = self._executor.try_hybrid(queryset, intent, self.dto_class, as_dicts=as_dicts)
+            hybrid = self._executor._try_hybrid_prepared(queryset, intent, self.dto_class, as_dicts=as_dicts)
             if hybrid is not None:
                 return hybrid
         has_expand = intent.expand and intent.expand.has_relations()
         if as_dicts and not has_expand:
-            rows = list(self._executor.execute(queryset, intent, use_values=True))
+            rows = list(self._executor._execute_prepared(queryset, intent, use_values=True))
             if intent.select is not None:
                 return [
                     {
@@ -303,7 +304,7 @@ class ODataSelector:
                     for row in rows
                 ]
             return rows
-        queryset = self._executor.execute(queryset, intent)
+        queryset = self._executor._execute_prepared(queryset, intent)
         selected, options = dto_options(intent)
         dtos = self.to_dtos(queryset, selected, set(options), options)
         return [dto.to_dict() for dto in dtos] if as_dicts else dtos
@@ -339,33 +340,9 @@ class ODataSelector:
 
     def _apply_defaults(self, intent: "QueryIntent") -> "QueryIntent":
         """Bound materialized collections; low-level query/execute remain composable."""
-        from fc_selector.core.intent import OrderField, OrderIntent, PaginationIntent, SelectIntent
-
-        intent = deepcopy(intent)
-        if intent.select is not None and "*" in intent.select.fields:
-            intent.select = None
-        if intent.select is None and self.allowed_fields is not None:
-            intent.select = SelectIntent(fields=list(self.allowed_fields))
-        if self.default_ordering and (not intent.orderby or not intent.orderby.has_ordering()):
-            intent.orderby = OrderIntent(
-                fields=[
-                    OrderField(
-                        field=field.lstrip("-"),
-                        direction=cast(Literal["asc", "desc"], "desc" if field.startswith("-") else "asc"),
-                    )
-                    for field in self.default_ordering
-                ]
-            )
-
-        if intent.pagination is None:
-            intent.pagination = PaginationIntent()
-        limit = intent.pagination.limit
-        if limit is None:
-            limit = self.default_limit
-        if limit is not None:
-            intent.pagination.limit = min(limit, self.max_limit)
-
-        return intent
+        return collection_defaults(
+            intent, ordering=self.default_ordering, limit=self.default_limit, maximum=self.max_limit
+        )
 
     def get_many(self, query_builder: QueryBuilder | None = None) -> list[Any]:
         """Execute a query and return results as DTOs."""
@@ -377,7 +354,10 @@ class ODataSelector:
 
     def get_one(self, query_builder: QueryBuilder, base_queryset: QuerySet | None = None) -> Any | None:
         intent = query_builder.build()
-        queryset = self.execute(intent, base_queryset)
+        if base_queryset is None:
+            base_queryset = self.get_queryset()
+        intent = self._executor.prepare(base_queryset, intent)
+        queryset = self._executor._execute_prepared(base_queryset, intent)
         instance = queryset.first()
         if not instance:
             return None

@@ -1,20 +1,18 @@
 """
-Base DTO class with automatic model-to-DTO conversion.
+Base DTO with neutral object projection and legacy model conversion.
 
 This module provides BaseODataDTO which uses type introspection to automatically
-convert Django model instances to DTOs without hardcoding field names.
+project plain objects and mappings; ORM extraction belongs to adapters.
 """
 
-import logging
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from dataclasses import fields as dataclass_fields
-from functools import lru_cache
-from typing import Any, cast, get_type_hints
+from typing import Any, Self, cast, get_type_hints
 
 from fc_selector.core.dtos.typed_dicts import generate_typeddict
 from fc_selector.core.dtos.utils import dto_class_of, is_dto_type, is_many_relationship
-
-logger = logging.getLogger(__name__)
+from fc_selector.core.intent import QueryIntent
 
 
 # Sentinel for unselected fields
@@ -148,241 +146,81 @@ class BaseODataDTO:
         return relationships
 
     @classmethod
-    def _populate_regular_fields(
+    def from_object(
         cls,
-        data: dict,
-        instance,
-        fields_to_populate: set[str],
-        relationship_fields: set[str],
+        instance: Any,
+        intent: QueryIntent | None = None,
         field_mapping: dict[str, str] | None = None,
-    ) -> None:
-        """Populate non-relationship fields from the instance.
-
-        Args:
-            data: Dictionary to populate
-            instance: Model instance to read from
-            fields_to_populate: Set of DTO field names to populate
-            relationship_fields: Set of relationship field names (to skip)
-            field_mapping: Mapping from model field name to DTO field name
-                           (reverse of field_aliases, i.e. model_field -> dto_field)
-        """
-        # Create reverse mapping: dto_field -> model_field
-        dto_to_model = {}
-        if field_mapping:
-            dto_to_model = {v: k for k, v in field_mapping.items()}
-
-        for field_name in fields_to_populate - relationship_fields:
-            # Check if there's a mapping for this DTO field
-            model_field = dto_to_model.get(field_name, field_name)
-            value = instance
-            for part in model_field.replace(".", "__").split("__"):
-                if value is None:
-                    break
-                value = getattr(value, part, UNSET)
-                if value is UNSET:
-                    break
-            # Relation managers are not scalar DTO values.
-            if value is not UNSET and not callable(getattr(value, "all", None)):
-                data[field_name] = value
-
-    @classmethod
-    @lru_cache(maxsize=128)
-    def _parse_nested_expand_options(cls, expand_value: str) -> tuple[set[str], dict]:
-        """Parse nested $expand options into expanded fields and options dict."""
-        # Lazy import to avoid core-to-protocol dependency at module level
-        from fc_selector.protocols.odata.parsers.expand import parse_expand  # noqa: PLC0415
-
-        # parse_expand already handles plain comma lists and empty input ({} -> no relations),
-        # so there is nothing to fall back to.
-        options = parse_expand(expand_value)
-        return set(options), options
-
-    @classmethod
-    def _populate_many_relationship(
-        cls,
-        data: dict,
-        instance: Any,
-        field_name: str,
-        dto_class: type["BaseODataDTO"],
-        nested_selected: set[str] | None,
-        nested_expanded: set[str],
-        nested_options: dict,
+        *,
+        value_reader: Callable[[Any, str, bool | None], Any] | None = None,
         _depth: int = 0,
-    ) -> None:
-        """Populate a one-to-many relationship field.
+    ) -> Self:
+        """Project plain objects/mappings using neutral intents, without ORM access.
 
-        Checks for prefetch cache to avoid N+1 queries. If the relationship
-        was prefetched, uses the cached objects; otherwise falls back to
-        .all() with a warning.
+        Adapters can supply a value reader to resolve their own relations. Paths
+        use dots in the generic reader; framework lookup syntax stays in adapters.
         """
-        if hasattr(instance, field_name):
-            # Check if prefetch cache exists to avoid N+1 queries
-            prefetch_cache = getattr(instance, "_prefetched_objects_cache", {})
-            if hasattr(instance, f"_odata_{field_name}"):
-                related_objs = getattr(instance, f"_odata_{field_name}")
-            elif field_name in prefetch_cache:
-                # Use prefetched objects (no additional query)
-                related_objs = prefetch_cache[field_name]
+        if _depth > MAX_DTO_RECURSION_DEPTH:
+            raise RecursionLimitExceededError(_depth, cls.__name__)
+        intent = intent or QueryIntent()
+        reader = value_reader or read_value
+        selected = set(intent.select.fields) if intent.select is not None else None
+        relations = intent.expand.relations if intent.expand else {}
+        fields = cls._determine_fields_to_populate(cls._get_dto_fields(), selected, set(relations))
+        relationships = cls._get_relationship_info()
+        aliases = {v: k for k, v in (field_mapping or {}).items()}
+        data = {}
+        for name in fields:
+            if name not in relationships:
+                value = reader(instance, aliases.get(name, name), None)
+                if value is not UNSET:
+                    data[name] = value
+                continue
+            if name not in relations:
+                continue
+            info = relationships[name]
+            dto_class = info["dto_class"]
+            if dto_class is None or not hasattr(dto_class, "from_object"):
+                continue
+            value = reader(instance, name, info["is_many"])
+            if info["is_many"]:
+                data[name] = [
+                    dto_class.from_object(obj, relations[name], value_reader=reader, _depth=_depth + 1)
+                    for obj in ([] if value is UNSET or value is None else value)
+                ]
             else:
-                # Fallback: query the database (potential N+1)
-                related_manager = getattr(instance, field_name)
-                related_objs = list(related_manager.all())
-                logger.debug(
-                    "Potential N+1 query: '%s' not prefetched for %s. Consider using prefetch_related().",
-                    field_name,
-                    instance.__class__.__name__,
+                data[name] = (
+                    None
+                    if value is UNSET or value is None
+                    else dto_class.from_object(value, relations[name], value_reader=reader, _depth=_depth + 1)
                 )
-
-            data[field_name] = [
-                dto_class.from_model(obj, nested_selected, nested_expanded, nested_options, _depth=_depth + 1)
-                for obj in related_objs
-            ]
-        else:
-            data[field_name] = []
-
-    @classmethod
-    def _populate_single_relationship(
-        cls,
-        data: dict,
-        instance: Any,
-        field_name: str,
-        dto_class: type["BaseODataDTO"],
-        nested_selected: set[str] | None,
-        nested_expanded: set[str],
-        nested_options: dict,
-        _depth: int = 0,
-    ) -> None:
-        """Populate a one-to-one or foreign key relationship field."""
-        if hasattr(instance, f"_odata_{field_name}") or hasattr(instance, field_name):
-            related_obj = (
-                getattr(instance, f"_odata_{field_name}", None)
-                if hasattr(instance, f"_odata_{field_name}")
-                else getattr(instance, field_name)
-            )
-            if related_obj is not None:
-                data[field_name] = dto_class.from_model(
-                    related_obj, nested_selected, nested_expanded, nested_options, _depth=_depth + 1
-                )
-            else:
-                data[field_name] = None
-        else:
-            data[field_name] = None
+        return cls(**data)
 
     @classmethod
     def from_model(
         cls,
         instance,
-        selected_fields: set[str] | None = None,
-        expanded_fields: set[str] | None = None,
-        expand_options: dict | None = None,
-        field_mapping: dict[str, str] | None = None,
+        selected_fields=None,
+        expanded_fields=None,
+        expand_options=None,
+        field_mapping=None,
         *,
-        _depth: int = 0,
-    ) -> "BaseODataDTO":
-        """
-        Create DTO from model instance with automatic field selection.
+        _depth=0,
+    ) -> Self:
+        """Historical Django/OData facade. Use from_object for neutral projection."""
+        from fc_selector.compat import from_model  # noqa: PLC0415
 
-        Uses type introspection to automatically:
-        1. Detect which fields are relationships (DTOs)
-        2. Populate regular fields from model instance
-        3. Convert related objects to DTOs if expanded
-        4. Handle both one-to-one and one-to-many relationships
-        5. Apply nested $select to expanded relationships
+        return cast(
+            Self,
+            from_model(cls, instance, selected_fields, expanded_fields, expand_options, field_mapping, _depth=_depth),
+        )
 
-        Args:
-            instance: Django model instance to convert
-            selected_fields: Set of field names from $select, or None for all fields
-            expanded_fields: Set of relationship names from $expand
-            expand_options: Nested options for expanded fields (e.g., {'author': {'$select': 'name'}})
-            field_mapping: Mapping from model field name to DTO field name
-                           (reverse of field_aliases, i.e. model_field -> dto_field)
-            _depth: Internal parameter to track recursion depth (do not use directly)
+    @classmethod
+    def _parse_nested_expand_options(cls, expand_value: str) -> tuple[set[str], dict]:
+        """Legacy textual-options compatibility; never used by from_object."""
+        from fc_selector.compat import parse_nested_options  # noqa: PLC0415
 
-        Returns:
-            DTO instance with automatic field population
-
-        Raises:
-            RecursionLimitExceededError: If conversion exceeds MAX_DTO_RECURSION_DEPTH
-        """
-        # Security: Check recursion depth to prevent infinite loops
-        if _depth > MAX_DTO_RECURSION_DEPTH:
-            raise RecursionLimitExceededError(_depth, cls.__name__)
-
-        data: dict[str, Any] = {}
-        expanded_fields = expanded_fields or set()
-        expand_options = expand_options or {}
-
-        # Get all DTO fields defined in the dataclass (cached)
-        dto_fields = cls._get_dto_fields()
-
-        # Determine which fields to populate
-        fields_to_populate = cls._determine_fields_to_populate(dto_fields, selected_fields, expanded_fields)
-
-        # Get relationship info (cached - no per-instance introspection)
-        relationship_info = cls._get_relationship_info()
-        relationship_fields = set(relationship_info.keys())
-
-        # Populate regular (non-relationship) fields
-        cls._populate_regular_fields(data, instance, fields_to_populate, relationship_fields, field_mapping)
-
-        # Handle relationship fields
-        for field_name in fields_to_populate & relationship_fields:
-            if field_name not in expanded_fields:
-                continue
-
-            rel_info = relationship_info[field_name]
-            dto_class = rel_info["dto_class"]
-            is_many = rel_info["is_many"]
-
-            if dto_class is None or not hasattr(dto_class, "from_model"):
-                continue
-
-            dto_cls = cast(type["BaseODataDTO"], dto_class)
-
-            # Get nested options for this field
-            nested_opts = expand_options.get(field_name, {})
-
-            # Parse nested $select
-            nested_selected_fields = None
-            if "$select" in nested_opts:
-                value = nested_opts["$select"]
-                nested_selected_fields = {f.strip() for f in value.split(",")} if isinstance(value, str) else set(value)
-
-            # Parse nested $expand
-            nested_expanded_fields: set[str] = set()
-            nested_expand_options: dict = {}
-            if "$expand" in nested_opts:
-                value = nested_opts["$expand"]
-                if isinstance(value, dict):
-                    nested_expanded_fields, nested_expand_options = set(value), value
-                else:
-                    nested_expanded_fields, nested_expand_options = cls._parse_nested_expand_options(value)
-
-            # Populate the relationship (pass depth for recursion tracking)
-            if is_many:
-                cls._populate_many_relationship(
-                    data,
-                    instance,
-                    field_name,
-                    dto_cls,
-                    nested_selected_fields,
-                    nested_expanded_fields,
-                    nested_expand_options,
-                    _depth=_depth,
-                )
-            else:
-                cls._populate_single_relationship(
-                    data,
-                    instance,
-                    field_name,
-                    dto_cls,
-                    nested_selected_fields,
-                    nested_expanded_fields,
-                    nested_expand_options,
-                    _depth=_depth,
-                )
-
-        return cls(**data)
+        return cast(tuple[set[str], dict], parse_nested_options(expand_value))
 
     def to_dict(self) -> dict[str, Any]:
         """Convert DTO to a plain dictionary, recursively handling nested DTOs.
@@ -400,6 +238,16 @@ class BaseODataDTO:
                 continue
             result[field.name] = _to_dict_value(value)
         return result
+
+
+def read_value(instance: Any, path: str, many: bool | None = None) -> Any:
+    """Read a dotted path from plain objects or mappings without ORM conventions."""
+    value = instance
+    for part in path.split("."):
+        if value is None or value is UNSET:
+            return value
+        value = value.get(part, UNSET) if isinstance(value, Mapping) else getattr(value, part, UNSET)
+    return value
 
 
 def _to_dict_value(value: Any) -> Any:

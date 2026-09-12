@@ -9,7 +9,7 @@ canonical internal representation.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Literal, Sequence, cast
+from typing import TYPE_CHECKING, Literal, Sequence, cast
 
 if TYPE_CHECKING:
     from fc_selector.core.ast.nodes import Node
@@ -135,16 +135,7 @@ class QueryIntent:
 
 
 def dto_options(intent: QueryIntent) -> tuple[set[str] | None, dict]:
-    """Projection options for DTO conversion, without reparsing protocol strings."""
-    selected = set(intent.select.fields) if intent.select is not None else None
-    options = {}
-    if intent.expand:
-        for name, nested in intent.expand.relations.items():
-            nested_selected, nested_expand = dto_options(nested)
-            opts: dict[str, Any] = {}
-            if nested_selected is not None:
-                opts["$select"] = nested_selected
-            if nested_expand:
-                opts["$expand"] = nested_expand
-            options[name] = opts
-    return selected, options
+    """Historical OData projection-options export; use intents directly in core."""
+    from fc_selector.compat import dto_options as export  # noqa: PLC0415
+
+    return cast(tuple[set[str] | None, dict], export(intent))

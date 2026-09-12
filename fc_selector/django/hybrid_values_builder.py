@@ -20,8 +20,6 @@ from django.db.models import QuerySet
 from fc_selector.core.dtos.base import MAX_DTO_RECURSION_DEPTH, UNSET, BaseODataDTO
 from fc_selector.core.dtos.utils import get_dto_fields
 from fc_selector.core.intent import QueryIntent
-from fc_selector.core.intent.models import dto_options
-from fc_selector.core.utils import odata_path_to_django
 from fc_selector.django.executor import DjangoExecutor, apply_pagination, get_expand_config
 from fc_selector.django.utils import (
     get_field_safe,
@@ -31,6 +29,7 @@ from fc_selector.django.utils import (
     is_m2m_relation,
     resolve_field_alias,
 )
+from fc_selector.django.utils.paths import odata_path_to_django
 from fc_selector.django.visitors import AstToDjangoQVisitor
 
 logger = logging.getLogger(__name__)
@@ -87,22 +86,13 @@ class HybridValuesBuilder:
         Returns:
             List of DTOs (default) or list of dicts (``as_dicts=True``).
         """
+        executor = DjangoExecutor(field_aliases=self.field_aliases, expandable_fields=self.expandable_fields)
+        return executor.materialize(queryset, intent, dto_class, as_dicts=as_dicts)
+
+    def _execute_prepared(self, queryset, intent, dto_class, *, as_dicts=False) -> list:
+        """Build values only; eligibility, policy and fallback belong to the executor."""
         model = queryset.model
         self._identities.clear()
-        executor = DjangoExecutor(field_aliases=self.field_aliases, expandable_fields=self.expandable_fields)
-        executor._validate_intent(queryset, intent)
-        if not executor._hybrid_supported(model, intent, dto_class):
-            selected, options = dto_options(intent)
-            # A legacy DTO can use model names while the API uses aliases.
-            if selected is not None:
-                dto_fields = set(get_dto_fields(dto_class))
-                selected = {name if name in dto_fields else self.field_aliases.get(name, name) for name in selected}
-            mapping = {value: key for key, value in self.field_aliases.items()}
-            result = [
-                dto_class.from_model(row, selected, set(options), options, field_mapping=mapping)
-                for row in executor.execute(queryset, intent)
-            ]
-            return [dto.to_dict() for dto in result] if as_dicts else result
 
         forward_relations: dict[str, QueryIntent] = {}
         reverse_fk_relations: dict[str, QueryIntent] = {}

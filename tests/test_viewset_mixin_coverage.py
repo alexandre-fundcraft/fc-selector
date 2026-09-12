@@ -143,13 +143,13 @@ class TestSelectorMixinCoverage:
         assert exc_info.value.details["expected_type"] == "DateTime"
 
     def test_mixin_retrieve_not_found(self):
-        """Return 404 when get_one returns None."""
+        """Return 404 when the prepared identity query has no matching model."""
         rf = RequestFactory()
         request = rf.get("/odata/posts/1/")
 
         mock_selector = MagicMock()
         mock_selector._parse.return_value = ({}, QueryIntent())
-        mock_selector.execute.return_value.first.return_value = None
+        mock_selector._executor._execute_prepared.return_value.first.return_value = None
 
         class TestViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
             def selector_class(self):

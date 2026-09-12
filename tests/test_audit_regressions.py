@@ -26,20 +26,20 @@ from fc_selector.django.hybrid_values_builder import HybridValuesBuilder
 from fc_selector.django.selector import ODataSelector
 from fc_selector.django.views.metadata import ODataMetadataRegistry, ODataMetadataView
 from fc_selector.protocols.odata.parsers.query import parse_odata_query
-from tests.integration.support.models import (
-    ODataChildModel,
-    ODataFKTarget,
-    ODataM2MTarget,
-    ODataModelWithFK,
-    ODataModelWithRelations,
-)
-from tests.test_hybrid_values_builder import (
+from tests.integration.support.dtos import (
     ChildDTO,
     FKSelector,
     FKTargetDTO,
     M2MTargetDTO,
     ModelWithFKDTO,
     ParentWithRelationsDTO,
+)
+from tests.integration.support.models import (
+    ODataChildModel,
+    ODataFKTarget,
+    ODataM2MTarget,
+    ODataModelWithFK,
+    ODataModelWithRelations,
 )
 
 pytestmark = pytest.mark.django_db

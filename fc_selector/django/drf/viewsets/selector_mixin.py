@@ -11,13 +11,13 @@ from rest_framework import status
 from rest_framework.response import Response
 
 from fc_selector.core import exceptions as core_ex
-from fc_selector.core.intent.models import dto_options
 from fc_selector.exceptions import (
     ODataFieldNotFoundError,
     ODataFilterError,
     ODataInvalidPaginationError,
     ODataInvalidValueError,
 )
+from fc_selector.protocols.odata.builder import dto_options
 from fc_selector.protocols.odata.parsers.query import MAX_SKIP_VALUE, MAX_TOP_VALUE, parse_query_params
 
 DEFAULT_PAGE_SIZE = 50
@@ -184,9 +184,9 @@ class ODataSelectorViewSetMixin:
             lookup = pk_field.to_python(pk)
             queryset = queryset.filter(pk=lookup)
             # Validate client pagination but never let it change identity lookup.
-            selector._executor._validate_intent(queryset, intent)
+            intent = selector._executor.prepare(queryset, intent)
             intent.pagination = None
-            instance = selector.execute(intent, queryset).first()
+            instance = selector._executor._execute_prepared(queryset, intent).first()
             if instance is None:
                 return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
             self.check_object_permissions(request, instance)

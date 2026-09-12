@@ -27,6 +27,8 @@ This mode is enabled by default (`values_mode=True`) for supported DTO expansion
 - **Security**: Field validation, private field blocking, query length limits, automatic password exclusion
 - **Explicit DTOs**: Define dataclasses and selectors directly; no code-generation command is bundled.
 
+See [compatibility verification](docs/installation.md#compatibility-verification) for the explicit Python/Django matrix and verified database scope.
+
 ## Installation
 
 This package is not published to PyPI. Install directly from the repository:
@@ -45,7 +47,7 @@ pip install -e .
 ### Requirements
 
 - **Python** >= 3.11 (tested on 3.11, 3.12, 3.13)
-- **Django** >= 4.2
+- **Django** >= 4.2.20
 - **djangorestframework** >= 3.12.0
 - **drf-spectacular** >= 0.29.0
 - **sly** >= 0.5

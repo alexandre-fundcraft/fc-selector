@@ -6,6 +6,9 @@ field name validation and parsing.
 """
 
 
+from typing import cast
+
+
 def is_private_field(field_name: str) -> bool:
     """
     Check if a field name refers to a private/internal field.
@@ -48,24 +51,7 @@ def get_base_field(field_path: str, separator: str = "__") -> str:
 
 
 def odata_path_to_django(odata_path: str) -> str:
-    """
-    Convert an OData-style path to Django ORM notation.
+    """Legacy import path; implementation belongs to the Django adapter."""
+    from fc_selector.compat import odata_path_to_django as convert  # noqa: PLC0415
 
-    OData uses '/' for path navigation, but internally this library
-    may also use '.' in some contexts. Both are converted to Django's '__'.
-
-    Args:
-        odata_path: OData field path (e.g., 'author/name', 'author.name').
-
-    Returns:
-        Django-style field path (e.g., 'author__name').
-
-    Examples:
-        >>> odata_path_to_django("author/name")
-        'author__name'
-        >>> odata_path_to_django("author.name")
-        'author__name'
-        >>> odata_path_to_django("simple_field")
-        'simple_field'
-    """
-    return odata_path.replace("/", "__").replace(".", "__")
+    return cast(str, convert(odata_path))

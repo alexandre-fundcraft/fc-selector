@@ -19,11 +19,10 @@ from django.db.models.expressions import Expression
 from fc_selector.core import ast
 from fc_selector.core import exceptions as core_ex
 from fc_selector.core.ast import visitor
-from fc_selector.core.utils import get_base_field, is_private_field, odata_path_to_django
+from fc_selector.core.ast.rewrite import expression_relative_to_identifier
+from fc_selector.core.utils import get_base_field, is_private_field
 from fc_selector.django.utils import get_field_safe, resolve_field_alias
-
-# We still use utils from parsers to manipulate AST nodes (should be moved to core later)
-from fc_selector.protocols.odata.parsers.filter import utils
+from fc_selector.django.utils.paths import odata_path_to_django
 
 from .django_q_ext import NotEqual
 from .utils import reverse_relationship
@@ -290,7 +289,7 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
         if node.lambda_:
             # For the lambda, we want to strip the identifier off, because
             # we will execute this as a subquery in the wanted model's context.
-            subq_ast = utils.expression_relative_to_identifier(node.lambda_.identifier, node.lambda_.expression)
+            subq_ast = expression_relative_to_identifier(node.lambda_.identifier, node.lambda_.expression)
             subq_transformer = self.__class__(related_model)
             subquery_filter = subq_transformer.visit(subq_ast)
         else:

@@ -7,6 +7,7 @@ Centralizes the execution of protocol-agnostic QueryIntents on Django QuerySets.
 # pylint: disable=protected-access  # Django's _meta is part of the public API for model introspection
 
 import logging
+from copy import deepcopy
 from functools import lru_cache
 from typing import Any
 
@@ -15,13 +16,15 @@ from django.db.models import Prefetch, QuerySet
 
 from fc_selector.core import exceptions as core_ex
 from fc_selector.core.dtos.utils import get_dto_fields
-from fc_selector.core.intent import ExpandIntent, QueryIntent, SelectIntent
-from fc_selector.core.utils import get_base_field, is_private_field, odata_path_to_django
+from fc_selector.core.intent import ExpandIntent, QueryIntent
+from fc_selector.core.intent.policies import selection_for_policy
+from fc_selector.core.utils import get_base_field, is_private_field
 from fc_selector.django.utils import (
     get_field_safe,
     is_forward_relation,
     resolve_field_alias,
 )
+from fc_selector.django.utils.paths import odata_path_to_django
 from fc_selector.django.visitors import AstToDjangoQVisitor
 
 logger = logging.getLogger(__name__)
@@ -129,8 +132,12 @@ class DjangoExecutor:
         Returns:
             List of DTOs/dicts if hybrid mode applies, None otherwise.
         """
-        if intent:
-            self._validate_intent(queryset, intent)
+        if not intent:
+            return None
+        return self._try_hybrid_prepared(queryset, self.prepare(queryset, intent), dto_class, as_dicts=as_dicts)
+
+    def _try_hybrid_prepared(self, queryset, intent, dto_class, *, as_dicts=False) -> list | None:
+        """Choose the optimized path once, after preparation at the boundary."""
         if not dto_class or not intent or not intent.expand or not intent.expand.has_relations():
             return None
 
@@ -152,7 +159,7 @@ class DjangoExecutor:
         )
         queryset = self._apply_filter(queryset, intent)
         queryset = self._apply_ordering(queryset, intent)
-        return builder.execute(queryset, intent, dto_class, as_dicts=as_dicts)
+        return builder._execute_prepared(queryset, intent, dto_class, as_dicts=as_dicts)
 
     def execute(
         self,
@@ -180,8 +187,10 @@ class DjangoExecutor:
         if not intent:
             return queryset
 
-        self._validate_intent(queryset, intent)
+        return self._execute_prepared(queryset, self.prepare(queryset, intent), use_values=use_values)
 
+    def _execute_prepared(self, queryset, intent, *, use_values=False):
+        """Execute a private, prepared intent; also used by nested prefetch."""
         # Check if values mode is possible (no expand relations)
         can_use_values = use_values and (not intent.expand or not intent.expand.has_relations())
 
@@ -233,6 +242,43 @@ class DjangoExecutor:
                     return False
         return True
 
+    def prepare(self, queryset: QuerySet, intent: QueryIntent) -> QueryIntent:
+        """Return a normalized, validated copy; never mutate caller-owned state."""
+        prepared = deepcopy(intent)
+        self._normalize_projection(prepared)
+        self._validate_intent(queryset, prepared)
+        return prepared
+
+    def _normalize_projection(self, intent, depth=0):
+        if depth > 10:
+            raise core_ex.QueryError("Maximum expansion depth exceeded")
+        intent.select = selection_for_policy(intent.select, self.allowed_fields)
+        if intent.expand:
+            for name, nested in intent.expand.relations.items():
+                self._nested_executor(name)._normalize_projection(nested, depth + 1)
+
+    def materialize(self, queryset, intent, dto_class, *, as_dicts=False) -> list:
+        """Compatibility entry point for direct hybrid-builder callers."""
+        from fc_selector.core.intent import SelectIntent
+        from fc_selector.django.projection import read_model_value
+
+        intent = self.prepare(queryset, intent)
+        hybrid = self._try_hybrid_prepared(queryset, intent, dto_class, as_dicts=as_dicts)
+        if hybrid is not None:
+            return hybrid
+        selected = set(intent.select.fields) if intent.select is not None else None
+        if selected is not None:
+            dto_fields = set(get_dto_fields(dto_class))
+            selected = {name if name in dto_fields else self.field_aliases.get(name, name) for name in selected}
+        if selected is not None:
+            intent.select = SelectIntent(list(selected))
+        mapping = {value: key for key, value in self.field_aliases.items()}
+        result = [
+            dto_class.from_object(row, intent, mapping, value_reader=read_model_value)
+            for row in self._execute_prepared(queryset, intent)
+        ]
+        return [dto.to_dict() for dto in result] if as_dicts else result
+
     def _validate_intent(self, queryset, intent, depth=0):
         if depth > 10:
             raise core_ex.QueryError("Maximum expansion depth exceeded")
@@ -241,10 +287,6 @@ class DjangoExecutor:
                 maximum = 10000 if name == "$top" else 1000000
                 if value is not None and (type(value) is not int or not 0 <= value <= maximum):
                     raise core_ex.InvalidValueError(value, f"integer between 0 and {maximum}", name)
-        if intent.select is not None and "*" in intent.select.fields:
-            intent.select = None
-        if intent.select is None and self.allowed_fields is not None:
-            intent.select = SelectIntent(fields=list(self.allowed_fields))
         model = queryset.model
         validator = AstToDjangoQVisitor(
             model,
@@ -661,7 +703,7 @@ class DjangoExecutor:
 
         # Recursive execution
         nested_executor = self._nested_executor(relation_name)
-        optimized_nested_qs = nested_executor.execute(nested_queryset, nested_intent)
+        optimized_nested_qs = nested_executor._execute_prepared(nested_queryset, nested_intent)
         # Reverse prefetch groups on this connector; never defer it.
         if field and getattr(field, "one_to_many", False) and optimized_nested_qs.query.deferred_loading[0]:
             fields = optimized_nested_qs.query.deferred_loading[0]

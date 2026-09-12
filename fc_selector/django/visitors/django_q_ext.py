@@ -24,5 +24,5 @@ class NotEqual(Lookup):
     def as_sql(self, compiler, connection):  # type: ignore
         lhs, lhs_params = self.process_lhs(compiler, connection)
         rhs, rhs_params = self.process_rhs(compiler, connection)
-        params = lhs_params + rhs_params
+        params = [*lhs_params, *rhs_params]
         return f"{lhs} <> {rhs}", params
