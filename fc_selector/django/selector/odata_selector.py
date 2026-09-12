@@ -265,8 +265,12 @@ class ODataSelector:
         if selected_fields is None and self.allowed_fields is not None:
             selected_fields = set(self.allowed_fields)
         # Pass reverse aliases for field mapping (model_field -> dto_field)
-        return self.dto_class.from_model(
-            instance, selected_fields, expanded_fields, expand_options, field_mapping=self._reverse_aliases
+        from fc_selector.django.projection import read_model_value
+        from fc_selector.protocols.odata.builder import projection_intent
+
+        intent = projection_intent(selected_fields, expanded_fields, expand_options)
+        return self.dto_class.from_object(
+            instance, intent, value_reader=read_model_value, **self._executor.projection_mappings(intent)
         )
 
     def to_dtos(self, instances, selected_fields=None, expanded_fields=None, expand_options=None) -> list[Any]:
@@ -290,7 +294,11 @@ class ODataSelector:
             if hybrid is not None:
                 return hybrid
         has_expand = intent.expand and intent.expand.has_relations()
-        if as_dicts and not has_expand:
+        has_properties = self.dto_class and any(
+            isinstance(getattr(queryset.model, resolve_field_alias(name, self.field_aliases), None), property)
+            for name in (intent.select.fields if intent.select else self.dto_class._get_dto_fields())
+        )
+        if as_dicts and not has_expand and not has_properties:
             rows = list(self._executor._execute_prepared(queryset, intent, use_values=True))
             if intent.select is not None:
                 return [

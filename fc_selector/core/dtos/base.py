@@ -153,12 +153,15 @@ class BaseODataDTO:
         field_mapping: dict[str, str] | None = None,
         *,
         value_reader: Callable[[Any, str, bool | None], Any] | None = None,
+        nested_mappings: dict[str, Any] | None = None,
         _depth: int = 0,
     ) -> Self:
         """Project plain objects/mappings using neutral intents, without ORM access.
 
         Adapters can supply a value reader to resolve their own relations. Paths
         use dots in the generic reader; framework lookup syntax stays in adapters.
+        ``nested_mappings`` maps relation names to child ``field_mapping`` and
+        ``nested_mappings`` options, keeping aliases scoped to each expansion.
         """
         if _depth > MAX_DTO_RECURSION_DEPTH:
             raise RecursionLimitExceededError(_depth, cls.__name__)
@@ -166,6 +169,7 @@ class BaseODataDTO:
         reader = value_reader or read_value
         selected = set(intent.select.fields) if intent.select is not None else None
         relations = intent.expand.relations if intent.expand else {}
+        nested_mappings = nested_mappings or {}
         fields = cls._determine_fields_to_populate(cls._get_dto_fields(), selected, set(relations))
         relationships = cls._get_relationship_info()
         aliases = {v: k for k, v in (field_mapping or {}).items()}
@@ -185,14 +189,18 @@ class BaseODataDTO:
             value = reader(instance, name, info["is_many"])
             if info["is_many"]:
                 data[name] = [
-                    dto_class.from_object(obj, relations[name], value_reader=reader, _depth=_depth + 1)
+                    dto_class.from_object(
+                        obj, relations[name], value_reader=reader, _depth=_depth + 1, **nested_mappings.get(name, {})
+                    )
                     for obj in ([] if value is UNSET or value is None else value)
                 ]
             else:
                 data[name] = (
                     None
                     if value is UNSET or value is None
-                    else dto_class.from_object(value, relations[name], value_reader=reader, _depth=_depth + 1)
+                    else dto_class.from_object(
+                        value, relations[name], value_reader=reader, _depth=_depth + 1, **nested_mappings.get(name, {})
+                    )
                 )
         return cls(**data)
 

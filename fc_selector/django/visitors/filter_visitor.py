@@ -91,8 +91,8 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
 
         ``allowed_fields`` holds API-facing names, so it is checked before alias
         resolution. When it is set, the field may be a queryset annotation rather
-        than a model field, so no existence check is done. Paths ("a__b") are left
-        to Django's join machinery.
+        than a model field, so single names retain that compatibility. Multi-segment
+        paths are checked through each relation and terminal field.
         """
         resolved = resolve_field_alias(field_name, self.field_aliases)
 
@@ -118,17 +118,25 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
                 raise core_ex.InvalidFieldError(
                     field_name, self.root_model.__name__, reason="field is not in allowed fields list"
                 )
-            return resolve_field_alias(field_name, self.field_aliases)
 
         resolved_field = resolve_field_alias(field_name, self.field_aliases)
-        if (
-            "__" not in resolved_field
-            and get_field_safe(self.root_model, resolved_field) is None
-            and not isinstance(getattr(self.root_model, resolved_field, None), property)
-        ):
-            raise core_ex.InvalidFieldError(
-                field_name, self.root_model.__name__, reason="field does not exist on model"
-            )
+        if resolved_field in self.queryset_annotations:
+            return resolved_field
+        # Keep explicit single-field declarations compatible with annotation users.
+        if self.allowed_fields is not None and "__" not in resolved_field:
+            return resolved_field
+        model = self.root_model
+        parts = resolved_field.split("__")
+        for index, part in enumerate(parts):
+            field = get_field_safe(model, part)
+            terminal = index == len(parts) - 1
+            if terminal and (field is not None or isinstance(getattr(model, part, None), property)):
+                break
+            if field is None or not getattr(field, "related_model", None):
+                raise core_ex.InvalidFieldError(
+                    field_name, self.root_model.__name__, reason="field path does not exist on model"
+                )
+            model = field.related_model
 
         return resolved_field
 

@@ -224,6 +224,16 @@ class DjangoExecutor:
             non_sortable_fields=config.get("non_sortable_fields"),
         )
 
+    def projection_mappings(self, intent):
+        """Describe alias mappings per expanded relation without leaking ORM into DTOs."""
+        return {
+            "field_mapping": {value: key for key, value in self.field_aliases.items()},
+            "nested_mappings": {
+                name: self._nested_executor(name).projection_mappings(child)
+                for name, child in (intent.expand.relations.items() if intent.expand else ())
+            },
+        }
+
     def _hybrid_supported(self, model, intent, dto):
         if self.field_aliases or any(isinstance(getattr(model, f, None), property) for f in get_dto_fields(dto)):
             return False
@@ -272,9 +282,8 @@ class DjangoExecutor:
             selected = {name if name in dto_fields else self.field_aliases.get(name, name) for name in selected}
         if selected is not None:
             intent.select = SelectIntent(list(selected))
-        mapping = {value: key for key, value in self.field_aliases.items()}
         result = [
-            dto_class.from_object(row, intent, mapping, value_reader=read_model_value)
+            dto_class.from_object(row, intent, value_reader=read_model_value, **self.projection_mappings(intent))
             for row in self._execute_prepared(queryset, intent)
         ]
         return [dto.to_dict() for dto in result] if as_dicts else result
@@ -293,6 +302,7 @@ class DjangoExecutor:
             allowed_fields=set(self.allowed_fields) if self.allowed_fields is not None else None,
             field_aliases=self.field_aliases,
         )
+        validator.queryset_annotations.update(queryset.query.annotations)
         for name in intent.select.fields if intent.select else ():
             if name == "*":
                 continue
@@ -339,6 +349,7 @@ class DjangoExecutor:
                 filterable_fields=self.filterable_fields,
                 non_filterable_fields=self.non_filterable_fields,
             )
+            visitor.queryset_annotations.update(queryset.query.annotations)
             q_object = visitor.visit(intent.filter.ast)
             return queryset.filter(q_object)
 
