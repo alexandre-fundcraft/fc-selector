@@ -32,3 +32,5 @@ Each run excludes the ten performance test functions, matching CI.
 
 ## Publication
 All implementation/testing complete. Commit/push to PR #5 and a PR #3 cross-reference are tracked in task4. Neither PR is merged or closed; neither OpenSpec change is archived. Remote checks run after push.
+
+Publication completed: implementation commit `2ad077d` pushed to PR #5; its description updated and PR #3 received a cross-reference explaining the three fixes live in #5. Both PRs remain open, review threads on the unchanged #3 branch remain unresolved intentionally. Remote CI is pending at this publication snapshot.
