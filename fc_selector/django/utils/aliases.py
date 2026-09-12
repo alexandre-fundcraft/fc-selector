@@ -23,9 +23,10 @@ def resolve_field_alias(field_name: str, field_aliases: dict[str, str] | None) -
         >>> resolve_field_alias("name", None)
         'name'
     """
+    field_name = field_name.replace("/", "__").replace(".", "__")
     if not field_aliases:
         return field_name
     # Handle nested fields (e.g., "relation__field")
     parts = field_name.split("__")
-    parts[0] = field_aliases.get(parts[0], parts[0])
+    parts[0] = field_aliases.get(parts[0], parts[0]).replace("/", "__").replace(".", "__")
     return "__".join(parts)

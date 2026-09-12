@@ -78,10 +78,10 @@ The system implements several security measures:
 *   `only()` to fetch only requested fields.
 
 ### Hybrid Values Mode
-*   Uses `.values()` with `__` notation for forward FK/OneToOne expands — 2-5x faster than standard mode.
+*   Uses `.values()` with `__` notation for forward FK/OneToOne expands — with workload-dependent performance.
 *   Uses 1+N query strategy for reverse FK/M2M relations — faster than model instantiation.
 *   Controlled per-selector via `values_mode` Meta option (default: `True`).
-*   Falls back to standard mode only when `values_mode = False`.
+*   Uses standard mode when disabled or when a query shape requires native prefetch/model conversion.
 *   See [Hybrid Values Mode](HYBRID_VALUES_EXPAND.md) for details.
 
 ## Extensibility
@@ -108,3 +108,42 @@ SelectorError (base)
 │   ├── TypeMismatchError
 │   └── UnsupportedFunctionError
 ```
+
+## Neutral core and adapter boundaries
+
+The shared execution contract is `QueryIntent` and its AST, not a Django
+`QuerySet`. OData produces that contract; ORM adapters consume it. SQLAlchemy
+is planned, **not implemented or advertised as supported yet**.
+
+- `core`: intent/AST types, fluent composition, collection/projection policies,
+  DTO introspection and `BaseODataDTO.from_object()` for plain objects/mappings.
+- `protocols/odata`: text parsing, textual builder export and legacy `$select` /
+  `$expand` projection options.
+- `django`: model/field validation, lookup path translation, query construction,
+  relation extraction, prefetch and values optimizations. DRF stays here.
+- `compat`: lazy dispatch for existing string methods, `from_model()` and the
+  historical `core.utils.odata_path_to_django` and `dto_options` imports. These are compatibility
+  surfaces, not protocol-neutral operations.
+
+`QueryBuilder` stores one representation per option. Pure fluent construction
+(with `Field`, `Expand` and `OrderBy`) does not load OData or an ORM. Calling
+legacy string methods loads the OData implementation only when needed. The
+injected filter parser still supports custom textual filters; textual expansions
+remain an explicitly OData compatibility feature.
+
+The executor prepares a private copy, normalizes projection and validates without
+mutating the caller. Materialization chooses hybrid eligibility once. The internal
+hybrid builder only constructs supported results; the public direct-builder API
+is a wrapper around the executor. Nested prefetch executes already prepared child
+intents. Low-level Django APIs still return lazy QuerySets without collection
+default limits; this return type is **not** imposed on future adapters.
+
+Architecture tests run fresh Python processes with ORM/protocol imports blocked.
+They verify pure fluent construction, OData parsing without Django, and nested DTO
+projection from ordinary objects and dictionaries. Compatibility APIs are tested
+separately. A future SQLAlchemy adapter must resolve its own field/relationship
+loading and pass plain values or a value reader into generic DTO projection; it
+must not inherit a Django selector or depend on Django prefetch conventions.
+
+The Django executor itself is tested with OData and DRF imports blocked: AST
+rewriting belongs to core, and direct intent materialization does not parse text.

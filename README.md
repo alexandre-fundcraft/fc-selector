@@ -9,23 +9,25 @@ A read-only data access library that implements the Selector pattern with type-s
 - **OData v4 Query Support**: `$filter`, `$orderby`, `$top`, `$skip`, `$select`, `$expand`, `$count`
 - **Selector + DTO Pattern**: Type-safe data access with Data Transfer Objects instead of raw models
 - **Automatic Query Optimization**: `.only()`, `select_related()`, `prefetch_related()` applied automatically
-- **Hybrid Values Mode**: High-performance execution using `.values()` (2-5x faster) with support for all relation types (Forward FK, Reverse FK, M2M)
+- **Hybrid Values Mode**: High-performance execution using `.values()` with support for all relation types (Forward FK, Reverse FK, M2M)
 - **Fluent Query Builder**: `Field("status").eq("published") & Field("rating").gt(4.0)`
 
 ## Performance: Hybrid Values Mode
 
-FC Selector includes a specialized **HybridValuesBuilder** that executes queries using Django's `.values()` method instead of instantiating model objects. This is typically **2-5x faster** for read operations.
+FC Selector includes a specialized **HybridValuesBuilder** that executes queries using Django's `.values()` method instead of instantiating model objects. It avoids model instantiation for supported expansion shapes; benchmark your workload rather than assume a fixed speedup.
 
 It supports `$expand` on **all relation types**:
 *   **Forward Relations (FK/OneToOne)**: Fetched in a single query using `select_related` + `__` notation.
 *   **Reverse Relations (Reverse FK)**: Fetched using a highly efficient 1+N query strategy (bulk fetch of children).
 *   **ManyToMany Relations**: Fetched using a 1+N strategy (through table + child table).
 
-This mode is enabled by default (`values_mode=True`) but can be disabled per selector if you need model methods or `@property` fields.
+This mode is enabled by default (`values_mode=True`) for supported DTO expansions. Properties, aliases, per-parent child pagination and deep forward expansions fall back to standard ORM execution. DTO queries without expansions use model conversion; dictionary queries without expansions use `.values()`.
 - **DRF Integration**: `ODataSelectorViewSetMixin` adds OData support to any ViewSet
 - **OpenAPI Documentation**: Automatic schema generation via drf-spectacular
 - **Security**: Field validation, private field blocking, query length limits, automatic password exclusion
-- **Code Generation**: Management commands to generate selectors, DTOs, and serializers from models
+- **Explicit DTOs**: Define dataclasses and selectors directly; no code-generation command is bundled.
+
+See [compatibility verification](docs/installation.md#compatibility-verification) for the explicit Python/Django matrix and verified database scope.
 
 ## Installation
 
@@ -39,16 +41,18 @@ cd fc-selector
 uv sync --group dev
 
 # Using pip
-pip install -e .
+pip install -e ".[django]"
 ```
 
 ### Requirements
 
 - **Python** >= 3.11 (tested on 3.11, 3.12, 3.13)
-- **Django** >= 4.2
-- **djangorestframework** >= 3.12.0
-- **drf-spectacular** >= 0.29.0
 - **sly** >= 0.5
+
+The `django` extra additionally installs **Django >= 4.2.20**, **Django REST
+Framework >= 3.12.0** and **drf-spectacular >= 0.29.0**. For the standalone core
+and OData parser without these packages, use `pip install -e .` from the checkout.
+`uv sync --group dev` includes the adapter and test tools for contributors.
 
 ## Quick Start
 
@@ -63,14 +67,32 @@ INSTALLED_APPS = [
 ]
 ```
 
-### 2. Generate Selectors and DTOs from your models
+### 2. Define a DTO and selector
 
-```bash
-python manage.py generate_odata_selector blog.BlogPost --single --force
-python manage.py generate_odata_selector blog.Author --single --force
+Create `blog/selectors/blog_post.py` and expose only the fields clients need:
+
+```python
+from dataclasses import dataclass
+from blog.models import BlogPost
+from fc_selector.core.dtos import BaseODataDTO, UNSET
+from fc_selector.django.selector import ODataSelector
+
+@dataclass
+class BlogPostDTO(BaseODataDTO):
+    id: int = UNSET
+    title: str = UNSET
+    status: str = UNSET
+
+class BlogPostSelector(ODataSelector):
+    class Meta:
+        model = BlogPost
+        dto_class = BlogPostDTO
+        allowed_fields = ["id", "title", "status"]
+        default_limit = 100
+        max_limit = 500
 ```
 
-This creates DTOs, Selectors, and field mappings automatically under `blog/selectors/`.
+See [Quick Start](docs/quickstart.md) for related DTOs and `$expand` configuration.
 
 ### 3. Create DTO Serializers
 
@@ -116,7 +138,7 @@ urlpatterns = router.urls
 
 ```bash
 # Get published posts, sorted by date, with author info
-GET /odata/posts/?$filter=status eq 'published'&$orderby=created_at desc&$top=10&$select=id,title&$expand=author($select=name)
+GET /odata/posts/?$filter=status eq 'published'&$orderby=id desc&$top=10&$select=id,title
 ```
 
 ## OData Query Reference
@@ -156,14 +178,10 @@ intent = (
     QueryBuilder()
     .where(
         Field("status").eq("published") &
-        Field("rating").gt(4.0)
+        Field("title").contains("Django")
     )
-    .select("id", "title", "rating")
-    .expand(
-        Expand("author").select("id", "name"),
-        Expand("comments").filter(Field("approved").eq(True)).top(5)
-    )
-    .orderby(OrderBy("created_at").desc())
+    .select("id", "title", "status")
+    .orderby(OrderBy("id").desc())
     .top(10)
     .build()
 )
@@ -186,7 +204,7 @@ query = QueryBuilder("$filter=status eq 'published'&$select=id,title&$top=10")
 query = QueryBuilder(request.META.get('QUERY_STRING', ''))
 
 # Then add server-side filters, enforce pagination, etc.
-query.and_filter(f"author/id eq {author_id}")
+query.and_filter("id gt 0")
 query.top(25)
 
 results = selector.get_many(query)

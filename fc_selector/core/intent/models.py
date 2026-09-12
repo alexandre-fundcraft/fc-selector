@@ -132,3 +132,10 @@ class QueryIntent:
     expand: ExpandIntent | None = None
     orderby: OrderIntent | None = None
     pagination: PaginationIntent | None = None
+
+
+def dto_options(intent: QueryIntent) -> tuple[set[str] | None, dict]:
+    """Historical OData projection-options export; use intents directly in core."""
+    from fc_selector.compat import dto_options as export  # noqa: PLC0415
+
+    return cast(tuple[set[str] | None, dict], export(intent))

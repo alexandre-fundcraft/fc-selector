@@ -46,13 +46,6 @@ if dto.content is not UNSET:
 
 ## Creating DTOs
 
-### Auto-generated
-
-Use the management command:
-
-```bash
-python manage.py generate_odata_selector myapp.BlogPost --single
-```
 
 ### Manual Definition
 
@@ -274,3 +267,19 @@ class UserDTOSerializer(ODataDTOSerializer):
         dto_class = UserDTO
         exclude = ['password', 'secret_token']
 ```
+
+## Projection without an ORM
+
+Use `from_object()` with a neutral `QueryIntent` for plain objects or mappings:
+
+```python
+from fc_selector.core.intent import QueryIntent, SelectIntent
+
+intent = QueryIntent(select=SelectIntent(fields=["id", "name"]))
+dto = AuthorDTO.from_object({"id": 1, "name": "Ada"}, intent)
+```
+
+Nested `ExpandIntent` projections accept ordinary lists. Generic field mappings
+use dotted paths. This operation never parses OData or accesses ORM managers.
+The existing `from_model()` method remains the Django/OData compatibility entry
+point, including prefetched relations and legacy textual expand options.

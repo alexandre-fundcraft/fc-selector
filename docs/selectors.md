@@ -2,40 +2,6 @@
 
 ## Creating a Selector
 
-### Auto-generate from Model
-
-The easiest way to create a selector is using the management command:
-
-```bash
-python manage.py generate_odata_selector myapp.BlogPost --single --force
-```
-
-Options:
-
-- `--single` - Generate one file with all DTOs and selectors
-- `--force` - Overwrite existing files
-
-This generates:
-
-```python
-# myapp/selectors/blog_post.py
-@dataclass
-class BlogPostDTO(BaseODataDTO):
-    id: int = UNSET
-    title: str = UNSET
-    content: str = UNSET
-    author: Optional[AuthorDTO] = UNSET
-    # ... all fields
-
-class BlogPostSelector(ODataSelector):
-    class Meta:
-        model = BlogPost
-        dto_class = BlogPostDTO
-        expandable_fields = {
-            'author': AuthorDTO,
-        }
-```
-
 ### Manual Definition
 
 ```python
@@ -219,7 +185,7 @@ selector.get_many(
 # Then reconstructs nested DTOs
 ```
 
-This is 2-5x faster than standard mode because it skips model instantiation entirely.
+This avoids model instantiation for supported expansion shapes; actual performance depends on the query.
 
 !!! note
     `@property` fields are left as `UNSET` in hybrid mode. Set `values_mode = False` if your DTOs require them. See [Hybrid Values Mode](HYBRID_VALUES_EXPAND.md) for details.
@@ -439,3 +405,14 @@ posts = selector.get_many(
     .top(10)
 )
 ```
+
+## Hardened query contract
+
+- `query_as_dtos`, `query_as_dicts`, `get_many` and `get_many_dicts` apply `default_limit` and `max_limit`, even with `$skip` alone.
+- `query` and `execute` are low-level, lazy QuerySet APIs: they apply explicit pagination but do not add collection defaults. Scope their queryset before evaluating it.
+- `count_by` counts all matching rows, independently of pagination.
+- `allowed_fields` restricts selection and filter/order field access. `filterable_fields`/`sortable_fields` are positive policies; corresponding `non_*` fields are negative policies. Aliases do not bypass restrictions.
+- The DRF mixin honors `get_queryset()` and filter backends. Retrieval checks object permissions against the Django model, not a projected DTO. Lists follow DRF's usual queryset-scoping contract, not per-row object-permission checks.
+- Password and DTO `_excluded_fields` are omitted by serializers at every depth. Serializer `write_only` and `Meta.exclude` apply to that serializer. Use `Meta.nested_serializers = {ChildDTO: ChildSerializer}` for additional child serializer rules; no global serializer discovery occurs.
+- Hybrid execution is an optimization, not different query semantics. Properties, aliases, deep forward expansion and per-parent child pagination fall back to standard ORM prefetch. M2M ordering and nested projections remain intact.
+- The query-string serializer is for textual builders; use `.build()` to execute fluent AST expressions without a lossy string round-trip.

@@ -1,0 +1,60 @@
+name: Quality checks
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: uv sync --frozen --group dev
+      - run: uv build --wheel
+      - name: Verify standalone wheel without adapter dependencies
+        run: |
+          for wheel in dist/*.whl; do
+            uv run --no-project --isolated --with "$wheel" python -I tests/test_core_without_django.py
+          done
+      - run: make lint
+      - run: uv run --frozen python -m mkdocs build --strict
+  compatibility:
+    name: Python ${{ matrix.python }} / Django ${{ matrix.django }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {python: '3.11', django: '4.2.20'}
+          - {python: '3.11', django: '5.0.*'}
+          - {python: '3.11', django: '5.2.*'}
+          - {python: '3.12', django: '5.2.*'}
+          - {python: '3.12', django: '6.0.*'}
+          - {python: '3.13', django: '6.0.*'}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      # --with overrides only this isolated run; it does not rewrite uv.lock.
+      - name: Verify installed framework
+        env:
+          DJANGO_SPEC: ${{ matrix.django }}
+        run: >-
+          uv run --frozen --isolated --python '${{ matrix.python }}'
+          --with 'django==${{ matrix.django }}'
+          python -c 'import django, os; v=django.get_version(); print(v); assert v.startswith(os.environ["DJANGO_SPEC"].removesuffix("*"))'
+      - name: Test compatibility
+        run: >-
+          uv run --frozen --isolated --python '${{ matrix.python }}'
+          --with 'django==${{ matrix.django }}'
+          pytest tests/ --ignore=tests/performance/ --benchmark-disable

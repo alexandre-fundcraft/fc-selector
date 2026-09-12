@@ -79,7 +79,7 @@ class ODataDTOSerializer(serializers.Serializer):
 
         # Get field configuration from Meta
         fields_option = getattr(self.Meta, "fields", None)
-        exclude_option = getattr(self.Meta, "exclude", None) or []
+        exclude_option = set(getattr(self.Meta, "exclude", None) or ()) | self._get_excluded_fields(self.dto_class)
         read_only_fields = getattr(self.Meta, "read_only_fields", None) or []
         extra_kwargs = getattr(self.Meta, "extra_kwargs", None) or {}
 
@@ -211,6 +211,8 @@ class ODataDTOSerializer(serializers.Serializer):
         data = {}
 
         for field_name, field in self.fields.items():
+            if field.write_only:
+                continue
             if not hasattr(instance, field_name):
                 continue
 
@@ -242,8 +244,8 @@ class ODataDTOSerializer(serializers.Serializer):
         """
         Recursively convert a DTO to a dictionary.
 
-        For nested DTOs, this method tries to find and use their corresponding
-        serializers to apply field exclusions (like password hiding).
+        DTO exclusions and password blocking apply at every depth. Additional
+        serializers are explicitly configured through Meta.nested_serializers.
 
         Args:
             dto_instance: DTO instance to convert
@@ -255,6 +257,10 @@ class ODataDTOSerializer(serializers.Serializer):
             return dto_instance
 
         dto_class = type(dto_instance)
+        nested_serializers = getattr(self.Meta, "nested_serializers", {})
+        serializer_class = nested_serializers.get(dto_class)
+        if serializer_class:
+            return serializer_class(dto_instance, context=self.context).data
         excluded_fields = self._get_excluded_fields(dto_class)
 
         result = {}
@@ -274,7 +280,7 @@ class ODataDTOSerializer(serializers.Serializer):
     @staticmethod
     def _get_excluded_fields(dto_class) -> set[str]:
         """Fields the DTO itself declares as never serialized."""
-        return set(getattr(dto_class, "_excluded_fields", ()))
+        return {"password"} | set(getattr(dto_class, "_excluded_fields", ()))
 
     def _convert_field_value(self, value):
         """Convert a field value, recursively handling DTOs."""

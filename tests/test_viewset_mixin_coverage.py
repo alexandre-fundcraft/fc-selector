@@ -6,13 +6,20 @@ from unittest.mock import MagicMock
 
 import pytest
 from django.test import RequestFactory
+from rest_framework import viewsets
 
 from fc_selector.core import exceptions as core_ex
+from fc_selector.core.intent import QueryIntent
 from fc_selector.django.drf.viewsets.selector_mixin import (
     ODataSelectorViewSetMixin,
     build_odata_response,
 )
-from fc_selector.exceptions import ODataInvalidPaginationError, ODataInvalidValueError
+from fc_selector.exceptions import (
+    ODataFieldNotFoundError,
+    ODataFilterError,
+    ODataInvalidPaginationError,
+    ODataInvalidValueError,
+)
 
 
 @pytest.mark.django_db
@@ -90,7 +97,7 @@ class TestSelectorMixinCoverage:
 
         mock_selector = MagicMock()
 
-        class TestViewSet(ODataSelectorViewSetMixin):
+        class TestViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
             def selector_class(self):
                 return mock_selector
 
@@ -122,7 +129,7 @@ class TestSelectorMixinCoverage:
         request = rf.get("/odata/posts/")
         mock_selector = MagicMock()
 
-        class TestViewSet(ODataSelectorViewSetMixin):
+        class TestViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
             def selector_class(self):
                 return mock_selector
 
@@ -141,14 +148,15 @@ class TestSelectorMixinCoverage:
         assert exc_info.value.details["expected_type"] == "DateTime"
 
     def test_mixin_retrieve_not_found(self):
-        """Return 404 when get_one returns None."""
+        """Return 404 when the prepared identity query has no matching model."""
         rf = RequestFactory()
         request = rf.get("/odata/posts/1/")
 
         mock_selector = MagicMock()
-        mock_selector.get_one.return_value = None
+        mock_selector._parse.return_value = ({}, QueryIntent())
+        mock_selector._executor._execute_prepared.return_value.first.return_value = None
 
-        class TestViewSet(ODataSelectorViewSetMixin):
+        class TestViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
             def selector_class(self):
                 return mock_selector
 
@@ -158,14 +166,16 @@ class TestSelectorMixinCoverage:
         response = viewset.retrieve(request, pk=1)
         assert response.status_code == 404
 
-    def test_mixin_retrieve_error_handling(self):
+    @pytest.mark.parametrize("stage", ["prepare", "_execute_prepared"])
+    def test_mixin_retrieve_error_handling(self, stage):
         """Coverage for exception mapping in retrieve()."""
         rf = RequestFactory()
         request = rf.get("/odata/posts/1/")
 
         mock_selector = MagicMock()
+        mock_selector._parse.return_value = ({}, QueryIntent())
 
-        class TestViewSet(ODataSelectorViewSetMixin):
+        class TestViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
             def selector_class(self):
                 return mock_selector
 
@@ -173,17 +183,21 @@ class TestSelectorMixinCoverage:
 
         viewset = TestViewSet()
 
+        failing_method = getattr(mock_selector._executor, stage)
+
         # Test InvalidFieldError
-        mock_selector.get_one.side_effect = core_ex.InvalidFieldError("field", "Model")
-        with pytest.raises(Exception):
+        failing_method.side_effect = core_ex.InvalidFieldError("field", "Model")
+        with pytest.raises(ODataFieldNotFoundError) as caught:
             viewset.retrieve(request, pk=1)
+        assert caught.value.__cause__ is failing_method.side_effect
+        failing_method.assert_called_once()
 
         # Test InvalidValueError
-        mock_selector.get_one.side_effect = core_ex.InvalidValueError("val", "int", "$top")
-        with pytest.raises(Exception):
+        failing_method.side_effect = core_ex.InvalidValueError("val", "int", "$top")
+        with pytest.raises(ODataInvalidPaginationError):
             viewset.retrieve(request, pk=1)
 
         # Test QueryError
-        mock_selector.get_one.side_effect = core_ex.QueryError("error")
-        with pytest.raises(Exception):
+        failing_method.side_effect = core_ex.QueryError("error")
+        with pytest.raises(ODataFilterError):
             viewset.retrieve(request, pk=1)

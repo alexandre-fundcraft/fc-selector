@@ -54,7 +54,7 @@ When `values_mode = True` on a selector (the default), the system uses an optimi
 
 ### How it works
 
-1. `ODataSelector` calls `DjangoExecutor.try_hybrid()` before the standard path.
+1. `ODataSelector` prepares a private intent once, then calls the executor's prepared hybrid path before the prepared standard path. Public `try_hybrid()` prepares its own copy for direct callers.
 2. `try_hybrid()` uses `HybridValuesBuilder.classify_relations()` to split expand into forward vs reverse.
 3. If all relations are forward (FK/OneToOne), the builder:
    - Collects flattened field names: `['id', 'title', 'author__id', 'author__name']`

@@ -6,12 +6,10 @@ in fc_selector/django/executor.py.
 """
 # pylint: disable=redefined-outer-name  # pytest fixtures
 
-from dataclasses import dataclass
-from typing import Optional
 
 import pytest
 
-from fc_selector.core.dtos import UNSET, BaseODataDTO
+from fc_selector.core.dtos import UNSET
 from fc_selector.core.intent import (
     ExpandIntent,
     FilterIntent,
@@ -26,6 +24,15 @@ from fc_selector.django.executor import DjangoExecutor
 from fc_selector.django.hybrid_values_builder import HybridValuesBuilder
 from fc_selector.django.selector import ODataSelector
 from fc_selector.protocols.odata.parsers.filter import parse_filter as parse
+from tests.integration.support.dtos import (
+    ChildDTO,
+    FKSelector,
+    FKTargetDTO,
+    GrandChildDTO,
+    M2MTargetDTO,
+    ModelWithFKDTO,
+    ParentWithRelationsDTO,
+)
 from tests.integration.support.models import (
     ODataChildModel,
     ODataFKTarget,
@@ -34,69 +41,6 @@ from tests.integration.support.models import (
     ODataModelWithFK,
     ODataModelWithRelations,
 )
-
-# --- DTOs ---
-
-
-@dataclass
-class FKTargetDTO(BaseODataDTO):
-    id: int = UNSET
-    name: str = UNSET
-    code: str = UNSET
-
-
-@dataclass
-class ModelWithFKDTO(BaseODataDTO):
-    id: int = UNSET
-    title: str = UNSET
-    value: int = UNSET
-    target: Optional[FKTargetDTO] = UNSET
-    second_target: Optional[FKTargetDTO] = UNSET
-
-
-@dataclass
-class M2MTargetDTO(BaseODataDTO):
-    id: int = UNSET
-    name: str = UNSET
-
-
-@dataclass
-class GrandChildDTO(BaseODataDTO):
-    id: int = UNSET
-    note: str = UNSET
-
-
-@dataclass
-class ChildDTO(BaseODataDTO):
-    id: int = UNSET
-    label: str = UNSET
-    score: int = UNSET
-    category: Optional[M2MTargetDTO] = UNSET
-    grandchildren: list[GrandChildDTO] = UNSET
-
-
-@dataclass
-class ParentWithRelationsDTO(BaseODataDTO):
-    id: int = UNSET
-    title: str = UNSET
-    value: int = UNSET
-    target: Optional[FKTargetDTO] = UNSET
-    children: list[ChildDTO] = UNSET
-    tags: list[M2MTargetDTO] = UNSET
-
-
-# --- Selectors ---
-
-
-class FKSelector(ODataSelector):
-    class Meta:
-        model = ODataModelWithFK
-        dto_class = ModelWithFKDTO
-        expandable_fields = {
-            "target": FKTargetDTO,
-            "second_target": FKTargetDTO,
-        }
-
 
 # --- Fixtures ---
 
@@ -701,8 +645,8 @@ class TestReverseFK:
         child_b = next(c for c in children if c.label == "Child-B")
         assert child_b.category is None
 
-    def test_nested_pagination_global(self, parent_with_children):
-        """$expand=children($top=1) -> only 1 child globally (limitation)."""
+    def test_nested_pagination_per_parent(self, parent_with_children):
+        """$expand=children($top=1) uses native per-parent prefetch pagination."""
         intent = QueryIntent(
             expand=ExpandIntent(
                 relations={
@@ -718,7 +662,7 @@ class TestReverseFK:
         result = builder.execute(qs, intent, ParentWithRelationsDTO)
 
         assert len(result) == 1
-        # Should only have 1 child total across all parents because pagination applies to the single child query
+        # This fixture has one parent; multi-parent behavior is covered by audit regressions.
         assert len(result[0].children) == 1
         assert result[0].children[0].label == "Child-A"
 

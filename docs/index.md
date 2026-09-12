@@ -79,10 +79,10 @@ Selectors return DTOs, not Django models. This:
 
 - **Full OData v4 support**: `$filter`, `$select`, `$expand`, `$orderby`, `$top`, `$skip`, `$count`
 - **Type-safe fluent API**: `Field("status").eq("published")`, `Expand("author").select("name")`, `OrderBy("created_at").desc()`
-- **Hybrid values mode**: 2-5x faster queries using `.values()` with `$expand` support for forward relations
+- **Hybrid values mode**: workload-dependent queries using `.values()` with `$expand` support for forward relations
 - **Automatic query optimization**: `select_related()`, `prefetch_related()`, `.only()` applied from query intent
 - **Type-safe DTOs** with dataclasses and `UNSET` sentinel
-- **Auto-generated selectors & DTOs** from Django models via management command
+- **Explicit selectors & DTOs** defined as Python classes
 - **Field aliases** for API-friendly names
 - **Field restrictions** with filterable/sortable positive and negative lists
 - **DRF integration** with ViewSet mixins, serializers, and OpenAPI/Swagger parameters
@@ -91,7 +91,7 @@ Selectors return DTOs, not Django models. This:
 ## Quick Example
 
 ```python
-# 1. Define your selector (or auto-generate it)
+# 1. Define your selector as a Python class
 class BlogPostSelector(ODataSelector):
     class Meta:
         model = BlogPost
