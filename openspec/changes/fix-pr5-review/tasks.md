@@ -7,4 +7,4 @@
 
 ## 2. Verification and publication
 - [x] 2.1 Run full suite, static checks, docs and compatibility checks.
-- [ ] 2.2 Publish fixes to PR 5 and cross-reference review comments.
+- [x] 2.2 Publish fixes to PR 5 and cross-reference review comments.

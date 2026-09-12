@@ -16,3 +16,6 @@
 
 ## Boundaries
 Core receives plain mapping trees and remains independent of Django/OData; existing architecture boundary tests pass. No backend files touched, no PostgreSQL validation claimed, no merge or archive performed.
+
+## Publication
+Implementation commit: 74f66b6, pushed to PR 5. Replied to all five Copilot threads with the fix and regression evidence. Threads remain open for reviewer confirmation.
