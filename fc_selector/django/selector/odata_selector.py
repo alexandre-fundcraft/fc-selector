@@ -7,14 +7,16 @@ Provides a clean selector interface for executing OData queries on Django models
 # pylint: disable=protected-access  # Django's _meta is part of the public API for model introspection
 
 import re
+from copy import deepcopy
 from typing import TYPE_CHECKING, Any, Literal, Optional, cast
-from urllib.parse import unquote_plus
 
 from django.db.models import QuerySet
 
 from fc_selector.core import exceptions as core_ex
+from fc_selector.core.intent.models import dto_options
 from fc_selector.core.query_builder import QueryBuilder
 from fc_selector.django.executor import DjangoExecutor
+from fc_selector.django.utils import resolve_field_alias
 
 # Security: Valid field name pattern (alphanumeric + underscore only)
 _VALID_FIELD_PATTERN = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
@@ -88,12 +90,15 @@ class ODataSelector:
         # Security: Validate field aliases to prevent injection
         ODataSelector._validate_field_aliases(self.field_aliases)
 
-        non_sortable = self.get_non_sortable_fields()
+        non_sortable = [] if getattr(meta, "sortable_fields", None) is not None else self.non_sortable_fields
         self._executor = DjangoExecutor(
             field_aliases=self.field_aliases,
             allowed_fields=self.allowed_fields,
             expandable_fields=self.expandable_fields,
             non_sortable_fields=non_sortable or None,
+            filterable_fields=getattr(meta, "filterable_fields", None),
+            non_filterable_fields=self.non_filterable_fields,
+            sortable_fields=getattr(meta, "sortable_fields", None),
         )
         self._reverse_aliases: dict[str, str] = {v: k for k, v in self.field_aliases.items()}
 
@@ -137,7 +142,8 @@ class ODataSelector:
         """
         if self.filterable_fields:
             all_fields = self._get_model_field_names()
-            return [f for f in all_fields if f not in self.filterable_fields]
+            allowed = {resolve_field_alias(f, self.field_aliases) for f in self.filterable_fields}
+            return [f for f in all_fields if f not in allowed]
         if self.non_filterable_fields:
             return list(self.non_filterable_fields)
         return []
@@ -152,7 +158,8 @@ class ODataSelector:
         """
         if self.sortable_fields:
             all_fields = self._get_model_field_names()
-            return [f for f in all_fields if f not in self.sortable_fields]
+            allowed = {resolve_field_alias(f, self.field_aliases) for f in self.sortable_fields}
+            return [f for f in all_fields if f not in allowed]
         if self.non_sortable_fields:
             return list(self.non_sortable_fields)
         return []
@@ -202,18 +209,8 @@ class ODataSelector:
                 f"Query string too long ({len(query_string)} chars). Maximum allowed: {MAX_QUERY_STRING_LENGTH}"
             )
 
-        params = parse_query_params(unquote_plus(query_string))
+        params = parse_query_params(query_string)
         return params, parse_odata_query(params)
-
-    @staticmethod
-    def _dto_options(params: dict[str, str]) -> tuple[set[str] | None, dict]:
-        """Read the $select fields and raw $expand options the DTO layer needs."""
-        from fc_selector.protocols.odata.parsers.expand import parse_expand
-        from fc_selector.protocols.odata.parsers.select import parse_select
-
-        selected = set(parse_select(params["$select"])) if params.get("$select") else None
-        expand_options = parse_expand(params["$expand"]) if params.get("$expand") else {}
-        return selected, expand_options
 
     def query(
         self,
@@ -265,6 +262,8 @@ class ODataSelector:
     def to_dto(self, instance: "Model", selected_fields=None, expanded_fields=None, expand_options=None) -> Any:
         if not self.dto_class:
             raise ValueError("dto_class not configured")
+        if selected_fields is None and self.allowed_fields is not None:
+            selected_fields = set(self.allowed_fields)
         # Pass reverse aliases for field mapping (model_field -> dto_field)
         return self.dto_class.from_model(
             instance, selected_fields, expanded_fields, expand_options, field_mapping=self._reverse_aliases
@@ -280,21 +279,34 @@ class ODataSelector:
         if base_queryset is None:
             base_queryset = self.get_queryset()
 
-        if not query_string:
-            return self.to_dtos(base_queryset)
+        _, intent = self._parse(query_string or "")
+        intent = self._apply_defaults(intent)
+        return self._materialize(intent, base_queryset)
 
-        params, intent = self._parse(query_string)
-
+    def _materialize(self, intent, queryset, *, as_dicts=False) -> list:
         if self.values_mode:
-            hybrid = self._executor.try_hybrid(base_queryset, intent, self.dto_class)
+            hybrid = self._executor.try_hybrid(queryset, intent, self.dto_class, as_dicts=as_dicts)
             if hybrid is not None:
-                return list(hybrid)
-
-        # Standard path: convert model instances to DTOs
-        queryset = self._executor.execute(base_queryset, intent)
-        selected_fields, expand_options = self._dto_options(params)
-
-        return self.to_dtos(queryset, selected_fields, set(expand_options), expand_options)
+                return hybrid
+        has_expand = intent.expand and intent.expand.has_relations()
+        if as_dicts and not has_expand:
+            rows = list(self._executor.execute(queryset, intent, use_values=True))
+            if intent.select is not None:
+                return [
+                    {
+                        (name if self.dto_class else resolve_field_alias(name, self.field_aliases)): row[
+                            resolve_field_alias(name, self.field_aliases)
+                        ]
+                        for name in intent.select.fields
+                        if resolve_field_alias(name, self.field_aliases) in row
+                    }
+                    for row in rows
+                ]
+            return rows
+        queryset = self._executor.execute(queryset, intent)
+        selected, options = dto_options(intent)
+        dtos = self.to_dtos(queryset, selected, set(options), options)
+        return [dto.to_dict() for dto in dtos] if as_dicts else dtos
 
     def query_as_dicts(
         self,
@@ -318,26 +330,22 @@ class ODataSelector:
         if base_queryset is None:
             base_queryset = self.get_queryset()
 
-        if not query_string:
-            return list(base_queryset.values())
-
-        _, intent = self._parse(query_string)
-
-        if self.values_mode:
-            hybrid = self._executor.try_hybrid(base_queryset, intent, self.dto_class, as_dicts=True)
-            if hybrid is not None:
-                return hybrid
-
-        return list(self._executor.execute(base_queryset, intent, use_values=True))
-
-    # --- New Query Builder Methods ---
+        _, intent = self._parse(query_string or "")
+        return self._materialize(self._apply_defaults(intent), base_queryset, as_dicts=True)
 
     def _build_intent(self, query_builder: QueryBuilder | None) -> "QueryIntent":
         """Build the intent for a builder, applying the selector's defaults."""
-        from fc_selector.core.intent import OrderField, OrderIntent, PaginationIntent
+        return self._apply_defaults((query_builder or QueryBuilder()).build())
 
-        intent = (query_builder or QueryBuilder()).build()
+    def _apply_defaults(self, intent: "QueryIntent") -> "QueryIntent":
+        """Bound materialized collections; low-level query/execute remain composable."""
+        from fc_selector.core.intent import OrderField, OrderIntent, PaginationIntent, SelectIntent
 
+        intent = deepcopy(intent)
+        if intent.select is not None and "*" in intent.select.fields:
+            intent.select = None
+        if intent.select is None and self.allowed_fields is not None:
+            intent.select = SelectIntent(fields=list(self.allowed_fields))
         if self.default_ordering and (not intent.orderby or not intent.orderby.has_ordering()):
             intent.orderby = OrderIntent(
                 fields=[
@@ -349,63 +357,48 @@ class ODataSelector:
                 ]
             )
 
-        if not intent.pagination or not intent.pagination.has_pagination():
-            intent.pagination = PaginationIntent(limit=self.default_limit, offset=0)
-        elif intent.pagination.limit and intent.pagination.limit > self.max_limit:
-            intent.pagination.limit = self.max_limit
+        if intent.pagination is None:
+            intent.pagination = PaginationIntent()
+        limit = intent.pagination.limit
+        if limit is None:
+            limit = self.default_limit
+        if limit is not None:
+            intent.pagination.limit = min(limit, self.max_limit)
 
         return intent
 
     def get_many(self, query_builder: QueryBuilder | None = None) -> list[Any]:
         """Execute a query and return results as DTOs."""
-        intent = self._build_intent(query_builder)
-
-        if self.values_mode:
-            hybrid = self._executor.try_hybrid(self.get_queryset(), intent, self.dto_class)
-            if hybrid is not None:
-                return hybrid
-
-        # Standard path: evaluate queryset -> model instances -> DTOs
-        sel, opts = self._select_and_expand_options(query_builder)
-        return self.to_dtos(self.execute(intent), sel, set(opts.keys()), opts)
+        return self._materialize(self._build_intent(query_builder), self.get_queryset())
 
     def get_many_dicts(self, query_builder: QueryBuilder | None = None) -> list[dict]:
-        """Execute a query and return results as plain dictionaries."""
-        intent = self._build_intent(query_builder)
+        """Execute a bounded collection query as dictionaries."""
+        return self._materialize(self._build_intent(query_builder), self.get_queryset(), as_dicts=True)
 
-        if self.values_mode:
-            hybrid = self._executor.try_hybrid(self.get_queryset(), intent, self.dto_class, as_dicts=True)
-            if hybrid is not None:
-                return hybrid
-
-        return list(self.execute(intent, use_values=True))
-
-    @staticmethod
-    def _select_and_expand_options(query_builder: QueryBuilder | None) -> tuple[set[str] | None, dict]:
-        """Read back $select fields and $expand options from a builder."""
-        return ODataSelector._dto_options(query_builder.to_dict() if query_builder else {})
-
-    def get_one(self, query_builder: QueryBuilder) -> Any | None:
+    def get_one(self, query_builder: QueryBuilder, base_queryset: QuerySet | None = None) -> Any | None:
         intent = query_builder.build()
-        queryset = self.execute(intent)
+        queryset = self.execute(intent, base_queryset)
         instance = queryset.first()
         if not instance:
             return None
 
-        sel, opts = self._select_and_expand_options(query_builder)
+        sel, opts = dto_options(intent)
 
         return self.to_dto(instance, sel, set(opts.keys()), opts)
 
     def get_by_pk(self, pk: Any, query_builder: QueryBuilder | None = None) -> Any | None:
-        if query_builder is None:
-            query_builder = QueryBuilder()
-        query_builder.and_filter(f"id eq {pk}")
-        return self.get_one(query_builder)
+        if self.model is None:
+            raise ValueError("model not configured")
+        pk_field = self.model._meta.pk
+        queryset = self.get_queryset().filter(pk=pk_field.to_python(pk))
+        return self.get_one(query_builder or QueryBuilder(), queryset)
 
     def count_by(self, query_builder: QueryBuilder | None = None) -> int:
         if query_builder is None:
             query_builder = QueryBuilder()
-        count: int = self.execute(query_builder.build()).count()
+        intent = query_builder.build()
+        intent.pagination = None
+        count: int = self.execute(intent).count()
         return count
 
     def exists_by(self, query_builder: QueryBuilder | None = None) -> bool:

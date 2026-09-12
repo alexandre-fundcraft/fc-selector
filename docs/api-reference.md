@@ -553,23 +553,10 @@ class MyViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
 
 ---
 
-## Management Commands
+## Defining selectors
 
-### generate_odata_selector
-
-Generate selectors and DTOs from Django models.
-
-```bash
-python manage.py generate_odata_selector myapp.MyModel [options]
-```
-
-Options:
-
-| Option | Description |
-|--------|-------------|
-| `--single` | Generate one combined file |
-| `--force` | Overwrite existing files |
-| `--output` | Custom output directory |
+No generator or seed management commands are bundled. Define DTO dataclasses and
+selectors explicitly as shown in [Quick Start](quickstart.md).
 
 ---
 

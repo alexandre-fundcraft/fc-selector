@@ -4,17 +4,21 @@ OData Selector ViewSet Mixin.
 Provides OData support using the Selector + DTO pattern for hexagonal architecture.
 """
 
+from urllib.parse import urlencode
+
+from django.core.exceptions import FieldError, ValidationError
 from rest_framework import status
 from rest_framework.response import Response
 
 from fc_selector.core import exceptions as core_ex
+from fc_selector.core.intent.models import dto_options
 from fc_selector.exceptions import (
     ODataFieldNotFoundError,
     ODataFilterError,
     ODataInvalidPaginationError,
     ODataInvalidValueError,
 )
-from fc_selector.protocols.odata.parsers.query import MAX_SKIP_VALUE, MAX_TOP_VALUE
+from fc_selector.protocols.odata.parsers.query import MAX_SKIP_VALUE, MAX_TOP_VALUE, parse_query_params
 
 DEFAULT_PAGE_SIZE = 50
 
@@ -40,11 +44,7 @@ def build_odata_response(request, serializer_data, query_string, entity_set_name
         "value": serializer_data,
     }
 
-    parsed_qs = {}
-    for param in query_string.split("&"):
-        if "=" in param:
-            key, value = param.split("=", 1)
-            parsed_qs[key] = value
+    parsed_qs = parse_query_params(query_string)
 
     if parsed_qs.get("$count", "").lower() == "true":
         if total_count is not None:
@@ -52,12 +52,21 @@ def build_odata_response(request, serializer_data, query_string, entity_set_name
             response_data["@odata.count"] = total_count
         elif selector:
             # Count should be independent of pagination
-            count_query = "&".join([f"{k}={v}" for k, v in parsed_qs.items() if k not in ("$count", "$top", "$skip")])
+            count_query = urlencode(
+                {k: v for k, v in parsed_qs.items() if k not in ("$count", "$top", "$skip")}, safe="$"
+            )
             response_data["@odata.count"] = selector.query(count_query).count()
+
+    default = getattr(selector, "default_limit", DEFAULT_PAGE_SIZE) if selector else DEFAULT_PAGE_SIZE
+    maximum = getattr(selector, "max_limit", MAX_TOP_VALUE) if selector else MAX_TOP_VALUE
+    if not isinstance(default, int):
+        default = DEFAULT_PAGE_SIZE
+    if not isinstance(maximum, int):
+        maximum = MAX_TOP_VALUE
 
     # Pagination links, with the same bounds the query parser enforces
     try:
-        top = min(int(parsed_qs.get("$top", DEFAULT_PAGE_SIZE)), MAX_TOP_VALUE)
+        top = min(int(parsed_qs.get("$top", default)), maximum, MAX_TOP_VALUE)
         skip = min(int(parsed_qs.get("$skip", 0)), MAX_SKIP_VALUE)
     except (ValueError, TypeError):
         top, skip = DEFAULT_PAGE_SIZE, 0
@@ -67,9 +76,14 @@ def build_odata_response(request, serializer_data, query_string, entity_set_name
     skip = max(skip, 0)
 
     # Exactly 'top' results means there may be more
-    if len(serializer_data) == top:
+    if (
+        top > 0
+        and len(serializer_data) == top
+        and skip + top <= MAX_SKIP_VALUE
+        and (total_count is None or skip + top < total_count)
+    ):
         next_params = {**parsed_qs, "$skip": str(skip + top)}
-        next_query = "&".join([f"{k}={v}" for k, v in next_params.items()])
+        next_query = urlencode(next_params, safe="$")
         response_data["@odata.nextLink"] = f"{request.build_absolute_uri(request.path)}?{next_query}"
 
     return response_data
@@ -133,54 +147,51 @@ class ODataSelectorViewSetMixin:
             ) from exc
         raise ODataFilterError(message=str(exc), original_exception=exc) from exc
 
+    def get_queryset(self):
+        """Use an explicit view queryset when present, otherwise the selector scope."""
+        if getattr(self, "queryset", None) is not None:
+            return super().get_queryset()
+        return self.get_selector().get_queryset()
+
     def list(self, request, *args, **kwargs):
-        """
-        List entities with full OData support.
-
-        Supports: $filter, $select, $expand, $orderby, $top, $skip, $count
-
-        Returns DTOs serialized to JSON with OData metadata.
-        """
         query_string = request.META.get("QUERY_STRING", "")
         selector = self.get_selector()
-
         try:
-            dtos = selector.query_as_dtos(query_string)
-        except (core_ex.InvalidFieldError, core_ex.InvalidValueError, core_ex.QueryError) as e:
-            self._reraise_as_odata_error(e)
-
-        serializer = self.get_serializer(dtos, many=True)
-
-        return Response(
-            build_odata_response(
-                request=request,
-                serializer_data=serializer.data,
-                query_string=query_string,
-                entity_set_name=self.odata_entity_set_name,
-                selector=selector,
+            queryset = self.filter_queryset(self.get_queryset())
+            dtos = selector.query_as_dtos(query_string, base_queryset=queryset)
+            total_count = None
+            if parse_query_params(query_string).get("$count", "").lower() == "true":
+                _, intent = selector._parse(query_string)
+                intent.pagination = None
+                intent.select = None
+                intent.expand = None
+                total_count = selector.execute(intent, queryset).count()
+            serializer = self.get_serializer(dtos, many=True)
+            data = build_odata_response(
+                request, serializer.data, query_string, self.odata_entity_set_name, selector, total_count
             )
-        )
+        except (core_ex.SelectorError, FieldError, ValidationError) as exc:
+            self._reraise_as_odata_error(exc)
+        return Response(data)
 
     def retrieve(self, request, *args, pk=None, **kwargs):
-        """
-        Retrieve a single entity with OData support.
-
-        Uses QueryBuilder to filter by pk without exposing QuerySet.
-        """
-        from fc_selector.core import QueryBuilder
-
-        query_string = request.META.get("QUERY_STRING", "")
         selector = self.get_selector()
-
-        # Build query with pk filter using pure OData syntax
-        query = QueryBuilder(query_string).and_filter(f"id eq {pk}")
-
+        query_string = request.META.get("QUERY_STRING", "")
         try:
-            dto = selector.get_one(query)
-        except (core_ex.InvalidFieldError, core_ex.InvalidValueError, core_ex.QueryError) as e:
-            self._reraise_as_odata_error(e)
-
-        if not dto:
-            return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-
+            _, intent = selector._parse(query_string)
+            queryset = self.filter_queryset(self.get_queryset())
+            pk_field = queryset.model._meta.pk
+            lookup = pk_field.to_python(pk)
+            queryset = queryset.filter(pk=lookup)
+            # Validate client pagination but never let it change identity lookup.
+            selector._executor._validate_intent(queryset, intent)
+            intent.pagination = None
+            instance = selector.execute(intent, queryset).first()
+            if instance is None:
+                return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+            self.check_object_permissions(request, instance)
+            selected, options = dto_options(intent)
+            dto = selector.to_dto(instance, selected, set(options), options)
+        except (core_ex.SelectorError, FieldError, ValidationError) as exc:
+            self._reraise_as_odata_error(exc)
         return Response(self.get_serializer(dto).data)

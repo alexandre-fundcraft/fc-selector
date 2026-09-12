@@ -184,7 +184,7 @@ The `DjangoExecutor` automatically:
 ### Hybrid Values Mode
 When `values_mode = True` (the default), the selector uses a fast execution path:
 
-- **No expand**: Uses `.values()` directly for raw dict results (2-5x faster).
+- **No expand**: Uses `.values()` directly for raw dict results (workload-dependent).
 - **Forward-only expand** (FK, OneToOne): Uses hybrid values mode — `.values('rel__field')` with `select_related`, then reconstructs nested DTOs. Same speed as plain `.values()`.
 - **Reverse/M2M expand**: Falls back to standard mode (model instantiation + `from_model()`).
 

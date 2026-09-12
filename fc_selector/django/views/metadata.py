@@ -5,11 +5,15 @@ These views generate $metadata and service document automatically
 from registered ODataSelectors.
 """
 
+from typing import Any
+
 from django.db import models
 from django.http import HttpResponse, JsonResponse
 from django.views import View
 
+from fc_selector.core.dtos.utils import get_dto_fields
 from fc_selector.django.selector import ODataSelector
+from fc_selector.django.utils import get_field_safe, resolve_field_alias
 
 
 class ODataMetadataRegistry:
@@ -92,6 +96,8 @@ class ODataMetadataView(View):
                 namespace,
                 registered_models,
                 expandable_fields,
+                selector.field_aliases,
+                selector.allowed_fields,
             )
             entity_types.append(entity_type_xml)
 
@@ -137,20 +143,47 @@ class ODataMetadataView(View):
         namespace: str,
         registered_models: set[type[models.Model]],
         expandable_fields: dict[str, type],
+        field_aliases: dict[str, str] | None = None,
+        allowed_fields: list[str] | None = None,
     ) -> str:
         """Generate XML for an entity type.
 
         Only includes navigation properties for fields configured in
         the selector's expandable_fields to ensure metadata matches API capabilities.
         """
+        aliases = field_aliases or {}
+        reverse = {v: k for k, v in aliases.items()}
+        exposed = set(get_dto_fields(dto_class)) if dto_class else None
+        excluded = {"password"} | set(getattr(dto_class, "_excluded_fields", ()))
+
+        def visible(api_name, model_name):
+            return (
+                not api_name.startswith("_")
+                and api_name not in excluded
+                and model_name not in excluded
+                and (exposed is None or api_name in exposed)
+                and (allowed_fields is None or api_name in allowed_fields)
+            )
+
         lines = [f"      <!-- {name} Entity Type -->"]
         lines.append(f'      <EntityType Name="{name}">')
         lines.append("        <Key>")
-        lines.append(f'          <PropertyRef Name="{model_class._meta.pk.name}"/>')
+        pk_name = reverse.get(model_class._meta.pk.name, model_class._meta.pk.name)
+        lines.append(f'          <PropertyRef Name="{pk_name}"/>')
         lines.append("        </Key>")
 
-        # Get fields from model
-        for field in model_class._meta.get_fields():  # noqa: W0212 - Django's public API
+        emitted = set()
+        # Navigation comes from model relations, scalar fields from the public DTO.
+        for field in model_class._meta.get_fields():
+            model_name = (
+                field.get_accessor_name()
+                if getattr(field, "auto_created", False) and not field.concrete
+                else field.name
+            )
+            api_name = reverse.get(model_name, model_name)
+            if not visible(api_name, model_name):
+                continue
+            emitted.add(api_name)
             if isinstance(field, (models.ManyToOneRel, models.ManyToManyRel)):
                 # Reverse relations - only add if in expandable_fields
                 related_name = field.get_accessor_name()
@@ -171,9 +204,7 @@ class ODataMetadataView(View):
                     continue
                 edm_type = f"{namespace}.{field.related_model.__name__}"
                 nullable = "true" if field.null else "false"
-                lines.append(
-                    f'        <NavigationProperty Name="{field.name}" Type="{edm_type}" Nullable="{nullable}"/>'
-                )
+                lines.append(f'        <NavigationProperty Name="{api_name}" Type="{edm_type}" Nullable="{nullable}"/>')
             elif isinstance(field, models.ManyToManyField):
                 # M2M - only add if in expandable_fields
                 if field.name not in expandable_fields:
@@ -182,7 +213,7 @@ class ODataMetadataView(View):
                     continue
                 related_model = field.related_model.__name__
                 lines.append(
-                    f'        <NavigationProperty Name="{field.name}" Type="Collection({namespace}.{related_model})"/>'
+                    f'        <NavigationProperty Name="{api_name}" Type="Collection({namespace}.{related_model})"/>'
                 )
             elif hasattr(field, "get_internal_type"):
                 # Regular field
@@ -193,7 +224,21 @@ class ODataMetadataView(View):
                 if field.name == "password":
                     continue
 
-                lines.append(f'        <Property Name="{field.name}" Type="{edm_type}" Nullable="{nullable}"/>')
+                lines.append(f'        <Property Name="{api_name}" Type="{edm_type}" Nullable="{nullable}"/>')
+
+        for api_name in sorted((exposed or set()) - emitted):
+            model_name = resolve_field_alias(api_name, aliases).replace(".", "__")
+            if not visible(api_name, model_name) or api_name in expandable_fields:
+                continue
+            related: Any = model_class
+            field = None
+            for part in model_name.split("__"):
+                field = get_field_safe(related, part)
+                if field is None:
+                    break
+                related = getattr(field, "related_model", None)
+            edm_type = self._django_to_edm_type(field) if field is not None else "Edm.String"
+            lines.append(f'        <Property Name="{api_name}" Type="{edm_type}" Nullable="true"/>')
 
         lines.append("      </EntityType>")
         lines.append("")

@@ -73,7 +73,11 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
         root_model: type[Model],
         allowed_fields: set[str] | None = None,
         field_aliases: dict[str, str] | None = None,
+        filterable_fields: list[str] | None = None,
+        non_filterable_fields: list[str] | None = None,
     ):
+        self.filterable_fields = filterable_fields
+        self.non_filterable_fields = non_filterable_fields or []
         self.root_model = root_model
         self.allowed_fields = allowed_fields
         self.field_aliases = field_aliases or {}
@@ -91,7 +95,21 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
         than a model field, so no existence check is done. Paths ("a__b") are left
         to Django's join machinery.
         """
-        if is_private_field(field_name):
+        resolved = resolve_field_alias(field_name, self.field_aliases)
+
+        def canonical(name):
+            return resolve_field_alias(odata_path_to_django(name), self.field_aliases)
+
+        if self.filterable_fields is not None:
+            allowed = {canonical(name) for name in self.filterable_fields}
+            if resolved not in allowed and get_base_field(resolved) not in allowed:
+                raise core_ex.InvalidFieldError(field_name, self.root_model.__name__, reason="field is not filterable")
+        elif any(
+            resolved == canonical(name) or resolved.startswith(canonical(name) + "__")
+            for name in self.non_filterable_fields
+        ):
+            raise core_ex.InvalidFieldError(field_name, self.root_model.__name__, reason="field is not filterable")
+        if any(is_private_field(part) or part == "password" for part in resolved.split("__")):
             raise core_ex.InvalidFieldError(
                 field_name, self.root_model.__name__, reason="access to private fields is not allowed"
             )
@@ -104,7 +122,11 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
             return resolve_field_alias(field_name, self.field_aliases)
 
         resolved_field = resolve_field_alias(field_name, self.field_aliases)
-        if "__" not in resolved_field and get_field_safe(self.root_model, resolved_field) is None:
+        if (
+            "__" not in resolved_field
+            and get_field_safe(self.root_model, resolved_field) is None
+            and not isinstance(getattr(self.root_model, resolved_field, None), property)
+        ):
             raise core_ex.InvalidFieldError(
                 field_name, self.root_model.__name__, reason="field does not exist on model"
             )
@@ -149,8 +171,14 @@ class AstToDjangoQVisitor(visitor.NodeVisitor):
 
     def visit_Attribute(self, node: ast.Attribute) -> F:
         ":meta private:"
-        owner = self.visit(node.owner)
-        full_id = owner.name + "__" + node.attr
+        full_id = node.attr
+        owner = node.owner
+        while isinstance(owner, ast.Attribute):
+            full_id = owner.attr + "__" + full_id
+            owner = owner.owner
+        if not isinstance(owner, ast.Identifier):
+            raise core_ex.QueryError("Invalid field path")
+        full_id = owner.name + "__" + full_id
         resolved_field = self._validate_field(full_id)
         return F(resolved_field)
 

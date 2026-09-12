@@ -10,11 +10,12 @@ import logging
 from functools import lru_cache
 from typing import Any
 
+from django.core.exceptions import FieldError
 from django.db.models import Prefetch, QuerySet
 
 from fc_selector.core import exceptions as core_ex
 from fc_selector.core.dtos.utils import get_dto_fields
-from fc_selector.core.intent import ExpandIntent, QueryIntent
+from fc_selector.core.intent import ExpandIntent, QueryIntent, SelectIntent
 from fc_selector.core.utils import get_base_field, is_private_field, odata_path_to_django
 from fc_selector.django.utils import (
     get_field_safe,
@@ -68,6 +69,9 @@ class DjangoExecutor:
         allowed_fields: list[str] | None = None,
         expandable_fields: dict[str, Any] | None = None,
         non_sortable_fields: list[str] | None = None,
+        filterable_fields: list[str] | None = None,
+        non_filterable_fields: list[str] | None = None,
+        sortable_fields: list[str] | None = None,
     ):
         """Initialize executor with optional field aliases and allowed fields.
 
@@ -91,6 +95,10 @@ class DjangoExecutor:
             non_sortable_fields: List of fields that cannot be used in $orderby.
                                Used to enforce sortable_fields/non_sortable_fields from the selector.
         """
+        self.filterable_fields = filterable_fields
+        self.non_filterable_fields = non_filterable_fields
+        self.sortable_fields = sortable_fields
+        self.restrict_expands = expandable_fields is not None
         self.field_aliases = field_aliases or {}
         self.allowed_fields = allowed_fields
         self.expandable_fields = expandable_fields or {}
@@ -121,6 +129,8 @@ class DjangoExecutor:
         Returns:
             List of DTOs/dicts if hybrid mode applies, None otherwise.
         """
+        if intent:
+            self._validate_intent(queryset, intent)
         if not dto_class or not intent or not intent.expand or not intent.expand.has_relations():
             return None
 
@@ -132,6 +142,10 @@ class DjangoExecutor:
         if not forward and not reverse_fk and not m2m:
             return None
 
+        # Native Django prefetch handles per-parent limits and deep forward expands.
+        # Property/alias-heavy DTOs also need model conversion for equivalent output.
+        if not self._hybrid_supported(queryset.model, intent, dto_class):
+            return None
         builder = HybridValuesBuilder(
             field_aliases=self.field_aliases,
             expandable_fields=self.expandable_fields,
@@ -166,6 +180,8 @@ class DjangoExecutor:
         if not intent:
             return queryset
 
+        self._validate_intent(queryset, intent)
+
         # Check if values mode is possible (no expand relations)
         can_use_values = use_values and (not intent.expand or not intent.expand.has_relations())
 
@@ -183,6 +199,88 @@ class DjangoExecutor:
 
         return queryset
 
+    def _nested_executor(self, relation_name):
+        config = get_expand_config(self.expandable_fields, relation_name) or {}
+        nested = config.get("expandable_fields")
+        dto = config.get("dto_class")
+        if nested is None and dto and hasattr(dto, "_get_relationship_info"):
+            nested = {name: info["dto_class"] for name, info in dto._get_relationship_info().items()}
+        return DjangoExecutor(
+            field_aliases=config.get("field_aliases"),
+            allowed_fields=config.get("allowed_fields"),
+            expandable_fields=nested,
+            filterable_fields=config.get("filterable_fields"),
+            non_filterable_fields=config.get("non_filterable_fields"),
+            sortable_fields=config.get("sortable_fields"),
+            non_sortable_fields=config.get("non_sortable_fields"),
+        )
+
+    def _hybrid_supported(self, model, intent, dto):
+        if self.field_aliases or any(isinstance(getattr(model, f, None), property) for f in get_dto_fields(dto)):
+            return False
+        if intent.expand:
+            for name, nested in intent.expand.relations.items():
+                config = get_expand_config(self.expandable_fields, name) or {}
+                child_dto = config.get("dto_class")
+                field = get_field_safe(model, name)
+                if not child_dto or not field:
+                    return False
+                if nested.pagination and nested.pagination.has_pagination():
+                    return False
+                if is_forward_relation(model, name) and (nested.expand or nested.filter):
+                    return False
+                if not self._nested_executor(name)._hybrid_supported(field.related_model, nested, child_dto):
+                    return False
+        return True
+
+    def _validate_intent(self, queryset, intent, depth=0):
+        if depth > 10:
+            raise core_ex.QueryError("Maximum expansion depth exceeded")
+        if intent.pagination:
+            for name, value in (("$top", intent.pagination.limit), ("$skip", intent.pagination.offset)):
+                maximum = 10000 if name == "$top" else 1000000
+                if value is not None and (type(value) is not int or not 0 <= value <= maximum):
+                    raise core_ex.InvalidValueError(value, f"integer between 0 and {maximum}", name)
+        if intent.select is not None and "*" in intent.select.fields:
+            intent.select = None
+        if intent.select is None and self.allowed_fields is not None:
+            intent.select = SelectIntent(fields=list(self.allowed_fields))
+        model = queryset.model
+        validator = AstToDjangoQVisitor(
+            model,
+            allowed_fields=set(self.allowed_fields) if self.allowed_fields is not None else None,
+            field_aliases=self.field_aliases,
+        )
+        for name in intent.select.fields if intent.select else ():
+            if name == "*":
+                continue
+            validator._validate_field(odata_path_to_django(name))
+        for order in intent.orderby.fields if intent.orderby else ():
+            resolved = validator._validate_field(odata_path_to_django(order.field))
+            if self.sortable_fields is not None:
+                allowed = {
+                    resolve_field_alias(odata_path_to_django(f), self.field_aliases) for f in self.sortable_fields
+                }
+                if resolved not in allowed and get_base_field(resolved) not in allowed:
+                    raise core_ex.InvalidFieldError(order.field, model.__name__, reason="field is not sortable")
+        if intent.expand:
+            for name, nested in intent.expand.relations.items():
+                self._validate_expandable_field(name, model)
+                field = get_field_safe(model, name)
+                if not field or not getattr(field, "related_model", None):
+                    raise core_ex.InvalidFieldError(name, model.__name__, reason="not a relation")
+                if (
+                    nested.pagination
+                    and nested.pagination.has_pagination()
+                    and not (field.one_to_many or field.many_to_many)
+                ):
+                    raise core_ex.QueryError("Pagination is only supported on collection expansions")
+                child_executor = self._nested_executor(name)
+                child_qs = field.related_model.objects.all()
+                child_executor._validate_intent(child_qs, nested, depth + 1)
+                child_executor._apply_filter(child_qs, nested)
+                child_executor._apply_ordering(child_qs, nested)
+
     def _apply_filter(self, queryset: QuerySet, intent: QueryIntent) -> QuerySet:
         """Apply filtering using AST visitor."""
         if not intent.filter:
@@ -191,16 +289,18 @@ class DjangoExecutor:
             raise core_ex.QueryError(f"Invalid filter expression: {intent.filter.expression}")
 
         try:
-            allowed = set(self.allowed_fields) if self.allowed_fields else None
+            allowed = set(self.allowed_fields) if self.allowed_fields is not None else None
             visitor = AstToDjangoQVisitor(
                 queryset.model,
                 field_aliases=self.field_aliases,
                 allowed_fields=allowed,
+                filterable_fields=self.filterable_fields,
+                non_filterable_fields=self.non_filterable_fields,
             )
             q_object = visitor.visit(intent.filter.ast)
             return queryset.filter(q_object)
 
-        except (ValueError, TypeError) as e:
+        except (FieldError, ValueError, TypeError) as e:
             logger.debug(
                 "Filter error on model=%s filter=%s: %s",
                 queryset.model.__name__,
@@ -216,8 +316,11 @@ class DjangoExecutor:
 
         order_fields = []
         for field in intent.orderby.fields:
-            base_field = get_base_field(odata_path_to_django(field.field))
-            if self.non_sortable_fields and base_field in self.non_sortable_fields:
+            blocked = {
+                resolve_field_alias(odata_path_to_django(f), self.field_aliases) for f in self.non_sortable_fields or ()
+            }
+            resolved = resolve_field_alias(odata_path_to_django(field.field), self.field_aliases)
+            if any(resolved == name or resolved.startswith(name + "__") for name in blocked):
                 raise core_ex.InvalidFieldError(
                     field.field,
                     queryset.model.__name__,
@@ -229,7 +332,10 @@ class DjangoExecutor:
             resolved_field = resolve_field_alias(django_field, self.field_aliases)
             order_fields.append(f"{prefix}{resolved_field}")
 
-        return queryset.order_by(*order_fields)
+        try:
+            return queryset.order_by(*order_fields)
+        except FieldError as exc:
+            raise core_ex.QueryError(str(exc)) from exc
 
     @staticmethod
     @lru_cache(maxsize=None)
@@ -279,6 +385,9 @@ class DjangoExecutor:
             queryset, select_only_fields = self._apply_selects(queryset, intent)
             only_fields.update(select_only_fields)
             logger.debug("[OData] select_only_fields: %s", select_only_fields)
+
+        if only_fields and not (intent.select and intent.select.has_fields()):
+            only_fields.update(field.attname for field in queryset.model._meta.concrete_fields)
 
         # 3. Apply optimization: .values() for dicts or .only() for model instances
         if only_fields:
@@ -332,7 +441,7 @@ class DjangoExecutor:
             is_forward = is_forward_relation(model, relation_name)
             django_relation = odata_path_to_django(relation_name)
 
-            if is_forward:
+            if is_forward and not (nested_intent.filter or nested_intent.expand or nested_intent.pagination):
                 select_related.append(django_relation)
                 self._process_forward_relation(
                     model,
@@ -358,7 +467,7 @@ class DjangoExecutor:
 
     def _validate_expandable_field(self, relation_name: str, model) -> None:
         """Validate that a relation is in the allowed expandable fields."""
-        if self.expandable_fields and relation_name not in self.expandable_fields:
+        if self.restrict_expands and relation_name not in self.expandable_fields:
             allowed = list(self.expandable_fields.keys())
             raise core_ex.InvalidFieldError(
                 relation_name,
@@ -551,14 +660,14 @@ class DjangoExecutor:
         nested_queryset = related_model.objects.all()
 
         # Recursive execution
-        nested_executor = DjangoExecutor(
-            field_aliases=self.field_aliases,
-            allowed_fields=self.allowed_fields,
-            expandable_fields=self.expandable_fields,
-        )
+        nested_executor = self._nested_executor(relation_name)
         optimized_nested_qs = nested_executor.execute(nested_queryset, nested_intent)
+        # Reverse prefetch groups on this connector; never defer it.
+        if field and getattr(field, "one_to_many", False) and optimized_nested_qs.query.deferred_loading[0]:
+            fields = optimized_nested_qs.query.deferred_loading[0]
+            optimized_nested_qs = optimized_nested_qs.only(*fields, field.field.attname)
 
-        return Prefetch(relation_name, queryset=optimized_nested_qs)
+        return Prefetch(relation_name, queryset=optimized_nested_qs, to_attr=f"_odata_{relation_name}")
 
     def _apply_selects(self, queryset: QuerySet, intent: QueryIntent) -> tuple[QuerySet, set[str]]:
         """Collect fields for only() based on $select.
@@ -582,6 +691,17 @@ class DjangoExecutor:
             resolved_field = resolve_field_alias(field_name, self.field_aliases)
             if get_field_safe(model, resolved_field):
                 only_fields.add(resolved_field)
+            elif "__" in resolved_field:
+                path, _, _ = resolved_field.rpartition("__")
+                related = model
+                for part in path.split("__"):
+                    relation = get_field_safe(related, part)
+                    if not relation or not getattr(relation, "related_model", None):
+                        break
+                    related = relation.related_model
+                else:
+                    queryset = queryset.select_related(path)
+                    only_fields.add(resolved_field)
 
         # Add FKs for expanded relations
         if intent.expand:

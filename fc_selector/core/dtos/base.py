@@ -174,12 +174,16 @@ class BaseODataDTO:
         for field_name in fields_to_populate - relationship_fields:
             # Check if there's a mapping for this DTO field
             model_field = dto_to_model.get(field_name, field_name)
-            if hasattr(instance, model_field):
-                value = getattr(instance, model_field)
-                # Skip relation accessors (Django managers, SQLAlchemy dynamic
-                # queries...): they expose .all() and are not scalar values.
-                if not callable(getattr(value, "all", None)):
-                    data[field_name] = value
+            value = instance
+            for part in model_field.replace(".", "__").split("__"):
+                if value is None:
+                    break
+                value = getattr(value, part, UNSET)
+                if value is UNSET:
+                    break
+            # Relation managers are not scalar DTO values.
+            if value is not UNSET and not callable(getattr(value, "all", None)):
+                data[field_name] = value
 
     @classmethod
     @lru_cache(maxsize=128)
@@ -214,7 +218,9 @@ class BaseODataDTO:
         if hasattr(instance, field_name):
             # Check if prefetch cache exists to avoid N+1 queries
             prefetch_cache = getattr(instance, "_prefetched_objects_cache", {})
-            if field_name in prefetch_cache:
+            if hasattr(instance, f"_odata_{field_name}"):
+                related_objs = getattr(instance, f"_odata_{field_name}")
+            elif field_name in prefetch_cache:
                 # Use prefetched objects (no additional query)
                 related_objs = prefetch_cache[field_name]
             else:
@@ -247,8 +253,12 @@ class BaseODataDTO:
         _depth: int = 0,
     ) -> None:
         """Populate a one-to-one or foreign key relationship field."""
-        if hasattr(instance, field_name):
-            related_obj = getattr(instance, field_name)
+        if hasattr(instance, f"_odata_{field_name}") or hasattr(instance, field_name):
+            related_obj = (
+                getattr(instance, f"_odata_{field_name}", None)
+                if hasattr(instance, f"_odata_{field_name}")
+                else getattr(instance, field_name)
+            )
             if related_obj is not None:
                 data[field_name] = dto_class.from_model(
                     related_obj, nested_selected, nested_expanded, nested_options, _depth=_depth + 1
@@ -335,13 +345,18 @@ class BaseODataDTO:
             # Parse nested $select
             nested_selected_fields = None
             if "$select" in nested_opts:
-                nested_selected_fields = set(nested_opts["$select"].split(","))
+                value = nested_opts["$select"]
+                nested_selected_fields = {f.strip() for f in value.split(",")} if isinstance(value, str) else set(value)
 
             # Parse nested $expand
             nested_expanded_fields: set[str] = set()
             nested_expand_options: dict = {}
             if "$expand" in nested_opts:
-                nested_expanded_fields, nested_expand_options = cls._parse_nested_expand_options(nested_opts["$expand"])
+                value = nested_opts["$expand"]
+                if isinstance(value, dict):
+                    nested_expanded_fields, nested_expand_options = set(value), value
+                else:
+                    nested_expanded_fields, nested_expand_options = cls._parse_nested_expand_options(value)
 
             # Populate the relationship (pass depth for recursion tracking)
             if is_many:

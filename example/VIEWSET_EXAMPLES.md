@@ -16,10 +16,7 @@ This guide shows complete examples of using ODataSelector + QueryBuilder + DTOs 
 
 ### 1. Setup (Already Done)
 
-```bash
-# Generate DTOs and Selectors
-python manage.py generate_odata_selector blog.BlogPost --single --force
-```
+Define DTO dataclasses and selectors explicitly; see [Quick Start](../docs/quickstart.md). No generator command is bundled.
 
 ### 2. Register URLs
 

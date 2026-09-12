@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from typing import TYPE_CHECKING
-from urllib.parse import unquote_plus
+from urllib.parse import quote
 
 from fc_selector.core.ast.nodes import And, BoolOp, Or
 from fc_selector.core.filters import Expand, Expression, OrderBy
@@ -92,19 +92,13 @@ class QueryBuilder:
 
     def _parse_query_string(self, query_string: str) -> None:
         """Parse an OData query string and populate internal state."""
-        if query_string:
-            # Handle URL-encoded strings ('+' becomes space, %2B becomes '+')
-            if "%" in query_string or "+" in query_string:
-                query_string = unquote_plus(query_string)
+        from fc_selector.protocols.odata.parsers.query import parse_query_params  # noqa: PLC0415
+        from fc_selector.protocols.odata.parsers.query.parser import _pagination_intent  # noqa: PLC0415
 
-        for param_pair in query_string.split("&"):
-            if "=" not in param_pair:
-                continue
-
-            key, value = param_pair.split("=", 1)
-            key = key.strip()
-            value = value.strip()
-
+        params = parse_query_params(query_string)
+        _pagination_intent(params)  # Reject malformed pagination rather than silently ignoring it.
+        for key, value in params.items():
+            key, value = key.strip(), value.strip()
             if key == "$filter":
                 self._filter = value
             elif key == "$select":
@@ -140,6 +134,7 @@ class QueryBuilder:
             self for method chaining
         """
         self._filter = expression
+        self._filter_ast = None
         return self
 
     def and_filter(self, expression: str) -> QueryBuilder:
@@ -152,6 +147,10 @@ class QueryBuilder:
         Returns:
             self for method chaining
         """
+        if self._filter_ast is not None:
+            self._filter_ast = BoolOp(op=And(), left=self._filter_ast, right=self._filter_parser(expression))
+            self._filter = None
+            return self
         if self._filter:
             self._filter = f"({self._filter}) and ({expression})"
         else:
@@ -168,6 +167,10 @@ class QueryBuilder:
         Returns:
             self for method chaining
         """
+        if self._filter_ast is not None:
+            self._filter_ast = BoolOp(op=Or(), left=self._filter_ast, right=self._filter_parser(expression))
+            self._filter = None
+            return self
         if self._filter:
             self._filter = f"({self._filter}) or ({expression})"
         else:
@@ -448,6 +451,7 @@ class QueryBuilder:
         Returns:
             Query string (e.g., "$filter=Price gt 100&$top=10")
         """
+        self._require_textual_query()
         params = []
 
         if self._filter:
@@ -465,7 +469,7 @@ class QueryBuilder:
         if self._count is not None:
             params.append(f"$count={'true' if self._count else 'false'}")
 
-        return "&".join(params)
+        return "&".join(quote(param, safe="=$ (),/;':") for param in params)
 
     def to_dict(self) -> dict:
         """
@@ -474,6 +478,7 @@ class QueryBuilder:
         Returns:
             Dictionary with OData query parameters
         """
+        self._require_textual_query()
         result = {}
 
         if self._filter:
@@ -492,6 +497,10 @@ class QueryBuilder:
             result["$count"] = "true" if self._count else "false"
 
         return result
+
+    def _require_textual_query(self) -> None:
+        if self._filter_ast is not None or self._expand_objects or self._orderby_objects:
+            raise ValueError("Use build() for fluent queries; textual conversion would discard AST options")
 
     def build(self) -> QueryIntent:
         """
@@ -555,15 +564,11 @@ class QueryBuilder:
 
     def _build_expand_from_strings(self) -> ExpandIntent:
         """Build expand intent from string-based expand (legacy)."""
+        from fc_selector.protocols.odata.parsers.query import parse_odata_query  # noqa: PLC0415
+
         assert self._expand is not None
-        relations = {}
-        for relation in self._expand:
-            if "(" in relation:
-                base_relation = relation.split("(")[0].strip()
-                relations[base_relation] = QueryIntent()
-            else:
-                relations[relation] = QueryIntent()
-        return ExpandIntent(relations=relations)
+        result = parse_odata_query({"$expand": ",".join(self._expand)}).expand
+        return result or ExpandIntent()
 
     def _build_orderby_intent(self) -> OrderIntent | None:
         """Build orderby intent from current builder state."""

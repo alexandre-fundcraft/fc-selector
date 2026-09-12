@@ -8,7 +8,7 @@ protocol-agnostic representation the rest of the library executes.
 from typing import Any
 from urllib.parse import parse_qsl
 
-from fc_selector.core.exceptions import InvalidValueError
+from fc_selector.core.exceptions import InvalidValueError, QueryError
 from fc_selector.core.intent import (
     ExpandIntent,
     FilterIntent,
@@ -32,6 +32,8 @@ def parse_query_params(query_string: str) -> dict[str, str]:
     if not query_string or not query_string.strip():
         return {}
 
+    if len(query_string) > 4096:
+        raise QueryError("Query string too long (maximum 4096 characters)")
     return dict(parse_qsl(query_string.removeprefix("?")))
 
 
@@ -131,7 +133,7 @@ def _expand_intent(nested_options: dict[str, dict[str, Any]]) -> ExpandIntent:
             if isinstance(value, dict):
                 nested.expand = _expand_intent(value)
             elif isinstance(value, str):
-                nested.expand = ExpandIntent(relations={r.strip(): QueryIntent() for r in value.split(",")})
+                nested.expand = _expand_intent(parse_expand(value))
 
         relations[relation_name] = nested
 

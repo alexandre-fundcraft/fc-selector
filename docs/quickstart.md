@@ -23,20 +23,16 @@ class BlogPost(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 ```
 
-## 2. Generate Selectors & DTOs
+## 2. Define Selectors & DTOs
 
-Run the management command to auto-generate selectors and DTOs:
-
-```bash
-python manage.py generate_odata_selector myapp.BlogPost --single --force
-```
-
-This creates `myapp/selectors/blog_post.py` with:
+Create `myapp/selectors/blog_post.py` explicitly (no generator command is bundled):
 
 ```python
 from dataclasses import dataclass
 from fc_selector.core.dtos import BaseODataDTO, UNSET
-from fc_selector.django.selector import ODataSelector, QueryBuilder
+from fc_selector.django.selector import ODataSelector
+from fc_selector.core import QueryBuilder
+from myapp.models import Author, BlogPost
 
 @dataclass
 class AuthorDTO(BaseODataDTO):
@@ -67,7 +63,7 @@ class BlogPostSelector(ODataSelector):
 ### From a Service or Use Case (String API)
 
 ```python
-from fc_selector.django.selector import QueryBuilder
+from fc_selector.core import QueryBuilder
 from myapp.selectors.blog_post import BlogPostSelector
 
 def get_published_posts(limit: int = 10):
@@ -92,7 +88,7 @@ def get_post_by_id(post_id: int):
 For better IDE support and type safety, use the fluent API:
 
 ```python
-from fc_selector.django.selector import QueryBuilder
+from fc_selector.core import QueryBuilder
 from fc_selector.core.filters import Field, Expand, OrderBy
 from myapp.selectors.blog_post import BlogPostSelector
 
@@ -132,7 +128,7 @@ def get_featured_posts_with_author():
 # viewsets.py
 from rest_framework import viewsets
 from rest_framework.response import Response
-from fc_selector.django.selector import QueryBuilder
+from fc_selector.core import QueryBuilder
 from fc_selector.django.drf.viewsets import ODataSelectorViewSetMixin
 from fc_selector.django.drf.serializers import ODataDTOSerializer
 

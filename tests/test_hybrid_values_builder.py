@@ -701,8 +701,8 @@ class TestReverseFK:
         child_b = next(c for c in children if c.label == "Child-B")
         assert child_b.category is None
 
-    def test_nested_pagination_global(self, parent_with_children):
-        """$expand=children($top=1) -> only 1 child globally (limitation)."""
+    def test_nested_pagination_per_parent(self, parent_with_children):
+        """$expand=children($top=1) uses native per-parent prefetch pagination."""
         intent = QueryIntent(
             expand=ExpandIntent(
                 relations={
@@ -718,7 +718,7 @@ class TestReverseFK:
         result = builder.execute(qs, intent, ParentWithRelationsDTO)
 
         assert len(result) == 1
-        # Should only have 1 child total across all parents because pagination applies to the single child query
+        # This fixture has one parent; multi-parent behavior is covered by audit regressions.
         assert len(result[0].children) == 1
         assert result[0].children[0].label == "Child-A"
 

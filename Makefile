@@ -1,5 +1,5 @@
 .PHONY: help sync test test-unit test-integration test-e2e test-coverage clean lint format \
-        example-setup example-run example-clean seed-data docs-serve docs-build
+        example-setup example-run example-clean docs-serve docs-build
 
 help:
 	@echo "FC Selector - Development Commands"
@@ -18,7 +18,6 @@ help:
 	@echo "  make example-setup    Set up example application database"
 	@echo "  make example-run      Run example application server"
 	@echo "  make example-clean    Remove the example application database"
-	@echo "  make seed-data        Seed example application with fake data"
 	@echo ""
 	@echo "  make docs-serve       Serve documentation locally (localhost:9999)"
 	@echo "  make docs-build       Build static documentation site"
@@ -35,7 +34,7 @@ test:
 	uv run pytest tests/ --ignore=tests/performance/ --cov=fc_selector --cov-report=term
 
 test-unit:
-	uv run pytest tests/core/
+	uv run pytest tests/ --ignore=tests/integration/ --ignore=tests/e2e/ --ignore=tests/performance/
 
 test-integration:
 	uv run pytest tests/integration/
@@ -49,8 +48,8 @@ test-coverage:
 
 # Code Quality
 lint:
-	-uv run ruff check fc_selector tests
-	-uv run mypy fc_selector
+	uv run ruff check fc_selector tests
+	uv run mypy fc_selector
 
 format:
 	uv run ruff check --fix --unsafe-fixes fc_selector tests
@@ -71,9 +70,6 @@ example-run:
 example-clean:
 	rm -f example/db.sqlite3
 	@echo "Database removed. Run 'make example-setup' to recreate."
-
-seed-data:
-	DJANGO_SETTINGS_MODULE=example.example.settings uv run python example/manage.py seed_data
 
 # Documentation
 docs-serve:

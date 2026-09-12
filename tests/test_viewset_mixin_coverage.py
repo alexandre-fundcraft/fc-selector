@@ -6,8 +6,10 @@ from unittest.mock import MagicMock
 
 import pytest
 from django.test import RequestFactory
+from rest_framework import viewsets
 
 from fc_selector.core import exceptions as core_ex
+from fc_selector.core.intent import QueryIntent
 from fc_selector.django.drf.viewsets.selector_mixin import (
     ODataSelectorViewSetMixin,
     build_odata_response,
@@ -90,7 +92,7 @@ class TestSelectorMixinCoverage:
 
         mock_selector = MagicMock()
 
-        class TestViewSet(ODataSelectorViewSetMixin):
+        class TestViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
             def selector_class(self):
                 return mock_selector
 
@@ -122,7 +124,7 @@ class TestSelectorMixinCoverage:
         request = rf.get("/odata/posts/")
         mock_selector = MagicMock()
 
-        class TestViewSet(ODataSelectorViewSetMixin):
+        class TestViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
             def selector_class(self):
                 return mock_selector
 
@@ -146,9 +148,10 @@ class TestSelectorMixinCoverage:
         request = rf.get("/odata/posts/1/")
 
         mock_selector = MagicMock()
-        mock_selector.get_one.return_value = None
+        mock_selector._parse.return_value = ({}, QueryIntent())
+        mock_selector.execute.return_value.first.return_value = None
 
-        class TestViewSet(ODataSelectorViewSetMixin):
+        class TestViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
             def selector_class(self):
                 return mock_selector
 
@@ -164,8 +167,9 @@ class TestSelectorMixinCoverage:
         request = rf.get("/odata/posts/1/")
 
         mock_selector = MagicMock()
+        mock_selector._parse.return_value = ({}, QueryIntent())
 
-        class TestViewSet(ODataSelectorViewSetMixin):
+        class TestViewSet(ODataSelectorViewSetMixin, viewsets.GenericViewSet):
             def selector_class(self):
                 return mock_selector
 
@@ -174,16 +178,16 @@ class TestSelectorMixinCoverage:
         viewset = TestViewSet()
 
         # Test InvalidFieldError
-        mock_selector.get_one.side_effect = core_ex.InvalidFieldError("field", "Model")
+        mock_selector.execute.side_effect = core_ex.InvalidFieldError("field", "Model")
         with pytest.raises(Exception):
             viewset.retrieve(request, pk=1)
 
         # Test InvalidValueError
-        mock_selector.get_one.side_effect = core_ex.InvalidValueError("val", "int", "$top")
+        mock_selector.execute.side_effect = core_ex.InvalidValueError("val", "int", "$top")
         with pytest.raises(Exception):
             viewset.retrieve(request, pk=1)
 
         # Test QueryError
-        mock_selector.get_one.side_effect = core_ex.QueryError("error")
+        mock_selector.execute.side_effect = core_ex.QueryError("error")
         with pytest.raises(Exception):
             viewset.retrieve(request, pk=1)

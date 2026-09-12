@@ -78,7 +78,7 @@ The system implements several security measures:
 *   `only()` to fetch only requested fields.
 
 ### Hybrid Values Mode
-*   Uses `.values()` with `__` notation for forward FK/OneToOne expands — 2-5x faster than standard mode.
+*   Uses `.values()` with `__` notation for forward FK/OneToOne expands — workload-dependent than standard mode.
 *   Uses 1+N query strategy for reverse FK/M2M relations — faster than model instantiation.
 *   Controlled per-selector via `values_mode` Meta option (default: `True`).
 *   Falls back to standard mode only when `values_mode = False`.

@@ -2,13 +2,13 @@
 
 ## Overview
 
-Hybrid values mode bridges Django's fast `.values()` execution with `$expand` support for **all relation types** (Forward FK, Reverse FK, ManyToMany). It provides the speed of `.values()` (2-5x faster than standard mode) while still returning nested DTOs.
+Hybrid values mode bridges Django's fast `.values()` execution with `$expand` support for **all relation types** (Forward FK, Reverse FK, ManyToMany). It provides the speed of `.values()` while still returning nested DTOs.
 
 | Mode | Speed | `$expand` | Returns |
 |------|-------|-----------|---------|
 | **Standard** | Baseline | Full (forward + reverse) | DTOs via `from_model()` |
-| **Values** | 2-5x faster | None | Raw dicts |
-| **Hybrid** | 2-5x faster | **Full (forward + reverse)** | DTOs via `DTO(**dict)` |
+| **Values** | workload-dependent | None | Raw dicts |
+| **Hybrid** | workload-dependent | **Full (forward + reverse)** | DTOs via `DTO(**dict)` |
 
 ## How It Works
 
@@ -111,13 +111,11 @@ Example: `$expand=comments($expand=replies($expand=author))`
 
 ## Nested Pagination
 
-Pagination (`$top`, `$skip`) inside a reverse relation `$expand` is applied **globally** to the child query, not per-parent.
-
-**Example**: `$expand=comments($top=5)`
--   **Standard Mode**: Returns top 5 comments *per post* (if using `Prefetch` with window functions, otherwise usually ignores it or applies globally).
--   **Hybrid Mode**: Returns top 5 comments *total* across all expanded posts.
-
-*Limit*: This is a known limitation of the `.values()` approach. If you need strict per-parent limits, consider using custom loaders or standard mode with window functions.
+Pagination (`$top`, `$skip`) within collection expansions applies **per parent**.
+The selector and direct hybrid builder use standard Django prefetch for these
+queries, with window functions provided by Django. `$expand=comments($top=5)`
+returns up to five comments for each post, not five across the whole result.
+The database backend must support window functions for sliced collection prefetch.
 
 ## Relation Types Support
 
@@ -130,12 +128,10 @@ Pagination (`$top`, `$skip`) inside a reverse relation `$expand` is applied **gl
 
 ## Performance Characteristics
 
-| Scenario | Standard Mode | Hybrid Mode | Benefit |
-|----------|---------------|-------------|---------|
-| **Simple List** | 100ms | 20ms | **5x Faster** (No model init) |
-| **Forward Expand** | 120ms | 25ms | **5x Faster** (Single query, no model init) |
-| **Reverse Expand** | N+1 queries (lazy) or 2 queries (prefetch) | 2 queries | **Faster** (No model init for children) |
-| **M2M Expand** | N+1 queries (lazy) or 2 queries (prefetch) | 3 queries | **Faster** (No model init for children) |
+There is no fixed speedup guarantee. Measure your own database and DTO shapes.
+Simple DTO lists use standard model conversion; supported expansions use hybrid
+values queries. Properties, aliases and complex expansion shapes fall back to
+standard ORM execution to preserve results.
 
 **Why 1+N?**
 Using `LEFT OUTER JOIN` for reverse relations often leads to **row explosion** (Cartesian product), where the parent data is duplicated for every child row. This massively increases data transfer and parsing time.

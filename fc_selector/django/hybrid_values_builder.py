@@ -20,8 +20,9 @@ from django.db.models import QuerySet
 from fc_selector.core.dtos.base import MAX_DTO_RECURSION_DEPTH, UNSET, BaseODataDTO
 from fc_selector.core.dtos.utils import get_dto_fields
 from fc_selector.core.intent import QueryIntent
+from fc_selector.core.intent.models import dto_options
 from fc_selector.core.utils import odata_path_to_django
-from fc_selector.django.executor import apply_pagination, get_expand_config
+from fc_selector.django.executor import DjangoExecutor, apply_pagination, get_expand_config
 from fc_selector.django.utils import (
     get_field_safe,
     get_m2m_info,
@@ -37,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 def _get_pk(obj: Any, pk_name: str, as_dicts: bool) -> Any:
     """Read the primary key from a parent object (dict or DTO)."""
-    return obj[pk_name] if as_dicts else getattr(obj, pk_name)
+    return obj.get(pk_name) if as_dicts else getattr(obj, pk_name, UNSET)
 
 
 def _set_field(obj: Any, name: str, value: Any, as_dicts: bool) -> None:
@@ -48,21 +49,14 @@ def _set_field(obj: Any, name: str, value: Any, as_dicts: bool) -> None:
         setattr(obj, name, value)
 
 
-def _collect_pks(objects: list, pk_name: str, as_dicts: bool) -> list:
-    """Collect primary keys from a list of parent objects."""
-    if as_dicts:
-        return [obj[pk_name] for obj in objects if pk_name in obj]
-    return [pk for obj in objects if (pk := getattr(obj, pk_name)) is not UNSET]
-
-
 class HybridValuesBuilder:
     """
     Executes a QueryIntent using .values() with $expand support for forward,
     reverse FK, and M2M relations.
 
     When ``as_dicts=False`` (default), returns DTO instances with nested DTOs.
-    When ``as_dicts=True``, returns plain dicts with nested dicts — no DTO
-    instantiation at all.
+    When ``as_dicts=True``, returns plain dicts with nested dicts. The fast path avoids DTO
+    instantiation; unsupported shapes use standard model/DTO conversion.
     """
 
     def __init__(
@@ -70,6 +64,7 @@ class HybridValuesBuilder:
         field_aliases: dict[str, str] | None = None,
         expandable_fields: dict[str, Any] | None = None,
     ):
+        self._identities: dict[int, Any] = {}
         self.field_aliases = field_aliases or {}
         self.expandable_fields = expandable_fields or {}
 
@@ -93,6 +88,21 @@ class HybridValuesBuilder:
             List of DTOs (default) or list of dicts (``as_dicts=True``).
         """
         model = queryset.model
+        self._identities.clear()
+        executor = DjangoExecutor(field_aliases=self.field_aliases, expandable_fields=self.expandable_fields)
+        executor._validate_intent(queryset, intent)
+        if not executor._hybrid_supported(model, intent, dto_class):
+            selected, options = dto_options(intent)
+            # A legacy DTO can use model names while the API uses aliases.
+            if selected is not None:
+                dto_fields = set(get_dto_fields(dto_class))
+                selected = {name if name in dto_fields else self.field_aliases.get(name, name) for name in selected}
+            mapping = {value: key for key, value in self.field_aliases.items()}
+            result = [
+                dto_class.from_model(row, selected, set(options), options, field_mapping=mapping)
+                for row in executor.execute(queryset, intent)
+            ]
+            return [dto.to_dict() for dto in result] if as_dicts else result
 
         forward_relations: dict[str, QueryIntent] = {}
         reverse_fk_relations: dict[str, QueryIntent] = {}
@@ -123,6 +133,8 @@ class HybridValuesBuilder:
             )
             for row in rows
         ]
+
+        self._identities.update((id(parent), row[model._meta.pk.name]) for parent, row in zip(parents, rows))
 
         # Phase 2: attach reverse FK children
         if reverse_fk_relations and parents:
@@ -403,7 +415,8 @@ class HybridValuesBuilder:
             return
 
         pk_name = model._meta.pk.name
-        parent_pks = _collect_pks(parents, pk_name, as_dicts)
+        parent_pks = [self._identities.get(id(p), _get_pk(p, pk_name, as_dicts)) for p in parents]
+        parent_pks = [pk for pk in parent_pks if pk is not None and pk is not UNSET]
         if not parent_pks:
             return
 
@@ -473,11 +486,12 @@ class HybridValuesBuilder:
                     fk_attname,
                     as_dicts=as_dicts,
                 )
+                self._identities[id(child)] = row[child_model._meta.pk.name]
                 grouped[parent_pk].append(child)
 
             # Attach to parents
             for p in parents:
-                pk = _get_pk(p, pk_name, as_dicts)
+                pk = self._identities.get(id(p), _get_pk(p, pk_name, as_dicts))
                 _set_field(p, relation_name, grouped.get(pk, []), as_dicts)
 
             # Recursive: handle nested reverse FK / M2M on child objects
@@ -508,7 +522,8 @@ class HybridValuesBuilder:
             return
 
         pk_name = model._meta.pk.name
-        parent_pks = _collect_pks(parents, pk_name, as_dicts)
+        parent_pks = [self._identities.get(id(p), _get_pk(p, pk_name, as_dicts)) for p in parents]
+        parent_pks = [pk for pk in parent_pks if pk is not None and pk is not UNSET]
         if not parent_pks:
             return
 
@@ -595,16 +610,17 @@ class HybridValuesBuilder:
                     child_forward,
                     as_dicts=as_dicts,
                 )
+                self._identities[id(child)] = row[child_pk_name]
                 child_by_pk[row[child_pk_name]] = child
 
             # Attach to parents using through mapping
             for p in parents:
-                pk = _get_pk(p, pk_name, as_dicts)
-                child_pks = parent_to_child_pks.get(pk, [])
+                pk = self._identities.get(id(p), _get_pk(p, pk_name, as_dicts))
+                child_pks = set(parent_to_child_pks.get(pk, []))
                 _set_field(
                     p,
                     relation_name,
-                    [child_by_pk[cpk] for cpk in child_pks if cpk in child_by_pk],
+                    [child for cpk, child in child_by_pk.items() if cpk in child_pks],
                     as_dicts,
                 )
 
@@ -642,6 +658,7 @@ class HybridValuesBuilder:
             field_aliases=self.field_aliases,
             expandable_fields=child_expandable,
         )
+        child_builder._identities = self._identities
         if child_reverse_fk:
             child_builder._attach_reverse_fk_children(
                 child_model,

@@ -147,14 +147,11 @@ curl "http://localhost:8000/api/authors/1/posts/?$filter=status eq 'published'&$
 
 ## 🔧 Setup (if new project)
 
-### 1. Generate DTOs and Selectors
+### 1. Define DTOs and Selectors
 
-```bash
-cd /Users/alexandre.busquets/Repos/fc-selector/example
-python manage.py generate_odata_selector blog.BlogPost --single --force
-```
+Define DTO dataclasses and selectors explicitly; see [Quick Start](../docs/quickstart.md). No generator command is bundled.
 
-This creates:
+The example already contains:
 - `/blog/selectors/blog_post.py` - DTOs and Selectors
 - `/blog/dto_serializers.py` - Serializers (already created)
 
@@ -314,16 +311,14 @@ urlpatterns = [
 ]
 ```
 
-Now `GET /odata/$metadata` returns auto-generated EDM schema.
+Now `GET /odata/$metadata` returns defined EDM schema.
 
 ## 🐛 Troubleshooting
 
 ### Error: "cannot import name 'BlogPostSelector'"
 
 Solution: Generate the selectors:
-```bash
-python manage.py generate_odata_selector blog.BlogPost --single --force
-```
+Define the DTO dataclass and selector explicitly; see [Quick Start](../docs/quickstart.md). No generator command is bundled.
 
 ### Error: "cannot import name 'BlogPostDTOSerializer'"
 

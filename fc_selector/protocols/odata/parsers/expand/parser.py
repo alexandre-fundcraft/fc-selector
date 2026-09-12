@@ -7,6 +7,8 @@ Example: "posts,comments($select=text)" → {'posts': {}, 'comments': {'$select'
 
 from typing import Any
 
+from fc_selector.core.exceptions import QueryError
+
 
 def parse_expand(value: str) -> dict[str, dict[str, Any]]:
     """
@@ -37,14 +39,21 @@ def parse_expand(value: str) -> dict[str, dict[str, Any]]:
     result = {}
     current_field = ""
     paren_depth = 0
+    in_string = False
 
     # Add trailing separator to ensure last field is processed
     for char in value + ",":
-        if char == "(":
+        if char == "'":
+            in_string = not in_string
+        if in_string or char == "'":
+            current_field += char
+        elif char == "(":
             paren_depth += 1
             current_field += char
         elif char == ")":
             paren_depth -= 1
+            if paren_depth < 0:
+                raise QueryError("Unbalanced $expand parentheses")
             current_field += char
         elif (char in {",", ";"}) and paren_depth == 0:
             # Both comma and semicolon are valid separators
@@ -55,6 +64,8 @@ def parse_expand(value: str) -> dict[str, dict[str, Any]]:
         else:
             current_field += char
 
+    if paren_depth or in_string:
+        raise QueryError("Unbalanced $expand expression")
     return result
 
 
@@ -102,13 +113,20 @@ def _parse_query_options(options_string: str) -> dict[str, Any]:
     options = {}
     current_option = ""
     paren_depth = 0
+    in_string = False
 
     for char in options_string + ";":
-        if char == "(":
+        if char == "'":
+            in_string = not in_string
+        if in_string or char == "'":
+            current_option += char
+        elif char == "(":
             paren_depth += 1
             current_option += char
         elif char == ")":
             paren_depth -= 1
+            if paren_depth < 0:
+                raise QueryError("Unbalanced $expand parentheses")
             current_option += char
         elif char == ";" and paren_depth == 0:
             if current_option.strip():
@@ -119,6 +137,8 @@ def _parse_query_options(options_string: str) -> dict[str, Any]:
         else:
             current_option += char
 
+    if paren_depth or in_string:
+        raise QueryError("Unbalanced $expand expression")
     return options
 
 

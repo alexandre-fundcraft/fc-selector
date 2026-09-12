@@ -46,13 +46,6 @@ if dto.content is not UNSET:
 
 ## Creating DTOs
 
-### Auto-generated
-
-Use the management command:
-
-```bash
-python manage.py generate_odata_selector myapp.BlogPost --single
-```
 
 ### Manual Definition
 

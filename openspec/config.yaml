@@ -1,0 +1,6 @@
+schema: spec-driven
+context: |
+  Python 3.11+, Django, DRF and SLY. Use existing dependencies and shared query intent.
+  Keep pytest --no-migrations: it is intentional, not an audit defect.
+  Add failing regressions before bug fixes; verify full tests, Ruff and Mypy.
+  Notify the user before accessing files outside the project directory.
