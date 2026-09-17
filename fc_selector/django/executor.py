@@ -496,6 +496,12 @@ class DjangoExecutor:
             only_fields.update(select_only_fields)
             logger.debug("[OData] select_only_fields: %s", select_only_fields)
 
+            if use_values:
+                # Annotated fields (Meta.field_annotations) aren't real model columns, so
+                # _apply_selects skips them; ensure_field_annotations already put them on
+                # the queryset earlier in _execute_prepared, so .values() can select them.
+                only_fields.update(name for name in intent.select.fields if name in self.field_annotations)
+
         if only_fields and not (intent.select and intent.select.has_fields()):
             only_fields.update(field.attname for field in queryset.model._meta.concrete_fields)
 

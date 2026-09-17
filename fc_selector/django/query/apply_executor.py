@@ -38,30 +38,41 @@ def apply_to_queryset(
     allowed_fields: list[str] | None = None,
     apply_functions: dict[str, Callable[[], Any]] | None = None,
     apply_aggregates: dict[str, Callable[..., Any]] | None = None,
-    field_annotations: dict[str, Callable[[], Any]] | None = None, # NEW
-    annotation_dependencies: dict[str, tuple[str, ...]] | None = None, # NEW
+    field_annotations: dict[str, Callable[[], Any]] | None = None,
+    annotation_dependencies: dict[str, tuple[str, ...]] | None = None,
+    field_aliases: dict[str, str] | None = None,
+    filterable_fields: list[str] | None = None,
+    non_filterable_fields: list[str] | None = None,
 ) -> QuerySet:
     """Apply a parsed $apply pipeline to a queryset, returning a .values(...) queryset."""
     field_annotations = field_annotations or {}
     annotation_dependencies = annotation_dependencies or {}
     apply_functions = apply_functions or {}
     apply_aggregates = apply_aggregates or {}
-    apply_ast: ast_nodes.Apply = apply_intent.ast # Correct type hint
+    apply_ast: ast_nodes.Apply = apply_intent.ast
 
-    executor = DjangoExecutor(field_annotations=field_annotations, annotation_dependencies=annotation_dependencies) # NEW
+    executor = DjangoExecutor(field_annotations=field_annotations, annotation_dependencies=annotation_dependencies)
+    allowed_fields_set = set(allowed_fields) if allowed_fields is not None else None
 
     for stage in apply_ast.transformations:
-        if isinstance(stage, ast_nodes.ApplyFilter): # Use ast_nodes
-            referenced = list(identifier_names(stage.ast)) # Use identifier_names
+        if isinstance(stage, ast_nodes.ApplyFilter):
+            referenced = list(identifier_names(stage.ast))
             queryset = executor.ensure_field_annotations(queryset, referenced)
-            queryset = queryset.filter(AstToDjangoQVisitor(queryset.model).visit(stage.ast))
+            visitor = AstToDjangoQVisitor(
+                queryset.model,
+                allowed_fields=allowed_fields_set,
+                field_aliases=field_aliases,
+                filterable_fields=filterable_fields,
+                non_filterable_fields=non_filterable_fields,
+            )
+            queryset = queryset.filter(visitor.visit(stage.ast))
             continue
 
-        if isinstance(stage, ast_nodes.ApplyGroupBy): # Use ast_nodes
+        if isinstance(stage, ast_nodes.ApplyGroupBy):
             plain_fields = [f for f in stage.fields if f not in apply_functions]
-            queryset = executor.ensure_field_annotations(queryset, plain_fields) # Use new executor
+            queryset = executor.ensure_field_annotations(queryset, plain_fields)
             source_fields = [s.source_field for s in (stage.aggregate or []) if s.source_field]
-            queryset = executor.ensure_field_annotations(queryset, [f for f in source_fields if f not in apply_aggregates]) # Use new executor
+            queryset = executor.ensure_field_annotations(queryset, [f for f in source_fields if f not in apply_aggregates])
             queryset = _apply_groupby(queryset, stage, allowed_fields, apply_functions, apply_aggregates)
             continue
 
@@ -98,6 +109,9 @@ def _apply_groupby(queryset, stage: ast_nodes.ApplyGroupBy, allowed_fields, appl
         for field_spec in stage.fields:
             if field_spec not in allowed_fields and field_spec not in apply_functions:
                 raise core_ex.FieldNotFoundError(field_spec, queryset.model.__name__)
+        for spec in stage.aggregate or []:
+            if spec.source_field and spec.source_field not in allowed_fields:
+                raise core_ex.FieldNotFoundError(spec.source_field, queryset.model.__name__)
 
     group_values: list[str] = []
     annotations: dict[str, Any] = {}

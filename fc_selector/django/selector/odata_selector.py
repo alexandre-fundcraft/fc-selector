@@ -96,12 +96,13 @@ class ODataSelector:
         ODataSelector._validate_field_aliases(self.field_aliases)
 
         non_sortable = [] if getattr(meta, "sortable_fields", None) is not None else self.non_sortable_fields
+        self._filterable_fields_for_visitor = getattr(meta, "filterable_fields", None)
         self._executor = DjangoExecutor(
             field_aliases=self.field_aliases,
             allowed_fields=self.allowed_fields,
             expandable_fields=self.expandable_fields,
             non_sortable_fields=non_sortable or None,
-            filterable_fields=getattr(meta, "filterable_fields", None),
+            filterable_fields=self._filterable_fields_for_visitor,
             non_filterable_fields=self.non_filterable_fields,
             sortable_fields=getattr(meta, "sortable_fields", None),
             field_annotations=self.field_annotations,
@@ -338,6 +339,17 @@ class ODataSelector:
 
         _, intent = self._parse(query_string or "")
         if intent.apply is not None and intent.apply.has_apply():
+            if (
+                (intent.filter and intent.filter.has_filter())
+                or (intent.select and intent.select.has_fields())
+                or (intent.orderby and intent.orderby.has_ordering())
+                or (intent.pagination and intent.pagination.has_pagination())
+            ):
+                raise core_ex.QueryError(
+                    "$apply cannot be combined with $filter, $select, $orderby, or $top/$skip; "
+                    "express filtering as a filter(...) stage inside $apply instead."
+                )
+
             from fc_selector.django.query.apply_executor import apply_to_queryset
 
             queryset = apply_to_queryset(
@@ -346,6 +358,11 @@ class ODataSelector:
                 allowed_fields=self.allowed_fields,
                 apply_functions=self.apply_functions,
                 apply_aggregates=self.apply_aggregates,
+                field_annotations=self.field_annotations,
+                annotation_dependencies=self.annotation_dependencies,
+                field_aliases=self.field_aliases,
+                filterable_fields=self._filterable_fields_for_visitor,
+                non_filterable_fields=self.non_filterable_fields,
             )
             return list(queryset)
 
