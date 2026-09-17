@@ -75,6 +75,8 @@ class DjangoExecutor:
         filterable_fields: list[str] | None = None,
         non_filterable_fields: list[str] | None = None,
         sortable_fields: list[str] | None = None,
+        field_annotations: dict[str, Callable[[], Any]] | None = None,
+        annotation_dependencies: dict[str, tuple[str, ...]] | None = None,
     ):
         """Initialize executor with optional field aliases and allowed fields.
 
@@ -106,6 +108,8 @@ class DjangoExecutor:
         self.allowed_fields = allowed_fields
         self.expandable_fields = expandable_fields or {}
         self.non_sortable_fields = set(non_sortable_fields) if non_sortable_fields else None
+        self.field_annotations = field_annotations or {}
+        self.annotation_dependencies = annotation_dependencies or {}
 
     def try_hybrid(
         self,
@@ -191,6 +195,10 @@ class DjangoExecutor:
 
     def _execute_prepared(self, queryset, intent, *, use_values=False):
         """Execute a private, prepared intent; also used by nested prefetch."""
+        referenced_fields = self._referenced_field_names(intent)
+        if referenced_fields:
+            queryset = self.ensure_field_annotations(queryset, referenced_fields)
+
         # Check if values mode is possible (no expand relations)
         can_use_values = use_values and (not intent.expand or not intent.expand.has_relations())
 
@@ -208,6 +216,29 @@ class DjangoExecutor:
 
         return queryset
 
+    def _referenced_field_names(self, intent) -> list[str]:
+        """Every field name the intent's filter/select/orderby touches, for
+        on-demand annotation resolution. Uses the AST's own field references
+        rather than re-parsing the raw expression string."""
+        names: set[str] = set()
+        if intent.filter and intent.filter.ast is not None:
+            names |= identifier_names(intent.filter.ast)
+        if intent.select:
+            names |= set(intent.select.fields)
+        if intent.orderby:
+            names |= {f.field for f in intent.orderby.fields}
+        # Add fields from apply clause (if any)
+        if intent.apply and intent.apply.ast:
+            for stage in intent.apply.ast.transformations:
+                if isinstance(stage, ast_nodes.ApplyFilter):
+                    names |= identifier_names(stage.ast)
+                elif isinstance(stage, ast_nodes.ApplyGroupBy):
+                    names |= set(stage.fields)
+                    if stage.aggregate:
+                        names |= {s.source_field for s in stage.aggregate if s.source_field}
+        return list(names)
+
+
     def _nested_executor(self, relation_name):
         config = get_expand_config(self.expandable_fields, relation_name) or {}
         nested = config.get("expandable_fields")
@@ -222,7 +253,29 @@ class DjangoExecutor:
             non_filterable_fields=config.get("non_filterable_fields"),
             sortable_fields=config.get("sortable_fields"),
             non_sortable_fields=config.get("non_sortable_fields"),
+            field_annotations=config.get("field_annotations"),
+            annotation_dependencies=config.get("annotation_dependencies"),
         )
+
+
+def identifier_names(node) -> set[str]:
+    """Recursively collect every Identifier.full_name() referenced in a filter AST."""
+    from fc_selector.core.ast.nodes import Identifier, Node
+
+    names: set[str] = set()
+    if isinstance(node, Identifier):
+        names.add(node.full_name())
+        return names
+    if isinstance(node, Node):
+        for field_value in vars(node).values():
+            if isinstance(field_value, Node):
+                names |= identifier_names(field_value)
+            elif isinstance(field_value, (list, tuple)):
+                for item in field_value:
+                    if isinstance(item, Node):
+                        names |= identifier_names(item)
+    return names
+
 
     def projection_mappings(self, intent):
         """Describe alias mappings per expanded relation without leaking ORM into DTOs."""

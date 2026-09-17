@@ -89,6 +89,8 @@ class ODataSelector:
 
         self.apply_functions = getattr(meta, "apply_functions", {})
         self.apply_aggregates = getattr(meta, "apply_aggregates", {})
+        self.field_annotations = getattr(meta, "field_annotations", {})
+        self.annotation_dependencies = getattr(meta, "annotation_dependencies", {})
 
         # Security: Validate field aliases to prevent injection
         ODataSelector._validate_field_aliases(self.field_aliases)
@@ -102,6 +104,8 @@ class ODataSelector:
             filterable_fields=getattr(meta, "filterable_fields", None),
             non_filterable_fields=self.non_filterable_fields,
             sortable_fields=getattr(meta, "sortable_fields", None),
+            field_annotations=self.field_annotations,
+            annotation_dependencies=self.annotation_dependencies,
         )
         self._reverse_aliases: dict[str, str] = {v: k for k, v in self.field_aliases.items()}
 
