@@ -73,6 +73,11 @@ def parse_odata_query(query_params: dict[str, Any] | str) -> QueryIntent:
 
     intent.pagination = _pagination_intent(query_params)
 
+    if "$apply" in query_params:
+        from ..apply import parse_apply
+
+        intent.apply = ApplyIntent(ast=parse_apply(query_params["$apply"]))
+
     return intent
 
 

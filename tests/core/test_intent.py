@@ -1,8 +1,6 @@
-"""
-Tests for QueryIntent and related models.
-"""
+"""Tests for QueryIntent and related models."""
 
-from fc_selector.core.ast.nodes import Compare, Eq, Identifier, String
+from fc_selector.core.ast.nodes import Apply, ApplyGroupBy, Compare, Eq, Identifier, String
 from fc_selector.core.intent import (
     ExpandIntent,
     FilterIntent,
@@ -11,6 +9,7 @@ from fc_selector.core.intent import (
     PaginationIntent,
     QueryIntent,
     SelectIntent,
+    ApplyIntent, # New
 )
 
 
@@ -188,3 +187,12 @@ class TestQueryIntent:
         assert "author" in intent.expand.relations
         assert intent.orderby.fields[0].field == "created_at"
         assert intent.pagination.limit == 10
+
+
+def test_query_intent_carries_apply():
+    from fc_selector.core.ast.nodes import Apply, ApplyGroupBy
+    from fc_selector.core.intent.models import ApplyIntent, QueryIntent
+
+    apply_ast = Apply(transformations=[ApplyGroupBy(fields=["status"], aggregate=None)])
+    intent = QueryIntent(apply=ApplyIntent(ast=apply_ast))
+    assert intent.apply.ast is apply_ast
