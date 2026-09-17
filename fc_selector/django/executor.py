@@ -9,12 +9,13 @@ Centralizes the execution of protocol-agnostic QueryIntents on Django QuerySets.
 import logging
 from copy import deepcopy
 from functools import lru_cache
-from typing import Any
+from typing import Any, Callable
 
 from django.core.exceptions import FieldError
 from django.db.models import Prefetch, QuerySet
 
 from fc_selector.core import exceptions as core_ex
+from fc_selector.core.ast import nodes as ast_nodes
 from fc_selector.core.dtos.utils import get_dto_fields
 from fc_selector.core.intent import ExpandIntent, QueryIntent
 from fc_selector.core.intent.policies import selection_for_policy
@@ -258,25 +259,6 @@ class DjangoExecutor:
         )
 
 
-def identifier_names(node) -> set[str]:
-    """Recursively collect every Identifier.full_name() referenced in a filter AST."""
-    from fc_selector.core.ast.nodes import Identifier, Node
-
-    names: set[str] = set()
-    if isinstance(node, Identifier):
-        names.add(node.full_name())
-        return names
-    if isinstance(node, Node):
-        for field_value in vars(node).values():
-            if isinstance(field_value, Node):
-                names |= identifier_names(field_value)
-            elif isinstance(field_value, (list, tuple)):
-                for item in field_value:
-                    if isinstance(item, Node):
-                        names |= identifier_names(item)
-    return names
-
-
     def projection_mappings(self, intent):
         """Describe alias mappings per expanded relation without leaking ORM into DTOs."""
         return {
@@ -304,6 +286,28 @@ def identifier_names(node) -> set[str]:
                 if not self._nested_executor(name)._hybrid_supported(field.related_model, nested, child_dto):
                     return False
         return True
+
+    def ensure_field_annotations(self, queryset: QuerySet, field_names: list[str], *, _depth: int = 0) -> QuerySet:
+        """Annotate `queryset` with every name in `field_names` that is registered
+        in `field_annotations` and not already annotated, resolving
+        `annotation_dependencies` transitively first. Fields not in
+        `field_annotations` (plain model fields, or names handled by
+        `field_aliases`) are left untouched — this only adds what's missing."""
+        if _depth > 10:
+            raise core_ex.QueryError("Maximum annotation dependency depth exceeded")
+
+        pending = {
+            name for name in field_names if name in self.field_annotations and name not in queryset.query.annotations
+        }
+        if not pending:
+            return queryset
+
+        for name in pending:
+            deps = self.annotation_dependencies.get(name, ())
+            if deps:
+                queryset = self.ensure_field_annotations(queryset, list(deps), _depth=_depth + 1)
+
+        return queryset.annotate(**{name: self.field_annotations[name]() for name in pending})
 
     def prepare(self, queryset: QuerySet, intent: QueryIntent) -> QueryIntent:
         """Return a normalized, validated copy; never mutate caller-owned state."""
@@ -817,3 +821,22 @@ def identifier_names(node) -> set[str]:
                     only_fields.add(field.attname)
 
         return queryset, only_fields
+
+
+def identifier_names(node) -> set[str]:
+    """Recursively collect every Identifier.full_name() referenced in a filter AST."""
+    from fc_selector.core.ast.nodes import Identifier, Node
+
+    names: set[str] = set()
+    if isinstance(node, Identifier):
+        names.add(node.full_name())
+        return names
+    if isinstance(node, Node):
+        for field_value in vars(node).values():
+            if isinstance(field_value, Node):
+                names |= identifier_names(field_value)
+            elif isinstance(field_value, (list, tuple)):
+                for item in field_value:
+                    if isinstance(item, Node):
+                        names |= identifier_names(item)
+    return names
