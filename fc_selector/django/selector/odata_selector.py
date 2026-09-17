@@ -87,18 +87,26 @@ class ODataSelector:
         self.max_limit = getattr(meta, "max_limit", MAX_PAGE_SIZE)
         self.values_mode = getattr(meta, "values_mode", True)
 
+        self.apply_functions = getattr(meta, "apply_functions", {})
+        self.apply_aggregates = getattr(meta, "apply_aggregates", {})
+        self.field_annotations = getattr(meta, "field_annotations", {})
+        self.annotation_dependencies = getattr(meta, "annotation_dependencies", {})
+
         # Security: Validate field aliases to prevent injection
         ODataSelector._validate_field_aliases(self.field_aliases)
 
         non_sortable = [] if getattr(meta, "sortable_fields", None) is not None else self.non_sortable_fields
+        self._filterable_fields_for_visitor = getattr(meta, "filterable_fields", None)
         self._executor = DjangoExecutor(
             field_aliases=self.field_aliases,
             allowed_fields=self.allowed_fields,
             expandable_fields=self.expandable_fields,
             non_sortable_fields=non_sortable or None,
-            filterable_fields=getattr(meta, "filterable_fields", None),
+            filterable_fields=self._filterable_fields_for_visitor,
             non_filterable_fields=self.non_filterable_fields,
             sortable_fields=getattr(meta, "sortable_fields", None),
+            field_annotations=self.field_annotations,
+            annotation_dependencies=self.annotation_dependencies,
         )
         self._reverse_aliases: dict[str, str] = {v: k for k, v in self.field_aliases.items()}
 
@@ -233,6 +241,10 @@ class ODataSelector:
             return base_queryset
 
         _, intent = self._parse(query_string)
+        if intent.apply is not None and intent.apply.has_apply():
+            raise core_ex.QueryError(
+                "$apply transformations are not supported by query(); use query_as_dicts() instead."
+            )
         return self._executor.execute(base_queryset, intent)
 
     def execute(
@@ -284,6 +296,10 @@ class ODataSelector:
             base_queryset = self.get_queryset()
 
         _, intent = self._parse(query_string or "")
+        if intent.apply is not None and intent.apply.has_apply():
+            raise core_ex.QueryError(
+                "$apply transformations cannot be mapped to DTO instances; use query_as_dicts() instead."
+            )
         intent = self._apply_defaults(intent)
         return self._materialize(intent, base_queryset)
 
@@ -323,16 +339,6 @@ class ODataSelector:
         model_class: Optional["Model"] = None,
         base_queryset: QuerySet | None = None,
     ) -> list[dict]:
-        """Execute OData query and return results as plain dictionaries.
-
-        Args:
-            query_string: OData query string (e.g., "$filter=name eq 'test'&$select=id,name")
-            model_class: Optional model class override
-            base_queryset: Optional base queryset to apply query to
-
-        Returns:
-            List of dicts.
-        """
         if not (model_class or self.model):
             raise ValueError("model_class required")
 
@@ -340,6 +346,39 @@ class ODataSelector:
             base_queryset = self.get_queryset()
 
         _, intent = self._parse(query_string or "")
+        if intent.apply is not None and intent.apply.has_apply():
+            if (
+                (intent.filter and intent.filter.has_filter())
+                or (intent.select and intent.select.has_fields())
+                or (intent.orderby and intent.orderby.has_ordering())
+                or (intent.pagination and intent.pagination.has_pagination())
+                or (intent.expand and intent.expand.has_relations())
+            ):
+                raise core_ex.QueryError(
+                    "$apply cannot be combined with $filter, $select, $orderby, $expand, or $top/$skip; "
+                    "express filtering as a filter(...) stage inside $apply instead."
+                )
+
+            from fc_selector.django.query.apply_executor import apply_to_queryset
+
+            res = apply_to_queryset(
+                base_queryset,
+                intent.apply,
+                allowed_fields=self.allowed_fields,
+                apply_functions=self.apply_functions,
+                apply_aggregates=self.apply_aggregates,
+                field_annotations=self.field_annotations,
+                annotation_dependencies=self.annotation_dependencies,
+                field_aliases=self.field_aliases,
+                filterable_fields=self._filterable_fields_for_visitor,
+                non_filterable_fields=self.non_filterable_fields,
+            )
+            if isinstance(res, list):
+                return res
+            if not getattr(res, "_fields", None):
+                return self._materialize(self._apply_defaults(intent), res, as_dicts=True)
+            return list(res)
+
         return self._materialize(self._apply_defaults(intent), base_queryset, as_dicts=True)
 
     def _build_intent(self, query_builder: QueryBuilder | None) -> "QueryIntent":

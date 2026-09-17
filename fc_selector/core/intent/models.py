@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal, Sequence, cast
 
 if TYPE_CHECKING:
-    from fc_selector.core.ast.nodes import Node
+    from fc_selector.core.ast.nodes import Apply, Node
 
 
 @dataclass
@@ -132,6 +132,7 @@ class QueryIntent:
     expand: ExpandIntent | None = None
     orderby: OrderIntent | None = None
     pagination: PaginationIntent | None = None
+    apply: ApplyIntent | None = None
 
 
 def dto_options(intent: QueryIntent) -> tuple[set[str] | None, dict]:
@@ -139,3 +140,18 @@ def dto_options(intent: QueryIntent) -> tuple[set[str] | None, dict]:
     from fc_selector.compat import dto_options as export  # noqa: PLC0415
 
     return cast(tuple[set[str] | None, dict], export(intent))
+
+
+@dataclass
+class ApplyIntent:
+    """
+    Protocol-agnostic $apply representation.
+
+    Attributes:
+        ast: Parsed $apply pipeline (Apply node from core.ast.nodes).
+    """
+
+    ast: "Apply"
+
+    def has_apply(self) -> bool:
+        return self.ast is not None and bool(self.ast.transformations)

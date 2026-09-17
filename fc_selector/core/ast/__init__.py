@@ -36,6 +36,11 @@ from .nodes import (
     All,
     And,
     Any,
+    Apply,
+    ApplyAggregateSpec,
+    ApplyFilter,
+    ApplyGroupBy,
+    ApplyTransformation,
     Attribute,
     BinOp,
     Boolean,
@@ -60,9 +65,7 @@ from .nodes import (
     LtE,
     Mod,
     Mult,
-    # Functions
     NamedParam,
-    # Base
     Node,
     Not,
     NotEq,
@@ -73,30 +76,21 @@ from .nodes import (
     Time,
     UnaryOp,
     USub,
-    # Arithmetic
     _BinOpToken,
-    # Boolean
     _BoolOpToken,
-    # Collections
     _CollectionOperator,
-    # Comparison
     _Comparator,
-    # Literals
     _Literal,
-    # Unary
     _UnaryOpToken,
 )
 from .visitor import NodeTransformer, NodeVisitor, iter_dataclass_fields
 
 __all__ = [
-    # Modules
     "nodes",
     "visitor",
-    # Base
     "Node",
     "Identifier",
     "Attribute",
-    # Literals
     "_Literal",
     "Null",
     "Integer",
@@ -109,7 +103,6 @@ __all__ = [
     "Duration",
     "GUID",
     "List",
-    # Arithmetic
     "_BinOpToken",
     "Add",
     "Sub",
@@ -117,7 +110,6 @@ __all__ = [
     "Div",
     "Mod",
     "BinOp",
-    # Comparison
     "_Comparator",
     "Eq",
     "NotEq",
@@ -127,26 +119,26 @@ __all__ = [
     "GtE",
     "In",
     "Compare",
-    # Boolean
     "_BoolOpToken",
     "And",
     "Or",
     "BoolOp",
-    # Unary
     "_UnaryOpToken",
     "Not",
     "USub",
     "UnaryOp",
-    # Functions
     "NamedParam",
     "Call",
-    # Collections
     "_CollectionOperator",
     "Any",
     "All",
     "Lambda",
     "CollectionLambda",
-    # Visitor
+    "Apply",  # New
+    "ApplyAggregateSpec",  # New
+    "ApplyFilter",  # New
+    "ApplyGroupBy",  # New
+    "ApplyTransformation",  # New
     "NodeVisitor",
     "NodeTransformer",
     "iter_dataclass_fields",

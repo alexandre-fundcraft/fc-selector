@@ -9,12 +9,13 @@ Centralizes the execution of protocol-agnostic QueryIntents on Django QuerySets.
 import logging
 from copy import deepcopy
 from functools import lru_cache
-from typing import Any
+from typing import Any, Callable
 
 from django.core.exceptions import FieldError
 from django.db.models import Prefetch, QuerySet
 
 from fc_selector.core import exceptions as core_ex
+from fc_selector.core.ast import nodes as ast_nodes
 from fc_selector.core.dtos.utils import get_dto_fields
 from fc_selector.core.intent import ExpandIntent, QueryIntent
 from fc_selector.core.intent.policies import selection_for_policy
@@ -75,6 +76,8 @@ class DjangoExecutor:
         filterable_fields: list[str] | None = None,
         non_filterable_fields: list[str] | None = None,
         sortable_fields: list[str] | None = None,
+        field_annotations: dict[str, Callable[[], Any]] | None = None,
+        annotation_dependencies: dict[str, tuple[str, ...]] | None = None,
     ):
         """Initialize executor with optional field aliases and allowed fields.
 
@@ -106,6 +109,8 @@ class DjangoExecutor:
         self.allowed_fields = allowed_fields
         self.expandable_fields = expandable_fields or {}
         self.non_sortable_fields = set(non_sortable_fields) if non_sortable_fields else None
+        self.field_annotations = field_annotations or {}
+        self.annotation_dependencies = annotation_dependencies or {}
 
     def try_hybrid(
         self,
@@ -157,6 +162,9 @@ class DjangoExecutor:
             field_aliases=self.field_aliases,
             expandable_fields=self.expandable_fields,
         )
+        referenced_fields = self._referenced_field_names(intent)
+        if referenced_fields:
+            queryset = self.ensure_field_annotations(queryset, referenced_fields)
         queryset = self._apply_filter(queryset, intent)
         queryset = self._apply_ordering(queryset, intent)
         return builder._execute_prepared(queryset, intent, dto_class, as_dicts=as_dicts)
@@ -191,6 +199,10 @@ class DjangoExecutor:
 
     def _execute_prepared(self, queryset, intent, *, use_values=False):
         """Execute a private, prepared intent; also used by nested prefetch."""
+        referenced_fields = self._referenced_field_names(intent)
+        if referenced_fields:
+            queryset = self.ensure_field_annotations(queryset, referenced_fields)
+
         # Check if values mode is possible (no expand relations)
         can_use_values = use_values and (not intent.expand or not intent.expand.has_relations())
 
@@ -208,6 +220,28 @@ class DjangoExecutor:
 
         return queryset
 
+    def _referenced_field_names(self, intent) -> list[str]:
+        """Every field name the intent's filter/select/orderby touches, for
+        on-demand annotation resolution. Uses the AST's own field references
+        rather than re-parsing the raw expression string."""
+        names: set[str] = set()
+        if intent.filter and intent.filter.ast is not None:
+            names |= identifier_names(intent.filter.ast)
+        if intent.select:
+            names |= set(intent.select.fields)
+        if intent.orderby:
+            names |= {f.field for f in intent.orderby.fields}
+        # Add fields from apply clause (if any)
+        if intent.apply and intent.apply.ast:
+            for stage in intent.apply.ast.transformations:
+                if isinstance(stage, ast_nodes.ApplyFilter):
+                    names |= identifier_names(stage.ast)
+                elif isinstance(stage, ast_nodes.ApplyGroupBy):
+                    names |= set(stage.fields)
+                    if stage.aggregate:
+                        names |= {s.source_field for s in stage.aggregate if s.source_field}
+        return list(names)
+
     def _nested_executor(self, relation_name):
         config = get_expand_config(self.expandable_fields, relation_name) or {}
         nested = config.get("expandable_fields")
@@ -222,6 +256,8 @@ class DjangoExecutor:
             non_filterable_fields=config.get("non_filterable_fields"),
             sortable_fields=config.get("sortable_fields"),
             non_sortable_fields=config.get("non_sortable_fields"),
+            field_annotations=config.get("field_annotations"),
+            annotation_dependencies=config.get("annotation_dependencies"),
         )
 
     def projection_mappings(self, intent):
@@ -251,6 +287,28 @@ class DjangoExecutor:
                 if not self._nested_executor(name)._hybrid_supported(field.related_model, nested, child_dto):
                     return False
         return True
+
+    def ensure_field_annotations(self, queryset: QuerySet, field_names: list[str], *, _depth: int = 0) -> QuerySet:
+        """Annotate `queryset` with every name in `field_names` that is registered
+        in `field_annotations` and not already annotated, resolving
+        `annotation_dependencies` transitively first. Fields not in
+        `field_annotations` (plain model fields, or names handled by
+        `field_aliases`) are left untouched — this only adds what's missing."""
+        if _depth > 10:
+            raise core_ex.QueryError("Maximum annotation dependency depth exceeded")
+
+        pending = {
+            name for name in field_names if name in self.field_annotations and name not in queryset.query.annotations
+        }
+        if not pending:
+            return queryset
+
+        for name in pending:
+            deps = self.annotation_dependencies.get(name, ())
+            if deps:
+                queryset = self.ensure_field_annotations(queryset, list(deps), _depth=_depth + 1)
+
+        return queryset.annotate(**{name: self.field_annotations[name]() for name in pending})
 
     def prepare(self, queryset: QuerySet, intent: QueryIntent) -> QueryIntent:
         """Return a normalized, validated copy; never mutate caller-owned state."""
@@ -438,6 +496,12 @@ class DjangoExecutor:
             queryset, select_only_fields = self._apply_selects(queryset, intent)
             only_fields.update(select_only_fields)
             logger.debug("[OData] select_only_fields: %s", select_only_fields)
+
+            if use_values:
+                # Annotated fields (Meta.field_annotations) aren't real model columns, so
+                # _apply_selects skips them; ensure_field_annotations already put them on
+                # the queryset earlier in _execute_prepared, so .values() can select them.
+                only_fields.update(name for name in intent.select.fields if name in self.field_annotations)
 
         if only_fields and not (intent.select and intent.select.has_fields()):
             only_fields.update(field.attname for field in queryset.model._meta.concrete_fields)
@@ -764,3 +828,22 @@ class DjangoExecutor:
                     only_fields.add(field.attname)
 
         return queryset, only_fields
+
+
+def identifier_names(node) -> set[str]:
+    """Recursively collect every Identifier.full_name() referenced in a filter AST."""
+    from fc_selector.core.ast.nodes import Identifier, Node
+
+    names: set[str] = set()
+    if isinstance(node, Identifier):
+        names.add(node.full_name())
+        return names
+    if isinstance(node, Node):
+        for field_value in vars(node).values():
+            if isinstance(field_value, Node):
+                names |= identifier_names(field_value)
+            elif isinstance(field_value, (list, tuple)):
+                for item in field_value:
+                    if isinstance(item, Node):
+                        names |= identifier_names(item)
+    return names

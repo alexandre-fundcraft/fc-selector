@@ -393,6 +393,11 @@ class TestCombinedParameters:
         assert "$expand" in result_expand["author"]
         assert result.filter is not None
 
+    def test_apply_parameter(self):
+        """Test parsing $apply parameter."""
+        result = parse_odata_query("$apply=groupby((status), aggregate($count as total))")
+        assert result.apply is not None
+
 
 class TestEdgeCases:
     """Tests for edge cases and error conditions."""

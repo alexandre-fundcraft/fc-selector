@@ -10,6 +10,7 @@ from urllib.parse import parse_qsl
 
 from fc_selector.core.exceptions import InvalidValueError, QueryError
 from fc_selector.core.intent import (
+    ApplyIntent,
     ExpandIntent,
     FilterIntent,
     OrderIntent,
@@ -72,6 +73,11 @@ def parse_odata_query(query_params: dict[str, Any] | str) -> QueryIntent:
         intent.orderby = OrderIntent.from_tuples(parse_orderby(query_params["$orderby"]))
 
     intent.pagination = _pagination_intent(query_params)
+
+    if "$apply" in query_params:
+        from ..apply import parse_apply
+
+        intent.apply = ApplyIntent(ast=parse_apply(query_params["$apply"]))
 
     return intent
 

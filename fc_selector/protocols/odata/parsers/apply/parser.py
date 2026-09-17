@@ -1,0 +1,135 @@
+"""OData $apply Parser.
+
+Parses the $apply query option which specifies collection transformations like
+groupby, aggregate, and filter. This parser supports chained transformations
+(e.g., "filter(...)/groupby(...)") and nested filter expressions."""
+
+import re
+
+from fc_selector.core import ast
+from fc_selector.core.exceptions import QueryError
+from fc_selector.protocols.odata.parsers.filter import parse_filter
+
+_WITH_AS_SPLIT_PATTERN = re.compile(r"\s*with\s*|\s*as\s*")
+
+
+def _split_on_top_level_char(s: str, splitter: str) -> list[str]:
+    """Splits a string by `splitter` only when not inside parentheses."""
+    parts: list[str] = []
+    current_part: list[str] = []
+    paren_depth = 0
+    for char in s:
+        if char == "(":
+            paren_depth += 1
+        elif char == ")":
+            paren_depth -= 1
+
+        if char == splitter and paren_depth == 0:
+            parts.append("".join(current_part).strip())
+            current_part = []
+        else:
+            current_part.append(char)
+    parts.append("".join(current_part).strip())
+    return [p for p in parts if p]
+
+
+def _parse_aggregate_items(inner_expr: str) -> list[ast.ApplyAggregateSpec]:
+    """Parse comma-separated aggregate specs inside aggregate(...)."""
+    inner = inner_expr.strip()
+    if not inner:
+        raise QueryError("aggregate clause cannot be empty")
+
+    agg_items = _split_on_top_level_char(inner, ",")
+    if not agg_items:
+        raise QueryError("aggregate clause cannot be empty")
+
+    parsed_aggregates: list[ast.ApplyAggregateSpec] = []
+    for item in agg_items:
+        with_parts = item.split(" with ", 1)
+        if len(with_parts) == 2:
+            source_method_part, as_part = with_parts
+            source_field = source_method_part.strip()
+            as_split = as_part.split(" as ", 1)
+            if len(as_split) == 2:
+                method = as_split[0].strip()
+                alias = as_split[1].strip()
+                parsed_aggregates.append(ast.ApplyAggregateSpec(source_field, method, alias))
+            else:
+                raise QueryError(f"Invalid aggregate item format: {item}")
+        elif item.lower().startswith("$count as "):
+            as_split = item.split(" as ", 1)
+            if len(as_split) == 2:
+                method = "count"
+                alias = as_split[1].strip()
+                parsed_aggregates.append(ast.ApplyAggregateSpec(source_field=None, method=method, alias=alias))
+            else:
+                raise QueryError(f"Invalid aggregate item format: {item}")
+        else:
+            raise QueryError(f"Invalid aggregate item format: {item}")
+
+    return parsed_aggregates
+
+
+def parse_apply(value: str) -> ast.Apply:
+    """
+    Parse OData $apply parameter.
+
+    Args:
+        value: The $apply value string (e.g., "filter(status eq 'published')/groupby((domain), aggregate($count as n))")
+
+    Returns:
+        An Apply AST node representing the parsed transformations.
+
+    Raises:
+        QueryError: If the $apply expression is empty or contains unknown syntax.
+    """
+    if not value or not value.strip():
+        raise QueryError("empty $apply expression")
+
+    transformations: list[ast.ApplyTransformation] = []
+
+    # Split by '/' at top level (outside parentheses)
+    segments = _split_on_top_level_char(value, "/")
+
+    for segment in segments:
+        segment_lower = segment.lower()
+        if segment_lower.startswith("filter(") and segment_lower.endswith(")"):
+            inner_expr = segment[len("filter(") : -1].strip()
+            filter_ast = parse_filter(inner_expr)  # Reuse existing $filter parser
+            transformations.append(ast.ApplyFilter(ast=filter_ast))
+        elif segment_lower.startswith("groupby(") and segment_lower.endswith(")"):
+            inner_expr = segment[len("groupby(") : -1].strip()
+            parts = _split_on_top_level_char(inner_expr, ",")
+            if not parts:
+                raise QueryError(f"Invalid groupby syntax: {inner_expr}")
+
+            fields_part = parts[0]
+            if not fields_part.startswith("(") or not fields_part.endswith(")"):
+                raise QueryError(f"Invalid groupby fields format: {fields_part}")
+
+            fields = [f.strip() for f in fields_part[1:-1].split(",") if f.strip()]
+            if not fields:
+                raise QueryError("groupby fields list cannot be empty")
+
+            parsed_aggregates: list[ast.ApplyAggregateSpec] | None = None
+            if len(parts) == 2:
+                agg_clause = parts[1].strip()
+                agg_lower = agg_clause.lower()
+                if not agg_lower.startswith("aggregate(") or not agg_clause.endswith(")"):
+                    raise QueryError(f"Invalid groupby aggregate format: {agg_clause}")
+                aggregate_inner = agg_clause[len("aggregate(") : -1].strip()
+                parsed_aggregates = _parse_aggregate_items(aggregate_inner)
+            elif len(parts) > 2:
+                raise QueryError(f"Invalid groupby syntax: {inner_expr}")
+
+            transformations.append(ast.ApplyGroupBy(fields=fields, aggregate=parsed_aggregates))
+
+        elif segment_lower.startswith("aggregate(") and segment_lower.endswith(")"):
+            inner_expr = segment[len("aggregate(") : -1].strip()
+            parsed_aggregates = _parse_aggregate_items(inner_expr)
+            transformations.append(ast.ApplyGroupBy(fields=[], aggregate=parsed_aggregates))
+
+        else:
+            raise QueryError(f"Unknown $apply segment: {segment}")
+
+    return ast.Apply(transformations=transformations)
