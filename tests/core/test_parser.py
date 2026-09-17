@@ -1,16 +1,442 @@
-"""Exhaustive tests for the OData query parser (core/query/parser.py).\n\nThis test suite ensures the parser correctly handles all OData query parameters\nand combinations WITHOUT any Django dependencies.\n"""\n\nimport pytest\n\nfrom fc_selector.core.intent import QueryIntent, ApplyIntent # NEW\nfrom fc_selector.protocols.odata.parsers.expand import parse_expand\nfrom fc_selector.protocols.odata.parsers.filter.exceptions import ODataSyntaxError\nfrom fc_selector.protocols.odata.parsers.query import parse_odata_query, parse_query_params\n\n\ndef expand_options(query_params):\n    """The nested $expand options for a query, exactly as parse_expand returns them."""\n    if isinstance(query_params, str):\n        query_params = parse_query_params(query_params)\n    return parse_expand((query_params or {}).get("$expand", "") or "")\n\n\nclass TestSelectParsing:\n    """Tests for $select parameter parsing."""\n\n    def test_select_single_field(self):\n        """Test parsing $select with single field."""\n        result = parse_odata_query("$select=id")\n\n        assert result.select is not None\n        assert ",".join(result.select.fields) == "id"\n        assert result.select.fields == ["id"]\n\n    def test_select_multiple_fields(self):\n        """Test parsing $select with multiple fields."""\n        result = parse_odata_query("$select=id,name,email")\n\n        assert result.select is not None\n        assert ",".join(result.select.fields) == "id,name,email"\n        assert set(result.select.fields) == {"id", "name", "email"}\n\n    def test_select_with_spaces(self):\n        """Test parsing $select with spaces around commas."""\n        result = parse_odata_query("$select=id, name , email")\n\n        assert result.select is not None\n        assert set(result.select.fields) == {"id", "name", "email"}\n\n    def test_no_select(self):\n        """Test query without $select."""\n        result = parse_odata_query("$filter=status eq 'published'")\n\n        assert result.select is None\n\n\nclass TestExpandParsing:\n    """Tests for $expand parameter parsing."""\n\n    def test_expand_single_field_simple(self):\n        """Test parsing $expand with single field without options."""\n        result = parse_odata_query("$expand=author")\n        result_expand = expand_options("$expand=author")\n\n        assert result.expand is not None\n        assert "author" in result_expand\n        assert result_expand["author"] == {}\n\n    def test_expand_multiple_fields_simple(self):\n        """Test parsing $expand with multiple fields without options."""\n        result = parse_odata_query("$expand=author,categories")\n        result_expand = expand_options("$expand=author,categories")\n\n        assert result.expand is not None\n        assert "author" in result_expand\n        assert "categories" in result_expand\n        assert result_expand["author"] == {}\n        assert result_expand["categories"] == {}\n\n    def test_expand_with_select_option(self):\n        """Test parsing $expand with nested $select."""\n        result = parse_odata_query("$expand=author($select=id,name)")\n        result_expand = expand_options("$expand=author($select=id,name)")\n\n        assert result.expand is not None\n        assert "author" in result_expand\n        assert "$select" in result_expand["author"]\n        assert result_expand["author"]["$select"] == "id,name"\n\n    def test_expand_with_nested_expand(self):\n        """Test parsing $expand with nested $expand."""\n        result = parse_odata_query("$expand=author($expand=user)")\n        result_expand = expand_options("$expand=author($expand=user)")\n\n        assert result.expand is not None\n        assert "author" in result_expand\n        assert "$expand" in result_expand["author"]\n        assert result_expand["author"]["$expand"] == "user"\n\n    def test_expand_with_multiple_options(self):\n        """Test parsing $expand with multiple nested options."""\n        result = parse_odata_query("$expand=author($select=id,name;$expand=user)")\n        result_expand = expand_options("$expand=author($select=id,name;$expand=user)")\n\n        assert result.expand is not None\n        assert "author" in result_expand\n        options = result_expand["author"]\n        assert "$select" in options\n        assert "$expand" in options\n        assert options["$select"] == "id,name"\n        assert options["$expand"] == "user"\n\n    def test_expand_multiple_with_mixed_options(self):\n        """Test parsing $expand with multiple fields, some with options, some without."""\n        result = parse_odata_query("$expand=categories,author($select=id,name)")\n        result_expand = expand_options("$expand=categories,author($select=id,name)")\n\n        assert result.expand is not None\n        assert "categories" in result_expand\n        assert "author" in result_expand\n        assert result_expand["categories"] == {}\n        assert "$select" in result_expand["author"]\n\n    def test_expand_semicolon_separator(self):\n        """Test parsing $expand with semicolon separator (alternative syntax)."""\n        result = parse_odata_query("$expand=categories;author($select=id,name)")\n        result_expand = expand_options("$expand=categories;author($select=id,name)")\n\n        assert result.expand is not None\n        assert "categories" in result_expand\n        assert "author" in result_expand\n\n    def test_expand_deeply_nested(self):\n        """Test parsing $expand with deeply nested options."""\n        result = parse_odata_query("$expand=author($select=id;$expand=user($select=username))")\n        result_expand = expand_options("$expand=author($select=id;$expand=user($select=username))")\n\n        assert result.expand is not None\n        assert "author" in result_expand\n        options = result_expand["author"]\n        assert "$select" in options\n        assert "$expand" in options\n        assert options["$expand"] == "user($select=username)"\n\n    def test_no_expand(self):\n        """Test query without $expand."""\n        result = parse_odata_query("$select=id,name")\n\n        assert result.expand is None\n\n\nclass TestFilterParsing:\n    """Tests for $filter parameter parsing."""\n\n    def test_filter_simple_equality(self):\n        """Test parsing simple equality filter."""\n        result = parse_odata_query("$filter=status eq 'published'")\n\n        assert result.filter is not None\n        assert result.filter.expression == "status eq 'published'"\n\n    def test_filter_with_and(self):\n        """Test parsing filter with AND operator."""\n        result = parse_odata_query("$filter=status eq 'published' and rating gt 4.0")\n\n        assert result.filter is not None\n        assert result.filter.expression == "status eq 'published' and rating gt 4.0"\n\n    def test_filter_with_or(self):\n        """Test parsing filter with OR operator."""\n        result = parse_odata_query("$filter=status eq 'draft' or status eq 'published'")\n\n        assert result.filter is not None\n        assert result.filter.expression == "status eq 'draft' or status eq 'published'"\n\n    def test_filter_with_navigation(self):\n        """Test parsing filter with navigation property."""\n        result = parse_odata_query("$filter=author/name eq 'John'")\n\n        assert result.filter is not None\n        assert result.filter.expression == "author/name eq 'John'"\n\n    def test_filter_with_nested_navigation(self):\n        """Test parsing filter with nested navigation."""\n        result = parse_odata_query("$filter=author/user/first_name eq 'Patricia'")\n\n        assert result.filter is not None\n        assert result.filter.expression == "author/user/first_name eq 'Patricia'"\n\n    def test_filter_with_functions(self):\n        """Test parsing filter with OData functions."""\n        result = parse_odata_query("$filter=startswith(title,'Introduction')")\n\n        assert result.filter is not None\n        assert result.filter.expression == "startswith(title,'Introduction')"\n\n    def test_malformed_filter_raises_error(self):\n        """Test that malformed $filter raises an error instead of silently passing."""\n        with pytest.raises((ODataSyntaxError, ValueError)):\n            parse_odata_query("$filter=this is not valid odata!!")\n\n    def test_no_filter(self):\n        """Test query without $filter."""\n        result = parse_odata_query("$select=id,name")\n\n        assert result.filter is None\n\n\nclass TestOrderByParsing:\n    """Tests for $orderby parameter parsing."""\n\n    def test_orderby_single_field_default(self):\n        """Test parsing $orderby with single field (default ascending)."""\n        result = parse_odata_query("$orderby=name")\n\n        assert result.orderby is not None\n        assert [(f.field, f.direction) for f in result.orderby.fields] == [("name", "asc")]\n\n    def test_orderby_single_field_asc(self):\n        """Test parsing $orderby with explicit asc."""\n        result = parse_odata_query("$orderby=name asc")\n\n        assert result.orderby is not None\n        assert [(f.field, f.direction) for f in result.orderby.fields] == [("name", "asc")]\n\n    def test_orderby_single_field_desc(self):\n        """Test parsing $orderby with desc."""\n        result = parse_odata_query("$orderby=created_at desc")\n\n        assert result.orderby is not None\n        assert [(f.field, f.direction) for f in result.orderby.fields] == [("created_at", "desc")]\n\n    def test_orderby_multiple_fields(self):\n        """Test parsing $orderby with multiple fields."""\n        result = parse_odata_query("$orderby=status asc,created_at desc")\n\n        assert result.orderby is not None\n        assert [(f.field, f.direction) for f in result.orderby.fields] == [("status", "asc"), ("created_at", "desc")]\n\n    def test_orderby_with_spaces(self):\n        """Test parsing $orderby with extra spaces."""\n        result = parse_odata_query("$orderby=name  asc , created_at   desc")\n\n        assert result.orderby is not None\n        assert [(f.field, f.direction) for f in result.orderby.fields] == [("name", "asc"), ("created_at", "desc")]\n\n    def test_orderby_case_insensitive_desc(self):\n        """Test parsing $orderby with uppercase DESC."""\n        result = parse_odata_query("$orderby=name DESC")\n\n        assert result.orderby is not None\n        assert [(f.field, f.direction) for f in result.orderby.fields] == [("name", "desc")]\n\n    def test_orderby_case_insensitive_asc(self):\n        """Test parsing $orderby with mixed case Asc."""\n        result = parse_odata_query("$orderby=name Asc")\n\n        assert result.orderby is not None\n        assert [(f.field, f.direction) for f in result.orderby.fields] == [("name", "asc")]\n\n    def test_orderby_field_ending_with_desc_word(self):\n        """Test that field names like sort_desc are not confused with direction."""\n        result = parse_odata_query("$orderby=sort_desc DESC")\n\n        assert result.orderby is not None\n        assert [(f.field, f.direction) for f in result.orderby.fields] == [("sort_desc", "desc")]\n\n    def test_no_orderby(self):\n        """Test query without $orderby."""
-        result = parse_odata_query("$select=id,name")\n\n        assert result.orderby is None\n\n\nclass TestPaginationParsing:\n    """Tests for $top and $skip parameters."""\n\n    def test_top(self):\n        """Test parsing $top."""\n        result = parse_odata_query("$top=10")\n\n        assert result.pagination is not None and result.pagination.limit is not None\n        assert result.pagination.limit == 10\n\n    def test_skip(self):\n        """Test parsing $skip."""\n        result = parse_odata_query("$skip=20")\n\n        assert result.pagination is not None and result.pagination.offset is not None\n        assert result.pagination.offset == 20\n\n    def test_top_and_skip(self):\n        """Test parsing both $top and $skip."""\n        result = parse_odata_query("$top=10&$skip=20")\n\n        assert result.pagination is not None and result.pagination.limit is not None\n        assert result.pagination is not None and result.pagination.offset is not None\n        assert result.pagination.limit == 10\n        assert result.pagination.offset == 20\n\n    def test_no_pagination(self):\n        """Test query without pagination."""
-        result = parse_odata_query("$select=id,name")\n\n        assert result.pagination is None or result.pagination.limit is None\n        assert result.pagination is None or result.pagination.offset is None\n\n\n# ponytail: Temporarily disabled due to internal pytest/ast parsing issues. Re-enable later.\n# class TestCountParsing:\n#     """Tests for $count parameter."""\n#\n#     def test_count_true(self):\n#         """Test parsing $count=true."""\n#         result = parse_odata_query("$count=true")\n#\n#         assert result.pagination.include_count is True\n#\n#     def test_count_false(self):\n#         """Test parsing $count=false."""\n#         result = parse_odata_query("$count=false")\n#\n#         assert result.pagination is None or result.pagination.include_count is False\n#\n#     def test_count_case_insensitive(self):\n#         """Test parsing $count with different cases."""\n#         result1 = parse_odata_query("$count=True")\n#         result2 = parse_odata_query("$count=TRUE")\n#\n#         assert result1.pagination.include_count is True\n#         assert result2.pagination.include_count is True\n#\n#     def test_no_count(self):\n#         """Test query without $count."""\n#         result = parse_odata_query("$select=id,name")\n#\n#         assert result.pagination is None\n\n\n# ponytail: Temporarily disabled due to internal pytest/ast parsing issues. Re-enable later.\n# class TestCombinedParameters:\n#     """Tests for queries with multiple parameters combined."""\n#\n#     def test_select_and_filter(self):\n#         """Test parsing $select with $filter."""\n#         result = parse_odata_query("$select=id,title&$filter=status eq 'published'")\n#\n#         assert result.select is not None\n#         assert result.filter is not None\n#         assert set(result.select.fields) == {"id", "title"}\n#         assert result.filter.expression == "status eq 'published'"\n#\n#     def test_select_and_expand(self):\n#         """Test parsing $select with $expand."""\n#         result = parse_odata_query("$select=id,title&$expand=author")\n#         result_expand = expand_options("$select=id,title&$expand=author")\n#\n#         assert result.select is not None\n#         assert result.expand is not None\n#         assert "author" in result_expand\n#\n#     def test_all_parameters(self):\n#         """Test parsing query with all parameters."""\n#         query = (\n#             "$select=id,title"\n#             "&$expand=author($select=name)"\n#             "&$filter=status eq 'published'"\n#             "&$orderby=created_at desc"\n#             "&$top=10"\n#             "&$skip=20"\n#             "&$count=true"\n#         )\n#         result = parse_odata_query(query)\n#\n#         assert result.select is not None\n#         assert result.expand is not None\n#         assert result.filter is not None\n#         assert result.orderby is not None\n#         assert result.pagination is not None and result.pagination.limit is not None\n#         assert result.pagination is not None and result.pagination.offset is not None\n#         assert result.pagination.include_count is True\n#\n#     def test_complex_real_world_query(self):\n#         """Test parsing complex real-world query."""\n#         query = (\n#             "$expand=categories;author($select=id;$expand=user($select=id,username))"\n#             "&$filter=author/user/first_name eq 'Patricia'"\n#         )\n#         result = parse_odata_query(query)\n#         result_expand = expand_options(query)\n#\n#         assert result.expand is not None\n#         assert "categories" in result_expand\n#         assert "author" in result_expand\n#         assert "$select" in result_expand["author"]\n#         assert "$expand" in result_expand["author"]\n#         assert result.filter is not None\n\n\n# ponytail: Temporarily disabled due to internal pytest/ast parsing issues. Re-enable later.\n# class TestEdgeCases:\n#     """Tests for edge cases and error conditions."""\n#\n#     def test_empty_string(self):\n#         """Test parsing empty query string."""
-#         result = parse_odata_query("")\n#
-#         assert isinstance(result, QueryIntent)\n#         assert result.select is None\n#         assert result.expand is None\n#         assert result.filter is None\n#
-#     def test_none_input(self):\n#         """Test parsing None input."""
-#         result = parse_odata_query(None)\n#
-#         assert isinstance(result, QueryIntent)\n#
-#     def test_whitespace_only(self):\n#         """Test parsing whitespace-only string."""
-#         result = parse_odata_query("   ")\n#
-#         assert isinstance(result, QueryIntent)\n#         assert result.select is None\n#
-#     def test_url_encoded_query(self):\n#         """Test parsing URL-encoded query string."""
-#         # The parser should handle URL-encoded strings\n#         result = parse_odata_query("$filter=author/user/first_name%20eq%20%27Patricia%27")\n#
-#         assert result.filter is not None\n#         # After URL decoding, it should be readable\n#         assert "first_name eq 'Patricia'" in result.filter.expression\n#
-#     def test_dict_input(self):\n#         """Test parsing dictionary input."""
-#         query_dict = {"$select": "id,name", "$filter": "status eq 'published'"}\n#         result = parse_odata_query(query_dict)\n#\n#         assert result.select is not None\n#         assert result.filter is not None
+"""
+Exhaustive tests for the OData query parser (core/query/parser.py).
+
+This test suite ensures the parser correctly handles all OData query parameters
+and combinations WITHOUT any Django dependencies.
+"""
+
+import pytest
+
+from fc_selector.core.intent import QueryIntent
+from fc_selector.protocols.odata.parsers.expand import parse_expand
+from fc_selector.protocols.odata.parsers.filter.exceptions import ODataSyntaxError
+from fc_selector.protocols.odata.parsers.query import parse_odata_query, parse_query_params
+
+
+def expand_options(query_params):
+    """The nested $expand options for a query, exactly as parse_expand returns them."""
+    if isinstance(query_params, str):
+        query_params = parse_query_params(query_params)
+    return parse_expand((query_params or {}).get("$expand", "") or "")
+
+
+class TestSelectParsing:
+    """Tests for $select parameter parsing."""
+
+    def test_select_single_field(self):
+        """Test parsing $select with single field."""
+        result = parse_odata_query("$select=id")
+
+        assert result.select is not None
+        assert ",".join(result.select.fields) == "id"
+        assert result.select.fields == ["id"]
+
+    def test_select_multiple_fields(self):
+        """Test parsing $select with multiple fields."""
+        result = parse_odata_query("$select=id,name,email")
+
+        assert result.select is not None
+        assert ",".join(result.select.fields) == "id,name,email"
+        assert set(result.select.fields) == {"id", "name", "email"}
+
+    def test_select_with_spaces(self):
+        """Test parsing $select with spaces around commas."""
+        result = parse_odata_query("$select=id, name , email")
+
+        assert result.select is not None
+        assert set(result.select.fields) == {"id", "name", "email"}
+
+    def test_no_select(self):
+        """Test query without $select."""
+        result = parse_odata_query("$filter=status eq 'published'")
+
+        assert result.select is None
+
+
+class TestExpandParsing:
+    """Tests for $expand parameter parsing."""
+
+    def test_expand_single_field_simple(self):
+        """Test parsing $expand with single field without options."""
+        result = parse_odata_query("$expand=author")
+        result_expand = expand_options("$expand=author")
+
+        assert result.expand is not None
+        assert "author" in result_expand
+        assert result_expand["author"] == {}
+
+    def test_expand_multiple_fields_simple(self):
+        """Test parsing $expand with multiple fields without options."""
+        result = parse_odata_query("$expand=author,categories")
+        result_expand = expand_options("$expand=author,categories")
+
+        assert result.expand is not None
+        assert "author" in result_expand
+        assert "categories" in result_expand
+        assert result_expand["author"] == {}
+        assert result_expand["categories"] == {}
+
+    def test_expand_with_select_option(self):
+        """Test parsing $expand with nested $select."""
+        result = parse_odata_query("$expand=author($select=id,name)")
+        result_expand = expand_options("$expand=author($select=id,name)")
+
+        assert result.expand is not None
+        assert "author" in result_expand
+        assert "$select" in result_expand["author"]
+        assert result_expand["author"]["$select"] == "id,name"
+
+    def test_expand_with_nested_expand(self):
+        """Test parsing $expand with nested $expand."""
+        result = parse_odata_query("$expand=author($expand=user)")
+        result_expand = expand_options("$expand=author($expand=user)")
+
+        assert result.expand is not None
+        assert "author" in result_expand
+        assert "$expand" in result_expand["author"]
+        assert result_expand["author"]["$expand"] == "user"
+
+    def test_expand_with_multiple_options(self):
+        """Test parsing $expand with multiple nested options."""
+        result = parse_odata_query("$expand=author($select=id,name;$expand=user)")
+        result_expand = expand_options("$expand=author($select=id,name;$expand=user)")
+
+        assert result.expand is not None
+        assert "author" in result_expand
+        options = result_expand["author"]
+        assert "$select" in options
+        assert "$expand" in options
+        assert options["$select"] == "id,name"
+        assert options["$expand"] == "user"
+
+    def test_expand_multiple_with_mixed_options(self):
+        """Test parsing $expand with multiple fields, some with options, some without."""
+        result = parse_odata_query("$expand=categories,author($select=id,name)")
+        result_expand = expand_options("$expand=categories,author($select=id,name)")
+
+        assert result.expand is not None
+        assert "categories" in result_expand
+        assert "author" in result_expand
+        assert result_expand["categories"] == {}
+        assert "$select" in result_expand["author"]
+
+    def test_expand_semicolon_separator(self):
+        """Test parsing $expand with semicolon separator (alternative syntax)."""
+        result = parse_odata_query("$expand=categories;author($select=id,name)")
+        result_expand = expand_options("$expand=categories;author($select=id,name)")
+
+        assert result.expand is not None
+        assert "categories" in result_expand
+        assert "author" in result_expand
+
+    def test_expand_deeply_nested(self):
+        """Test parsing $expand with deeply nested options."""
+        result = parse_odata_query("$expand=author($select=id;$expand=user($select=username))")
+        result_expand = expand_options("$expand=author($select=id;$expand=user($select=username))")
+
+        assert result.expand is not None
+        assert "author" in result_expand
+        options = result_expand["author"]
+        assert "$select" in options
+        assert "$expand" in options
+        assert options["$expand"] == "user($select=username)"
+
+    def test_no_expand(self):
+        """Test query without $expand."""
+        result = parse_odata_query("$select=id,name")
+
+        assert result.expand is None
+
+
+class TestFilterParsing:
+    """Tests for $filter parameter parsing."""
+
+    def test_filter_simple_equality(self):
+        """Test parsing simple equality filter."""
+        result = parse_odata_query("$filter=status eq 'published'")
+
+        assert result.filter is not None
+        assert result.filter.expression == "status eq 'published'"
+
+    def test_filter_with_and(self):
+        """Test parsing filter with AND operator."""
+        result = parse_odata_query("$filter=status eq 'published' and rating gt 4.0")
+
+        assert result.filter is not None
+        assert result.filter.expression == "status eq 'published' and rating gt 4.0"
+
+    def test_filter_with_or(self):
+        """Test parsing filter with OR operator."""
+        result = parse_odata_query("$filter=status eq 'draft' or status eq 'published'")
+
+        assert result.filter is not None
+        assert result.filter.expression == "status eq 'draft' or status eq 'published'"
+
+    def test_filter_with_navigation(self):
+        """Test parsing filter with navigation property."""
+        result = parse_odata_query("$filter=author/name eq 'John'")
+
+        assert result.filter is not None
+        assert result.filter.expression == "author/name eq 'John'"
+
+    def test_filter_with_nested_navigation(self):
+        """Test parsing filter with nested navigation."""
+        result = parse_odata_query("$filter=author/user/first_name eq 'Patricia'")
+
+        assert result.filter is not None
+        assert result.filter.expression == "author/user/first_name eq 'Patricia'"
+
+    def test_filter_with_functions(self):
+        """Test parsing filter with OData functions."""
+        result = parse_odata_query("$filter=startswith(title,'Introduction')")
+
+        assert result.filter is not None
+        assert result.filter.expression == "startswith(title,'Introduction')"
+
+    def test_malformed_filter_raises_error(self):
+        """Test that malformed $filter raises an error instead of silently passing."""
+        with pytest.raises((ODataSyntaxError, ValueError)):
+            parse_odata_query("$filter=this is not valid odata!!")
+
+    def test_no_filter(self):
+        """Test query without $filter."""
+        result = parse_odata_query("$select=id,name")
+
+        assert result.filter is None
+
+
+class TestOrderByParsing:
+    """Tests for $orderby parameter parsing."""
+
+    def test_orderby_single_field_default(self):
+        """Test parsing $orderby with single field (default ascending)."""
+        result = parse_odata_query("$orderby=name")
+
+        assert result.orderby is not None
+        assert [(f.field, f.direction) for f in result.orderby.fields] == [("name", "asc")]
+
+    def test_orderby_single_field_asc(self):
+        """Test parsing $orderby with explicit asc."""
+        result = parse_odata_query("$orderby=name asc")
+
+        assert result.orderby is not None
+        assert [(f.field, f.direction) for f in result.orderby.fields] == [("name", "asc")]
+
+    def test_orderby_single_field_desc(self):
+        """Test parsing $orderby with desc."""
+        result = parse_odata_query("$orderby=created_at desc")
+
+        assert result.orderby is not None
+        assert [(f.field, f.direction) for f in result.orderby.fields] == [("created_at", "desc")]
+
+    def test_orderby_multiple_fields(self):
+        """Test parsing $orderby with multiple fields."""
+        result = parse_odata_query("$orderby=status asc,created_at desc")
+
+        assert result.orderby is not None
+        assert [(f.field, f.direction) for f in result.orderby.fields] == [("status", "asc"), ("created_at", "desc")]
+
+    def test_orderby_with_spaces(self):
+        """Test parsing $orderby with extra spaces."""
+        result = parse_odata_query("$orderby=name  asc , created_at   desc")
+
+        assert result.orderby is not None
+        assert [(f.field, f.direction) for f in result.orderby.fields] == [("name", "asc"), ("created_at", "desc")]
+
+    def test_orderby_case_insensitive_desc(self):
+        """Test parsing $orderby with uppercase DESC."""
+        result = parse_odata_query("$orderby=name DESC")
+
+        assert result.orderby is not None
+        assert [(f.field, f.direction) for f in result.orderby.fields] == [("name", "desc")]
+
+    def test_orderby_case_insensitive_asc(self):
+        """Test parsing $orderby with mixed case Asc."""
+        result = parse_odata_query("$orderby=name Asc")
+
+        assert result.orderby is not None
+        assert [(f.field, f.direction) for f in result.orderby.fields] == [("name", "asc")]
+
+    def test_orderby_field_ending_with_desc_word(self):
+        """Test that field names like sort_desc are not confused with direction."""
+        result = parse_odata_query("$orderby=sort_desc DESC")
+
+        assert result.orderby is not None
+        assert [(f.field, f.direction) for f in result.orderby.fields] == [("sort_desc", "desc")]
+
+    def test_no_orderby(self):
+        """Test query without $orderby."""
+        result = parse_odata_query("$select=id,name")
+
+        assert result.orderby is None
+
+
+class TestPaginationParsing:
+    """Tests for $top and $skip parameters."""
+
+    def test_top(self):
+        """Test parsing $top."""
+        result = parse_odata_query("$top=10")
+
+        assert result.pagination is not None and result.pagination.limit is not None
+        assert result.pagination.limit == 10
+
+    def test_skip(self):
+        """Test parsing $skip."""
+        result = parse_odata_query("$skip=20")
+
+        assert result.pagination is not None and result.pagination.offset is not None
+        assert result.pagination.offset == 20
+
+    def test_top_and_skip(self):
+        """Test parsing both $top and $skip."""
+        result = parse_odata_query("$top=10&$skip=20")
+
+        assert result.pagination is not None and result.pagination.limit is not None
+        assert result.pagination is not None and result.pagination.offset is not None
+        assert result.pagination.limit == 10
+        assert result.pagination.offset == 20
+
+    def test_no_pagination(self):
+        """Test query without pagination."""
+        result = parse_odata_query("$select=id,name")
+
+        assert result.pagination is None or result.pagination.limit is None
+        assert result.pagination is None or result.pagination.offset is None
+
+
+class TestCountParsing:
+    """Tests for $count parameter."""
+
+    def test_count_true(self):
+        """Test parsing $count=true."""
+        result = parse_odata_query("$count=true")
+
+        assert result.pagination.include_count is True
+
+    def test_count_false(self):
+        """Test parsing $count=false."""
+        result = parse_odata_query("$count=false")
+
+        assert result.pagination is None or result.pagination.include_count is False
+
+    def test_count_case_insensitive(self):
+        """Test parsing $count with different cases."""
+        result1 = parse_odata_query("$count=True")
+        result2 = parse_odata_query("$count=TRUE")
+
+        assert result1.pagination.include_count is True
+        assert result2.pagination.include_count is True
+
+    def test_no_count(self):
+        """Test query without $count."""
+        result = parse_odata_query("$select=id,name")
+
+        assert result.pagination is None
+
+
+class TestCombinedParameters:
+    """Tests for queries with multiple parameters combined."""
+
+    def test_select_and_filter(self):
+        """Test parsing $select with $filter."""
+        result = parse_odata_query("$select=id,title&$filter=status eq 'published'")
+
+        assert result.select is not None
+        assert result.filter is not None
+        assert set(result.select.fields) == {"id", "title"}
+        assert result.filter.expression == "status eq 'published'"
+
+    def test_select_and_expand(self):
+        """Test parsing $select with $expand."""
+        result = parse_odata_query("$select=id,title&$expand=author")
+        result_expand = expand_options("$select=id,title&$expand=author")
+
+        assert result.select is not None
+        assert result.expand is not None
+        assert "author" in result_expand
+
+    def test_all_parameters(self):
+        """Test parsing query with all parameters."""
+        query = (
+            "$select=id,title"
+            "&$expand=author($select=name)"
+            "&$filter=status eq 'published'"
+            "&$orderby=created_at desc"
+            "&$top=10"
+            "&$skip=20"
+            "&$count=true"
+        )
+        result = parse_odata_query(query)
+
+        assert result.select is not None
+        assert result.expand is not None
+        assert result.filter is not None
+        assert result.orderby is not None
+        assert result.pagination is not None and result.pagination.limit is not None
+        assert result.pagination is not None and result.pagination.offset is not None
+        assert result.pagination.include_count is True
+
+    def test_complex_real_world_query(self):
+        """Test parsing complex real-world query."""
+        query = (
+            "$expand=categories;author($select=id;$expand=user($select=id,username))"
+            "&$filter=author/user/first_name eq 'Patricia'"
+        )
+        result = parse_odata_query(query)
+        result_expand = expand_options(query)
+
+        assert result.expand is not None
+        assert "categories" in result_expand
+        assert "author" in result_expand
+        assert "$select" in result_expand["author"]
+        assert "$expand" in result_expand["author"]
+        assert result.filter is not None
+
+    def test_apply_parameter(self):
+        """Test parsing $apply parameter."""
+        result = parse_odata_query("$apply=groupby((status), aggregate($count as total))")
+        assert result.apply is not None
+
+
+class TestEdgeCases:
+    """Tests for edge cases and error conditions."""
+
+    def test_empty_string(self):
+        """Test parsing empty query string."""
+        result = parse_odata_query("")
+
+        assert isinstance(result, QueryIntent)
+        assert result.select is None
+        assert result.expand is None
+        assert result.filter is None
+
+    def test_none_input(self):
+        """Test parsing None input."""
+        result = parse_odata_query(None)
+
+        assert isinstance(result, QueryIntent)
+
+    def test_whitespace_only(self):
+        """Test parsing whitespace-only string."""
+        result = parse_odata_query("   ")
+
+        assert isinstance(result, QueryIntent)
+        assert result.select is None
+
+    def test_url_encoded_query(self):
+        """Test parsing URL-encoded query string."""
+        # The parser should handle URL-encoded strings
+        result = parse_odata_query("$filter=author/user/first_name%20eq%20%27Patricia%27")
+
+        assert result.filter is not None
+        # After URL decoding, it should be readable
+        assert "first_name eq 'Patricia'" in result.filter.expression
+
+    def test_dict_input(self):
+        """Test parsing dictionary input."""
+        query_dict = {"$select": "id,name", "$filter": "status eq 'published'"}
+        result = parse_odata_query(query_dict)
+
+        assert result.select is not None
+        assert result.filter is not None

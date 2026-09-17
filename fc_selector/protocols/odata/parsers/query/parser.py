@@ -10,6 +10,7 @@ from urllib.parse import parse_qsl
 
 from fc_selector.core.exceptions import InvalidValueError, QueryError
 from fc_selector.core.intent import (
+    ApplyIntent,
     ExpandIntent,
     FilterIntent,
     OrderIntent,

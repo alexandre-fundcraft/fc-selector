@@ -22,6 +22,7 @@ To build one from an OData query string, use:
 """
 
 from .models import (
+    ApplyIntent,
     ExpandIntent,
     FilterIntent,
     OrderField,
@@ -32,6 +33,7 @@ from .models import (
 )
 
 __all__ = [
+    "ApplyIntent",
     "QueryIntent",
     "FilterIntent",
     "SelectIntent",

@@ -10,7 +10,9 @@ from fc_selector.protocols.odata.parsers.apply import parse_apply
 def test_parse_bare_count():
     result = parse_apply("aggregate($count as total)")
     assert result == Apply(
-        transformations=[ApplyGroupBy(fields=[], aggregate=[ApplyAggregateSpec(source_field=None, method="count", alias="total")])]
+        transformations=[
+            ApplyGroupBy(fields=[], aggregate=[ApplyAggregateSpec(source_field=None, method="count", alias="total")])
+        ]
     )
 
 

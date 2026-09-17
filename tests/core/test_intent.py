@@ -2,6 +2,7 @@
 
 from fc_selector.core.ast.nodes import Apply, ApplyGroupBy, Compare, Eq, Identifier, String
 from fc_selector.core.intent import (
+    ApplyIntent,
     ExpandIntent,
     FilterIntent,
     OrderField,
@@ -9,7 +10,6 @@ from fc_selector.core.intent import (
     PaginationIntent,
     QueryIntent,
     SelectIntent,
-    ApplyIntent, # New
 )
 
 
@@ -190,9 +190,6 @@ class TestQueryIntent:
 
 
 def test_query_intent_carries_apply():
-    from fc_selector.core.ast.nodes import Apply, ApplyGroupBy
-    from fc_selector.core.intent.models import ApplyIntent, QueryIntent
-
     apply_ast = Apply(transformations=[ApplyGroupBy(fields=["status"], aggregate=None)])
     intent = QueryIntent(apply=ApplyIntent(ast=apply_ast))
     assert intent.apply.ast is apply_ast
