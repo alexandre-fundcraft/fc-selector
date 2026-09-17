@@ -12,15 +12,15 @@ functions already exposed via $filter's own function dispatch.
 
 from typing import Any, Callable
 
-from django.db.models import Count, F, Max, Min, QuerySet
 from django.db.models import Avg as _Avg
+from django.db.models import Count, F, Max, Min, QuerySet
 from django.db.models import Sum as _Sum
 
 from fc_selector.core import exceptions as core_ex
-from fc_selector.core.ast import nodes as ast_nodes # NEW
+from fc_selector.core.ast import nodes as ast_nodes  # NEW
 from fc_selector.core.intent.models import ApplyIntent
+from fc_selector.django.executor import DjangoExecutor, identifier_names  # NEW
 from fc_selector.django.visitors import AstToDjangoQVisitor
-from fc_selector.django.executor import DjangoExecutor, identifier_names # NEW
 
 _STANDARD_AGGREGATES: dict[str, Callable[[str], Any]] = {
     "sum": lambda field: _Sum(field),

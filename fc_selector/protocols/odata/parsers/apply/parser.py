@@ -16,7 +16,7 @@ _WITH_AS_SPLIT_PATTERN = re.compile(r"\s*with\s*|\s*as\s*")
 def _split_on_top_level_char(s: str, splitter: str) -> list[str]:
     """Splits a string by `splitter` only when not inside parentheses."""
     parts: list[str] = []
-    current_part = []
+    current_part: list[str] = []
     paren_depth = 0
     for char in s:
         if char == "(":

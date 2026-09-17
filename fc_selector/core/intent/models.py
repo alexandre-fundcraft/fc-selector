@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal, Sequence, cast
 
 if TYPE_CHECKING:
-    from fc_selector.core.ast.nodes import Node
+    from fc_selector.core.ast.nodes import Apply, Node
 
 
 @dataclass
@@ -151,7 +151,7 @@ class ApplyIntent:
         ast: Parsed $apply pipeline (Apply node from core.ast.nodes).
     """
 
-    ast: "Node"
+    ast: "Apply"
 
     def has_apply(self) -> bool:
         return self.ast is not None and bool(self.ast.transformations)
