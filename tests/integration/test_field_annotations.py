@@ -4,9 +4,11 @@ dotted-path rename can't express (concatenation, conditional expressions,
 cross-field arithmetic)."""
 
 from django.contrib.auth.models import User
+from django.db import connection
 from django.db.models import Case, CharField, Count, F, Value, When
 from django.db.models.functions import Concat
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 
 from example.blog.models import Author, BlogPost
 from fc_selector.django.selector import ODataSelector
@@ -59,12 +61,15 @@ class TestFieldAnnotations(TestCase):
         """A field the request never references must not be annotated — proves
         on-demand behavior, not "annotate everything registered"."""
         selector = _AuthorStatsSelector()
-        # No exception, no reference to post_count/is_prolific in this query;
-        # if the executor eagerly annotated everything, an unrelated field name
-        # collision would surface here in a larger schema. This test's job is
-        # to document the on-demand contract, verified more directly by the
-        # queryset.query inspection below.
-        result = selector.query_as_dicts("$select=full_name")
-        queryset_query = str(selector.get_queryset().query)
+        with CaptureQueriesContext(connection) as queries:
+            result = selector.query_as_dicts("$select=full_name")
         assert result[0]["full_name"] in ("Alice Smith", "Bob Jones")
-        assert "post_count" not in queryset_query  # base queryset has no annotations yet
+        executed_sql = " ".join(q["sql"] for q in queries)
+        assert "post_count" not in executed_sql
+        assert "COUNT" not in executed_sql
+
+        _, intent = selector._parse("$select=full_name")
+        prepared_qs = selector._executor._execute_prepared(selector.get_queryset(), intent)
+        assert "post_count" not in prepared_qs.query.annotations
+        assert "is_prolific" not in prepared_qs.query.annotations
+        assert "full_name" in prepared_qs.query.annotations

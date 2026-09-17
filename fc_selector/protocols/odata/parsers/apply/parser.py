@@ -33,6 +33,43 @@ def _split_on_top_level_char(s: str, splitter: str) -> list[str]:
     return [p for p in parts if p]
 
 
+def _parse_aggregate_items(inner_expr: str) -> list[ast.ApplyAggregateSpec]:
+    """Parse comma-separated aggregate specs inside aggregate(...)."""
+    inner = inner_expr.strip()
+    if not inner:
+        raise QueryError("aggregate clause cannot be empty")
+
+    agg_items = _split_on_top_level_char(inner, ",")
+    if not agg_items:
+        raise QueryError("aggregate clause cannot be empty")
+
+    parsed_aggregates: list[ast.ApplyAggregateSpec] = []
+    for item in agg_items:
+        with_parts = item.split(" with ", 1)
+        if len(with_parts) == 2:
+            source_method_part, as_part = with_parts
+            source_field = source_method_part.strip()
+            as_split = as_part.split(" as ", 1)
+            if len(as_split) == 2:
+                method = as_split[0].strip()
+                alias = as_split[1].strip()
+                parsed_aggregates.append(ast.ApplyAggregateSpec(source_field, method, alias))
+            else:
+                raise QueryError(f"Invalid aggregate item format: {item}")
+        elif item.lower().startswith("$count as "):
+            as_split = item.split(" as ", 1)
+            if len(as_split) == 2:
+                method = "count"
+                alias = as_split[1].strip()
+                parsed_aggregates.append(ast.ApplyAggregateSpec(source_field=None, method=method, alias=alias))
+            else:
+                raise QueryError(f"Invalid aggregate item format: {item}")
+        else:
+            raise QueryError(f"Invalid aggregate item format: {item}")
+
+    return parsed_aggregates
+
+
 def parse_apply(value: str) -> ast.Apply:
     """
     Parse OData $apply parameter.
@@ -62,89 +99,34 @@ def parse_apply(value: str) -> ast.Apply:
             transformations.append(ast.ApplyFilter(ast=filter_ast))
         elif segment_lower.startswith("groupby(") and segment_lower.endswith(")"):
             inner_expr = segment[len("groupby(") : -1].strip()
-            fields_part, _, aggregate_part = inner_expr.partition(", aggregate(")
+            parts = _split_on_top_level_char(inner_expr, ",")
+            if not parts:
+                raise QueryError(f"Invalid groupby syntax: {inner_expr}")
 
+            fields_part = parts[0]
             if not fields_part.startswith("(") or not fields_part.endswith(")"):
                 raise QueryError(f"Invalid groupby fields format: {fields_part}")
 
             fields = [f.strip() for f in fields_part[1:-1].split(",") if f.strip()]
+            if not fields:
+                raise QueryError("groupby fields list cannot be empty")
 
             parsed_aggregates: list[ast.ApplyAggregateSpec] | None = None
-            if aggregate_part:
-                # Strip trailing ' )' from aggregate part (it was ', aggregate(' + rest + ')')
-                if not aggregate_part.endswith(")"):
-                    raise QueryError(f"Invalid aggregate format: {aggregate_part}")
-                aggregate_inner = aggregate_part[:-1].strip()
-
-                # Split by comma at top level within aggregate
-                agg_items = _split_on_top_level_char(aggregate_inner, ",")
-
-                parsed_aggregates = []
-                for item in agg_items:
-                    # Split "field with method as alias" into its 3 logical parts
-                    with_parts = item.split(" with ", 1)
-                    if len(with_parts) == 2:  # "field with method as alias"
-                        source_method_part, as_part = with_parts
-                        source_field = source_method_part.strip()
-
-                        as_split = as_part.split(" as ", 1)
-                        if len(as_split) == 2:  # "method as alias"
-                            method, alias = as_split
-                            method = method.strip()
-                            alias = alias.strip()
-                            parsed_aggregates.append(ast.ApplyAggregateSpec(source_field, method, alias))
-                        else:
-                            raise QueryError(f"Invalid aggregate item format: {item}")
-                    elif item.lower().startswith("$count as "):  # "$count as total"
-                        as_split = item.split(" as ", 1)
-                        if len(as_split) == 2:
-                            method = "count"
-                            alias = as_split[1].strip()
-                            source_field = None
-                            parsed_aggregates.append(
-                                ast.ApplyAggregateSpec(source_field=source_field, method=method, alias=alias)
-                            )
-                        else:
-                            raise QueryError(f"Invalid aggregate item format: {item}")
-                    else:
-                        raise QueryError(f"Invalid aggregate item format: {item}")
+            if len(parts) == 2:
+                agg_clause = parts[1].strip()
+                agg_lower = agg_clause.lower()
+                if not agg_lower.startswith("aggregate(") or not agg_clause.endswith(")"):
+                    raise QueryError(f"Invalid groupby aggregate format: {agg_clause}")
+                aggregate_inner = agg_clause[len("aggregate(") : -1].strip()
+                parsed_aggregates = _parse_aggregate_items(aggregate_inner)
+            elif len(parts) > 2:
+                raise QueryError(f"Invalid groupby syntax: {inner_expr}")
 
             transformations.append(ast.ApplyGroupBy(fields=fields, aggregate=parsed_aggregates))
 
         elif segment_lower.startswith("aggregate(") and segment_lower.endswith(")"):
-            # Handle bare aggregate transformation (no groupby clause)
             inner_expr = segment[len("aggregate(") : -1].strip()
-
-            agg_items = _split_on_top_level_char(inner_expr, ",")
-            parsed_aggregates = []
-            for item in agg_items:
-                # Split "field with method as alias" into its 3 logical parts
-                with_parts = item.split(" with ", 1)
-                if len(with_parts) == 2:  # "field with method as alias"
-                    source_method_part, as_part = with_parts
-                    source_field = source_method_part.strip()
-
-                    as_split = as_part.split(" as ", 1)
-                    if len(as_split) == 2:  # "method as alias"
-                        method, alias = as_split
-                        method = method.strip()
-                        alias = alias.strip()
-                        parsed_aggregates.append(ast.ApplyAggregateSpec(source_field, method, alias))
-                    else:
-                        raise QueryError(f"Invalid aggregate item format: {item}")
-                elif item.lower().startswith("$count as "):  # "$count as total"
-                    as_split = item.split(" as ", 1)
-                    if len(as_split) == 2:
-                        method = "count"
-                        alias = as_split[1].strip()
-                        source_field = None
-                        parsed_aggregates.append(
-                            ast.ApplyAggregateSpec(source_field=source_field, method=method, alias=alias)
-                        )
-                    else:
-                        raise QueryError(f"Invalid aggregate item format: {item}")
-                else:
-                    raise QueryError(f"Invalid aggregate item format: {item}")
+            parsed_aggregates = _parse_aggregate_items(inner_expr)
             transformations.append(ast.ApplyGroupBy(fields=[], aggregate=parsed_aggregates))
 
         else:

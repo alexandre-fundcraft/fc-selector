@@ -241,6 +241,10 @@ class ODataSelector:
             return base_queryset
 
         _, intent = self._parse(query_string)
+        if intent.apply is not None and intent.apply.has_apply():
+            raise core_ex.QueryError(
+                "$apply transformations are not supported by query(); use query_as_dicts() instead."
+            )
         return self._executor.execute(base_queryset, intent)
 
     def execute(
@@ -292,6 +296,10 @@ class ODataSelector:
             base_queryset = self.get_queryset()
 
         _, intent = self._parse(query_string or "")
+        if intent.apply is not None and intent.apply.has_apply():
+            raise core_ex.QueryError(
+                "$apply transformations cannot be mapped to DTO instances; use query_as_dicts() instead."
+            )
         intent = self._apply_defaults(intent)
         return self._materialize(intent, base_queryset)
 
@@ -344,15 +352,16 @@ class ODataSelector:
                 or (intent.select and intent.select.has_fields())
                 or (intent.orderby and intent.orderby.has_ordering())
                 or (intent.pagination and intent.pagination.has_pagination())
+                or (intent.expand and intent.expand.has_relations())
             ):
                 raise core_ex.QueryError(
-                    "$apply cannot be combined with $filter, $select, $orderby, or $top/$skip; "
+                    "$apply cannot be combined with $filter, $select, $orderby, $expand, or $top/$skip; "
                     "express filtering as a filter(...) stage inside $apply instead."
                 )
 
             from fc_selector.django.query.apply_executor import apply_to_queryset
 
-            queryset = apply_to_queryset(
+            res = apply_to_queryset(
                 base_queryset,
                 intent.apply,
                 allowed_fields=self.allowed_fields,
@@ -364,7 +373,11 @@ class ODataSelector:
                 filterable_fields=self._filterable_fields_for_visitor,
                 non_filterable_fields=self.non_filterable_fields,
             )
-            return list(queryset)
+            if isinstance(res, list):
+                return res
+            if not getattr(res, "_fields", None):
+                return self._materialize(self._apply_defaults(intent), res, as_dicts=True)
+            return list(res)
 
         return self._materialize(self._apply_defaults(intent), base_queryset, as_dicts=True)
 

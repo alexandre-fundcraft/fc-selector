@@ -162,6 +162,9 @@ class DjangoExecutor:
             field_aliases=self.field_aliases,
             expandable_fields=self.expandable_fields,
         )
+        referenced_fields = self._referenced_field_names(intent)
+        if referenced_fields:
+            queryset = self.ensure_field_annotations(queryset, referenced_fields)
         queryset = self._apply_filter(queryset, intent)
         queryset = self._apply_ordering(queryset, intent)
         return builder._execute_prepared(queryset, intent, dto_class, as_dicts=as_dicts)
@@ -239,7 +242,6 @@ class DjangoExecutor:
                         names |= {s.source_field for s in stage.aggregate if s.source_field}
         return list(names)
 
-
     def _nested_executor(self, relation_name):
         config = get_expand_config(self.expandable_fields, relation_name) or {}
         nested = config.get("expandable_fields")
@@ -257,7 +259,6 @@ class DjangoExecutor:
             field_annotations=config.get("field_annotations"),
             annotation_dependencies=config.get("annotation_dependencies"),
         )
-
 
     def projection_mappings(self, intent):
         """Describe alias mappings per expanded relation without leaking ORM into DTOs."""

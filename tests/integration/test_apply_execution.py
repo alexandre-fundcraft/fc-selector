@@ -1,11 +1,41 @@
 """Integration tests for OData $apply execution against the example/blog app."""
 
 from django.contrib.auth.models import User
+from django.db.models import F
 from django.test import TestCase
 
 from example.blog.models import Author, BlogPost, Category
-from example.blog.selectors.blog_post import BlogPostSelector
-from fc_selector.core.exceptions import UnsupportedFunctionError
+from example.blog.selectors.blog_post import AuthorDTO, BlogPostDTO, BlogPostSelector
+from fc_selector.core.exceptions import QueryError, UnsupportedFunctionError
+from fc_selector.django.selector import ODataSelector
+
+
+class _AliasedPostSelector(ODataSelector):
+    class Meta:
+        model = BlogPost
+        dto_class = None
+        field_aliases = {"post_status": "status", "score": "rating"}
+        allowed_fields = ["post_status", "score"]
+
+
+class _AnnotatedPostSelector(ODataSelector):
+    class Meta:
+        model = BlogPost
+        dto_class = None
+        allowed_fields = None
+        field_annotations = {
+            "score_doubled": lambda: F("rating") * 2,
+        }
+
+
+class _HybridBlogPostSelector(ODataSelector):
+    class Meta:
+        model = BlogPost
+        dto_class = BlogPostDTO
+        values_mode = True
+        expandable_fields = {"author": AuthorDTO}
+        field_annotations = {"score_doubled": lambda: F("rating") * 2}
+        allowed_fields = ["title", "author", "score_doubled"]
 
 
 class TestApplyExecution(TestCase):
@@ -56,3 +86,45 @@ class TestApplyExecution(TestCase):
         selector = BlogPostSelector()
         with self.assertRaises(UnsupportedFunctionError):
             selector.query_as_dicts("$apply=groupby((status), aggregate(rating with median as m))")
+
+    def test_filter_only_pipeline_returns_dicts(self):
+        selector = BlogPostSelector()
+        result = selector.query_as_dicts("$apply=filter(status eq 'draft')")
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert isinstance(result[0], dict)
+        assert result[0]["status"] == "draft"
+
+    def test_apply_with_expand_raises_query_error(self):
+        selector = BlogPostSelector()
+        with self.assertRaises(QueryError):
+            selector.query_as_dicts("$apply=groupby((status))&$expand=author")
+
+    def test_query_and_query_as_dtos_reject_apply(self):
+        selector = BlogPostSelector()
+        with self.assertRaises(QueryError):
+            selector.query("$apply=groupby((status))")
+        with self.assertRaises(QueryError):
+            selector.query_as_dtos("$apply=groupby((status))")
+
+    def test_bare_aggregate_not_terminal_raises_query_error(self):
+        selector = BlogPostSelector()
+        with self.assertRaises(QueryError):
+            selector.query_as_dicts("$apply=aggregate($count as n)/filter(n gt 1)")
+
+    def test_groupby_and_aggregate_with_field_aliases(self):
+        selector = _AliasedPostSelector()
+        result = selector.query_as_dicts("$apply=groupby((post_status), aggregate(score with average as avg_score))")
+        assert any(r["post_status"] == "published" and r["avg_score"] == 4.5 for r in result)
+
+    def test_filter_by_annotated_field_in_apply(self):
+        selector = _AnnotatedPostSelector()
+        result = selector.query_as_dicts("$apply=filter(score_doubled gt 8)/groupby((status))")
+        assert result == [{"status": "published"}]
+
+    def test_hybrid_expand_with_field_annotations(self):
+        selector = _HybridBlogPostSelector()
+        result = selector.query_as_dicts("$filter=score_doubled gt 8&$expand=author&$select=title")
+        assert len(result) == 1
+        assert result[0]["title"] == "B"
+        assert "author" in result[0]

@@ -72,3 +72,23 @@ def test_parse_unknown_syntax_raises_query_error():
 def test_parse_empty_string_raises_query_error():
     with pytest.raises(QueryError):
         parse_apply("")
+
+
+def test_parse_groupby_whitespace_variations():
+    res1 = parse_apply("groupby((status),aggregate($count as n))")
+    res2 = parse_apply("groupby((status),  aggregate($count as n))")
+    assert res1 == res2
+    assert res1.transformations[0].fields == ["status"]
+    assert res1.transformations[0].aggregate[0].alias == "n"
+
+
+def test_parse_empty_groupby_fields_raises_query_error():
+    with pytest.raises(QueryError, match="groupby fields list cannot be empty"):
+        parse_apply("groupby(())")
+
+
+def test_parse_empty_aggregate_clause_raises_query_error():
+    with pytest.raises(QueryError, match="aggregate clause cannot be empty"):
+        parse_apply("groupby((status), aggregate())")
+    with pytest.raises(QueryError, match="aggregate clause cannot be empty"):
+        parse_apply("aggregate()")
