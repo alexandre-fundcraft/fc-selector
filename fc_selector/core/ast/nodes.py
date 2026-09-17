@@ -704,3 +704,82 @@ class CollectionLambda(Node):
     owner: Node
     operator: _CollectionOperator
     lambda_: Lambda | None
+
+
+###############################################################################
+# $apply transformations (OData v4 aggregation)
+###############################################################################
+@dataclass(frozen=True)
+class ApplyAggregateSpec(Node):
+    """
+    One aggregate clause inside an aggregate(...) transformation.
+
+    Examples:
+        - "id with countdistinct as n" → ApplyAggregateSpec("id", "countdistinct", "n")
+        - "$count as total" → ApplyAggregateSpec(None, "count", "total")
+
+    Attributes:
+        source_field: Field the aggregate reads, or None for a bare row count.
+        method: Aggregate method name (standard: sum, average, min, max,
+            countdistinct, count; or a name registered in a selector's
+            Meta.apply_aggregates).
+        alias: Output key for this aggregate's value.
+    """
+
+    source_field: str | None
+    method: str
+    alias: str
+
+
+@dataclass(frozen=True)
+class ApplyGroupBy(Node):
+    """
+    Represents a groupby(...) transformation.
+
+    Examples:
+        - "groupby((status))" → ApplyGroupBy(fields=["status"], aggregate=None)
+        - "groupby((status), aggregate($count as n))"
+          → ApplyGroupBy(fields=["status"], aggregate=[ApplyAggregateSpec(None, "count", "n")])
+
+    A field in `fields` may itself be a compute-function call (e.g.
+    "quarter(created_at)") when the selector registers that name in
+    Meta.apply_functions; the AST carries it as the raw field-spec string,
+    resolved by the executor, not interpreted here.
+
+    Attributes:
+        fields: Group-by field specs, in order.
+        aggregate: Aggregate specs computed per group, or None (plain distinct).
+    """
+
+    fields: list[str]
+    aggregate: list[ApplyAggregateSpec] | None = None
+
+
+@dataclass(frozen=True)
+class ApplyFilter(Node):
+    """
+    Represents a filter(...) transformation inside $apply.
+
+    Reuses the standard $filter grammar/AST for its inner expression.
+
+    Attributes:
+        ast: The parsed filter expression (same Node types as top-level $filter).
+    """
+
+    ast: Node
+
+
+ApplyTransformation = ApplyGroupBy | ApplyFilter
+
+
+@dataclass(frozen=True)
+class Apply(Node):
+    """
+    Represents a full $apply pipeline: an ordered list of transformations
+    chained with "/", e.g. "filter(...)/groupby((...), aggregate(...))".
+
+    Attributes:
+        transformations: Ordered pipeline stages.
+    """
+
+    transformations: list[ApplyTransformation]
