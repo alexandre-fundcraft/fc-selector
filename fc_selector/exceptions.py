@@ -145,3 +145,22 @@ class ODataInvalidPaginationError(ODataFilterError):
             details={"parameter": parameter, "invalid_value": value},
             original_exception=original_exception,
         )
+
+
+class ODataApplyError(ODataFilterError):
+    """
+    Exception raised when $apply parsing or execution fails.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        code: str = "BadRequest",
+        original_exception: Exception | None = None,
+    ):
+        super().__init__(
+            message=message,
+            code=code,
+            target="$apply",
+            original_exception=original_exception,
+        )

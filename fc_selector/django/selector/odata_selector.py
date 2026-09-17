@@ -87,6 +87,9 @@ class ODataSelector:
         self.max_limit = getattr(meta, "max_limit", MAX_PAGE_SIZE)
         self.values_mode = getattr(meta, "values_mode", True)
 
+        self.apply_functions = getattr(meta, "apply_functions", {})
+        self.apply_aggregates = getattr(meta, "apply_aggregates", {})
+
         # Security: Validate field aliases to prevent injection
         ODataSelector._validate_field_aliases(self.field_aliases)
 
@@ -323,16 +326,6 @@ class ODataSelector:
         model_class: Optional["Model"] = None,
         base_queryset: QuerySet | None = None,
     ) -> list[dict]:
-        """Execute OData query and return results as plain dictionaries.
-
-        Args:
-            query_string: OData query string (e.g., "$filter=name eq 'test'&$select=id,name")
-            model_class: Optional model class override
-            base_queryset: Optional base queryset to apply query to
-
-        Returns:
-            List of dicts.
-        """
         if not (model_class or self.model):
             raise ValueError("model_class required")
 
@@ -340,6 +333,18 @@ class ODataSelector:
             base_queryset = self.get_queryset()
 
         _, intent = self._parse(query_string or "")
+        if intent.apply is not None and intent.apply.has_apply():
+            from fc_selector.django.query.apply_executor import apply_to_queryset
+
+            queryset = apply_to_queryset(
+                base_queryset,
+                intent.apply,
+                allowed_fields=self.allowed_fields,
+                apply_functions=self.apply_functions,
+                apply_aggregates=self.apply_aggregates,
+            )
+            return list(queryset)
+
         return self._materialize(self._apply_defaults(intent), base_queryset, as_dicts=True)
 
     def _build_intent(self, query_builder: QueryBuilder | None) -> "QueryIntent":
